@@ -1,0 +1,5 @@
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+WebSocketChannel connectWs(Uri uri, Map<String, String> headers) =>
+    IOWebSocketChannel.connect(uri, headers: headers, pingInterval: const Duration(seconds: 20));

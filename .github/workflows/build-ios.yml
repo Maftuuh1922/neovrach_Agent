@@ -1,0 +1,45 @@
+# Builds an UNSIGNED iOS .ipa for Neovarch Agent on a macOS runner.
+# Install it by sideloading (AltStore / Sideloadly re-sign it with your Apple ID)
+# or sign it with your own Apple Developer account.
+name: build-ios
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.6
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Pub get
+        run: flutter pub get
+
+      # Flutter 3.47 uses Swift Package Manager; plugins without SwiftPM support
+      # are installed through CocoaPods automatically by `flutter build ios`.
+      - name: Build (no codesign)
+        run: flutter build ios --release --no-codesign --build-name=1.1.0 --build-number=${{ github.run_number }}
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/
+          cd build/ipa && zip -qry ../neovarch-agent-1.1.0-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neovarch-agent-ios-unsigned
+          path: build/neovarch-agent-1.1.0-unsigned.ipa
+          retention-days: 30
