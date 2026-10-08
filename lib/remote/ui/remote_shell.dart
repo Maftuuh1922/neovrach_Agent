@@ -1,17 +1,18 @@
 // Remote shell: Chat · Tugas · Setujui · PC, with a connection strip that
 // appears whenever the link to the desktop is not up.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../main.dart' show previewTab;
-import '../../theme/app_theme.dart';
-import '../../ui/app_shell.dart' show FloatingNavBar;
+import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/motion.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'remote_approvals_screen.dart';
 import 'remote_chat_screen.dart';
 import 'remote_pc_screen.dart';
+import 'nv_widgets.dart';
 import 'remote_tasks_screen.dart';
 
 class RemoteShell extends ConsumerStatefulWidget {
@@ -45,11 +46,11 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     }
   }
 
-  static const _dest = [
-    (Icons.forum_outlined, Icons.forum, 'Chat'),
-    (Icons.view_kanban_outlined, Icons.view_kanban, 'Tugas'),
-    (Icons.verified_user_outlined, Icons.verified_user, 'Setujui'),
-    (Icons.computer_outlined, Icons.computer, 'PC'),
+  static const _dest = <(IconData, IconData, String)>[
+    (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
+    (Icons.view_week_outlined, Icons.view_week_rounded, 'Tugas'),
+    (Icons.shield_outlined, Icons.shield_rounded, 'Setujui'),
+    (Icons.desktop_windows_outlined, Icons.desktop_windows_rounded, 'PC'),
   ];
 
   @override
@@ -77,44 +78,48 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
         TabFade(active: index == i, child: w),
     ]);
 
-    Widget badge(int i, Widget icon) {
-      if (i == 2 && pending > 0) return Badge(label: Text('$pending'), child: icon);
-      if (i == 3 && !remote.connected) return Badge(backgroundColor: context.hc.warning, smallSize: 8, child: icon);
-      return icon;
-    }
-
     final mq = MediaQuery.of(context);
     final keyboard = mq.viewInsets.bottom > 0;
-    const barH = 62.0, gap = 12.0;
+    const barH = 64.0, gap = 12.0;
     final reserve = keyboard ? 0.0 : barH + gap;
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: Stack(children: [
-        Positioned.fill(
-          child: MediaQuery(
-            data: mq.copyWith(
-                padding: mq.padding.copyWith(bottom: mq.padding.bottom + reserve),
-                viewPadding: mq.viewPadding.copyWith(bottom: mq.viewPadding.bottom + reserve)),
-            child: Column(children: [
-              if (!remote.connected) const _ConnectionStrip(),
-              Expanded(child: pages),
-            ]),
-          ),
-        ),
-        if (!keyboard)
-          Positioned(
-            left: 14,
-            right: 14,
-            bottom: mq.viewPadding.bottom + gap,
-            height: barH,
-            child: FloatingNavBar(
-              index: index,
-              onTap: (i) => setState(() => index = i),
-              items: [for (final d in _dest) (d.$1, d.$2, d.$3)],
-              badge: badge,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: NV.bg,
+        systemNavigationBarDividerColor: NV.bg,
+      ),
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        body: Stack(children: [
+          Positioned.fill(
+            child: MediaQuery(
+              data: mq.copyWith(
+                  padding: mq.padding.copyWith(bottom: mq.padding.bottom + reserve),
+                  viewPadding: mq.viewPadding.copyWith(bottom: mq.viewPadding.bottom + reserve)),
+              child: Column(children: [
+                if (!remote.connected) const _ConnectionStrip(),
+                Expanded(
+                  child: MediaQuery.removePadding(context: context, removeTop: !remote.connected, child: pages),
+                ),
+              ]),
             ),
           ),
-      ]),
+          if (!keyboard)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: mq.viewPadding.bottom + gap,
+              height: barH,
+              child: NvNavBar(
+                index: index,
+                onTap: (i) => setState(() => index = i),
+                items: _dest,
+                badges: {2: pending},
+                dots: {if (!remote.connected) 3: NV.warn},
+              ),
+            ),
+        ]),
+      ),
     );
   }
 }
@@ -125,29 +130,29 @@ class _ConnectionStrip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final r = ref.watch(remoteProvider);
     final busy = r.status == RemoteStatus.connecting || r.status == RemoteStatus.reconnecting;
-    final c = busy ? context.hc.warning : context.hc.destructive;
-    return Material(
-      color: c.withValues(alpha: 0.14),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-          child: Row(children: [
-            Icon(busy ? Icons.sync : Icons.link_off, size: 18, color: c),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                r.desktop == null
-                    ? 'Belum memilih PC'
-                    : '${r.desktop!.name}: ${r.statusLabel}${r.error != null && !busy ? ' — ${r.error}' : ''}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5),
-              ),
-            ),
-            TextButton(onPressed: busy ? null : r.reconnect, child: const Text('Sambungkan')),
-          ]),
+    final c = busy ? NV.warn : NV.red;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + 8, 12, 0),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(NV.rCtl),
+          border: Border.all(color: c.withValues(alpha: 0.45)),
         ),
+        child: Row(children: [
+          Icon(busy ? Icons.sync : Icons.link_off, size: 17, color: c),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(r.desktop == null ? '// BELUM ADA PC' : '// ${r.desktop!.name.toUpperCase()} · ${r.statusLabel.toUpperCase()}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5, color: c)),
+              if (r.error != null && !busy)
+                Text(r.error!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
+            ]),
+          ),
+          TextButton(onPressed: busy ? null : r.reconnect, child: const Text('Sambungkan')),
+        ]),
       ),
     );
   }

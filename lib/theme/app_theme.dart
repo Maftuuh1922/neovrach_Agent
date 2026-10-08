@@ -62,7 +62,16 @@ extension HermesThemeX on BuildContext {
 }
 
 /// Fonts shipped in assets/fonts (no runtime download needed).
-const bundledFonts = {'IBM Plex Mono': 'IBMPlexMono', 'IBMPlexMono': 'IBMPlexMono', 'Barlow': 'Barlow', 'BigShoulders': 'BigShoulders'};
+const bundledFonts = {
+  'IBM Plex Mono': 'IBMPlexMono',
+  'IBMPlexMono': 'IBMPlexMono',
+  'Barlow': 'Barlow',
+  'BigShoulders': 'BigShoulders',
+  'JetBrains Mono': 'JetBrainsMono',
+  'JetBrainsMono': 'JetBrainsMono',
+  'IBMPlexSans': 'IBMPlexSans',
+  'InstrumentSerif': 'InstrumentSerif',
+};
 
 TextStyle monoStyle(BuildContext context, {double? size, Color? color, FontWeight? weight}) {
   final fam = context.hc.monoFamily;

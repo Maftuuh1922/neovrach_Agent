@@ -7,11 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/platform_caps.dart';
 import '../../state/app_controller.dart' show settingsProvider;
 import '../../state/voice_service.dart';
-import '../../theme/app_theme.dart';
+import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/screens/chat/message_widgets.dart';
 import '../../ui/widgets/common.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
+import 'nv_widgets.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
   const RemoteChatScreen({super.key, required this.onOpenApprovals});
@@ -86,36 +87,41 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final mine = r.approvals.where((a) => a.sessionId == r.runtimeId).toList();
     final others = r.approvals.length - mine.length;
     if (r.running) _toBottom();
+    final pc = r.desktop?.name ?? 'PC';
+    final tps = r.transcript.tokensPerSecond;
 
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(r.title.isNotEmpty ? r.title : (r.storedId == null ? 'Chat baru' : 'Percakapan'),
-              maxLines: 1, overflow: TextOverflow.ellipsis, style: context.tt.titleMedium),
-          Row(children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: r.connected ? context.hc.success : context.hc.warning),
-            ),
-            const SizedBox(width: 6),
+      body: Column(children: [
+        NvHeader(
+          kicker: 'chat · $pc',
+          title: r.title.isNotEmpty ? r.title : (r.storedId == null ? 'Chat baru' : 'Percakapan'),
+          status: Row(children: [
+            NvDot(r.connected ? NV.ok : NV.warn, size: 7),
+            const SizedBox(width: 8),
             Flexible(
-              child: Text('${r.desktop?.name ?? 'PC'} · ${r.statusLabel}${r.transcript.tokensPerSecond != null ? ' · ${r.transcript.tokensPerSecond!.toStringAsFixed(0)} tok/s' : ''}',
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: context.tt.bodySmall),
+              child: Text(
+                '${r.statusLabel}${r.running ? ' · agen bekerja' : ''}${tps != null ? ' · ${tps.toStringAsFixed(0)} tok/s' : ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: NV.monoLabel(size: 10, color: NV.muted).copyWith(letterSpacing: 0.4),
+              ),
             ),
           ]),
-        ]),
-        actions: [
-          IconButton(tooltip: 'Riwayat sesi di PC', icon: const Icon(Icons.history), onPressed: r.connected ? _sessions : null),
-          IconButton(tooltip: 'Chat baru', icon: const Icon(Icons.add_comment_outlined), onPressed: r.connected ? r.newChat : null),
-        ],
-      ),
-      body: Column(children: [
+          actions: [
+            NvIconButton(tooltip: 'Riwayat sesi di PC', icon: Icons.history_rounded, onPressed: r.connected ? _sessions : null),
+            NvIconButton(tooltip: 'Chat baru', icon: Icons.add_rounded, onPressed: r.connected ? r.newChat : null),
+          ],
+        ),
+        const Divider(height: 1, color: NV.border),
         if (others > 0)
-          MaterialBanner(
-            content: Text('$others persetujuan menunggu di sesi lain'),
-            actions: [TextButton(onPressed: widget.onOpenApprovals, child: const Text('Lihat'))],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: NvNotice(
+              '$others persetujuan menunggu di sesi lain',
+              color: NV.warn,
+              icon: Icons.shield_outlined,
+              action: TextButton(onPressed: widget.onOpenApprovals, child: const Text('Lihat')),
+            ),
           ),
         Expanded(
           child: r.opening
@@ -124,76 +130,85 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                   ? _empty(context, r)
                   : ListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                       itemCount: msgs.length,
                       itemBuilder: (context, i) {
                         final m = msgs[i];
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.only(bottom: 18),
                           child: m.role == 'user'
-                              ? UserBubble(msg: m, scale: s.chatScale)
-                              : AssistantMessage(
-                                  msg: m,
-                                  scale: s.chatScale,
-                                  showReasoning: s.showReasoning,
-                                  isLast: i == msgs.length - 1,
-                                  onLink: (u) => launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication),
-                                  onOpenFile: (p) => toast(context, 'Berkas ada di PC: $p'),
-                                ),
+                              ? NvUserMessage(msg: m, scale: s.chatScale)
+                              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                  NvAgentLabel('neovarch · $pc', live: m.streaming),
+                                  AssistantMessage(
+                                    msg: m,
+                                    scale: s.chatScale,
+                                    showReasoning: s.showReasoning,
+                                    isLast: i == msgs.length - 1,
+                                    onLink: (u) => launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication),
+                                    onOpenFile: (p) => toast(context, 'Berkas ada di PC: $p'),
+                                  ),
+                                ]),
                         );
                       },
                     ),
         ),
         for (final a in mine)
-          ApprovalCard(
+          NvApprovalCard(
             command: a.command,
             description: a.description,
             choices: a.choices,
+            origin: a.toolName,
             onChoice: (c) async {
               final err = await r.respond(a, c);
               if (err != null && context.mounted) toast(context, err);
             },
           ),
         if (r.transcript.error != null && !r.running)
-          Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 6), child: ErrorBanner(r.transcript.error!, dense: true)),
+          Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: NvNotice(r.transcript.error!)),
         _composer(context, r),
       ]),
     );
   }
 
-  Widget _empty(BuildContext context, RemoteController r) => ListView(padding: const EdgeInsets.all(24), children: [
-        const SizedBox(height: 24),
-        const Center(child: BrandBadge(height: 64)),
-        const SizedBox(height: 14),
-        Text('Perintahkan agen di PC', textAlign: TextAlign.center, style: context.tt.titleMedium),
-        const SizedBox(height: 6),
-        Text(
-          r.connected
-              ? 'Pesanmu dijalankan oleh agen Neovarch di ${r.desktop?.name ?? 'PC'} — alat, berkas, dan terminal semuanya di sana.'
-              : 'Belum terhubung ke PC.',
-          textAlign: TextAlign.center,
-          style: context.tt.bodySmall,
+  Widget _empty(BuildContext context, RemoteController r) => ListView(padding: const EdgeInsets.only(top: 16, bottom: 16), children: [
+        NvEmpty(
+          art: 'assets/art/portal-banner.webp',
+          kicker: r.connected ? 'siap · ${r.desktop?.name ?? 'pc'}' : 'offline',
+          title: 'Perintahkan agen di PC',
+          body: r.connected
+              ? 'Pesanmu dijalankan agen Neovarch di ${r.desktop?.name ?? 'PC'}. Alat, berkas, dan terminal ada di sana; HP ini mengirim perintah dan menampilkan hasilnya.'
+              : 'Belum terhubung ke PC. Sambungkan dari tab PC.',
         ),
-        const SizedBox(height: 18),
-        if (r.connected)
-          Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
-            for (final p in const [
+        if (r.connected) ...[
+          const NvSection('coba perintah', padding: EdgeInsets.fromLTRB(20, 4, 20, 10)),
+          NvList(children: [
+            for (final (i, p) in const [
               'Apa yang sedang dikerjakan agen sekarang?',
               'Ringkas papan Kanban hari ini',
               'Jalankan tes proyek dan laporkan hasilnya',
-            ])
-              ActionChip(label: Text(p), onPressed: () => _send(p)),
+            ].indexed)
+              NvRow(
+                icon: [Icons.bolt_rounded, Icons.view_week_outlined, Icons.terminal_rounded][i],
+                title: p,
+                trailing: const Icon(Icons.north_east_rounded, size: 16, color: NV.faint),
+                onTap: () => _send(p),
+              ),
           ]),
+        ],
         if (r.sessions.isNotEmpty) ...[
-          const SectionLabel('Terakhir di PC', padding: EdgeInsets.fromLTRB(0, 24, 0, 6)),
-          for (final s in r.sessions.take(5))
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.chat_bubble_outline, size: 20),
-              title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(relTime(s.updatedAt), style: context.tt.bodySmall),
-              onTap: () => r.openSession(s.id).then((_) => _toBottom()),
-            ),
+          const NvSection('terakhir di pc'),
+          NvList(children: [
+            for (final s in r.sessions.take(5))
+              NvRow(
+                icon: Icons.chat_bubble_outline_rounded,
+                title: s.title,
+                subtitle: '${relTime(s.updatedAt)} · ${s.messageCount} pesan',
+                mono: true,
+                trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                onTap: () => r.openSession(s.id).then((_) => _toBottom()),
+              ),
+          ]),
         ],
       ]);
 
@@ -201,51 +216,48 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final kb = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(12, 6, 12, (kb > 0 ? kb : bottom) + 8),
-      child: PaperScope(
-        child: Builder(
-          builder: (context) => Container(
-            padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-            decoration: BoxDecoration(
-              color: context.hc.popover,
-              borderRadius: BorderRadius.circular(context.hc.corner + 4),
-              border: Border.all(color: context.hc.border),
-            ),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (canDictate)
-                IconButton(
-                  tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah',
-                  icon: Icon(_dictating ? Icons.mic : Icons.mic_none, color: _dictating ? context.cs.primary : null),
-                  onPressed: r.connected ? _dictate : null,
-                ),
-              Expanded(
-                child: TextField(
-                  controller: _input,
-                  minLines: 1,
-                  maxLines: 5,
-                  enabled: r.connected,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _send(),
-                  decoration: InputDecoration(
-                    hintText: r.connected ? 'Perintah untuk agen di PC…' : 'Menunggu koneksi ke PC…',
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    filled: false,
-                  ),
-                ),
-              ),
-              if (r.running)
-                IconButton(tooltip: 'Hentikan', icon: const Icon(Icons.stop_circle_outlined), onPressed: r.stop)
-              else
-                IconButton(
-                  tooltip: 'Kirim',
-                  icon: Icon(Icons.arrow_upward_rounded, color: context.cs.primary),
-                  onPressed: r.connected ? _send : null,
-                ),
-            ]),
-          ),
+      padding: EdgeInsets.fromLTRB(16, 6, 16, (kb > 0 ? kb : bottom) + 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: NV.surface,
+          borderRadius: BorderRadius.circular(NV.rCard),
+          border: Border.all(color: NV.borderStrong),
         ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          if (canDictate)
+            NvIconButton(
+              tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah',
+              icon: _dictating ? Icons.mic_rounded : Icons.mic_none_rounded,
+              accent: _dictating,
+              onPressed: r.connected ? _dictate : null,
+            ),
+          Expanded(
+            child: TextField(
+              controller: _input,
+              minLines: 1,
+              maxLines: 5,
+              enabled: r.connected,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _send(),
+              style: const TextStyle(fontSize: 15, color: NV.text, height: 1.4),
+              decoration: InputDecoration(
+                hintText: r.connected ? 'Perintah untuk agen di PC…' : 'Menunggu koneksi ke PC…',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                filled: false,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+              ),
+            ),
+          ),
+          if (r.running)
+            NvIconButton(tooltip: 'Hentikan', icon: Icons.stop_rounded, accent: true, onPressed: r.stop)
+          else
+            NvIconButton(tooltip: 'Kirim', icon: Icons.arrow_upward_rounded, accent: true, onPressed: r.connected ? _send : null),
+        ]),
       ),
     );
   }
@@ -262,28 +274,33 @@ class _SessionsSheet extends ConsumerWidget {
         height: MediaQuery.sizeOf(context).height * 0.7,
         child: Column(children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
-            child: Row(children: [
-              Expanded(child: Text('Sesi di ${r.desktop?.name ?? 'PC'}', style: context.tt.titleMedium)),
-              IconButton(icon: const Icon(Icons.refresh), onPressed: r.loadSessions),
-            ]),
+            padding: const EdgeInsets.fromLTRB(20, 0, 16, 12),
+            child: NvSheetTitle(
+              kicker: 'riwayat · ${r.desktop?.name ?? 'pc'}',
+              title: 'Sesi di PC',
+              trailing: NvIconButton(tooltip: 'Segarkan', icon: Icons.refresh_rounded, onPressed: r.loadSessions),
+            ),
           ),
           Expanded(
             child: r.sessionsLoading && r.sessions.isEmpty
                 ? const CenterLoader()
                 : r.sessions.isEmpty
-                    ? const EmptyState(icon: Icons.forum_outlined, title: 'Belum ada sesi')
-                    : ListView(children: [
-                        for (final s in r.sessions)
-                          ListTile(
-                            selected: s.id == r.storedId,
-                            title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text('${relTime(s.updatedAt)} · ${s.messageCount} pesan', style: context.tt.bodySmall),
-                            trailing: r.active.any((a) => a.title == s.title && a.status == 'running')
-                                ? const TypingDots(size: 4)
-                                : null,
-                            onTap: () => onPick(s.id),
-                          ),
+                    ? const NvEmpty(title: 'Belum ada sesi', body: 'Percakapan yang dimulai di PC atau dari HP ini muncul di sini.')
+                    : ListView(padding: const EdgeInsets.only(bottom: 16), children: [
+                        NvList(children: [
+                          for (final s in r.sessions)
+                            NvRow(
+                              icon: s.id == r.storedId ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
+                              accent: s.id == r.storedId,
+                              title: s.title,
+                              subtitle: '${relTime(s.updatedAt)} · ${s.messageCount} pesan',
+                              mono: true,
+                              trailing: r.active.any((a) => a.title == s.title && a.status == 'running')
+                                  ? const NvPill('jalan', color: NV.red)
+                                  : null,
+                              onTap: () => onPick(s.id),
+                            ),
+                        ]),
                       ]),
           ),
         ]),
