@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../theme/app_theme.dart';
-import '../../ui/widgets/brand.dart';
+import '../../theme/neovarch_mobile_theme.dart';
 import '../pairing.dart';
+import 'nv_widgets.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -41,8 +41,7 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(title: Text('Pindai QR dari PC', style: context.tt.titleMedium)),
+      backgroundColor: NV.bg,
       body: Stack(children: [
         Positioned.fill(
           child: MobileScanner(
@@ -50,33 +49,51 @@ class _ScanScreenState extends State<ScanScreen> {
             onDetect: _onDetect,
             errorBuilder: (context, e) => Center(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(28),
                 child: Text(
                   e.errorCode == MobileScannerErrorCode.permissionDenied
                       ? 'Izin kamera ditolak. Izinkan kamera di Pengaturan, atau masukkan alamat & token secara manual.'
                       : 'Kamera tidak tersedia: ${e.errorDetails?.message ?? e.errorCode.name}',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: brandPaper),
+                  style: const TextStyle(color: NV.text, fontSize: 14, height: 1.5),
                 ),
               ),
             ),
           ),
         ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          child: Container(
+            color: NV.bg.withValues(alpha: 0.86),
+            child: NvHeader(kicker: 'pemasangan', title: 'Pindai QR dari PC', onBack: () => Navigator.of(context).maybePop()),
+          ),
+        ),
         Center(
           child: Container(
-            width: 240,
-            height: 240,
-            decoration: BoxDecoration(border: Border.all(color: brandPaper, width: 2)),
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: NV.red, width: 2),
+            ),
           ),
         ),
         Positioned(
-          left: 24,
-          right: 24,
-          bottom: 40,
-          child: Text(
-            _hint ?? 'Di PC: Neovarch Desktop → Remote / Perangkat → tampilkan QR pemasangan.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: brandPaper, fontSize: 14),
+          left: 20,
+          right: 20,
+          bottom: 28 + MediaQuery.paddingOf(context).bottom,
+          child: NvPanel(
+            color: NV.bg.withValues(alpha: 0.92),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_hint != null ? '// QR DITOLAK' : '// LANGKAH', style: NV.monoLabel(color: NV.red)),
+              const SizedBox(height: 6),
+              Text(
+                _hint ?? 'Di PC: Neovarch Desktop → Remote / Perangkat → tampilkan QR pemasangan.',
+                style: const TextStyle(color: NV.text, fontSize: 14, height: 1.45),
+              ),
+            ]),
           ),
         ),
       ]),

@@ -3,10 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../theme/app_theme.dart';
+import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/common.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
+import 'nv_widgets.dart';
 
 const laneLabels = {
   'triage': 'Triase',
@@ -52,72 +53,101 @@ class _RemoteTasksScreenState extends ConsumerState<RemoteTasksScreen> {
         lanes.where((l) => l.name == 'running' && l.cards.isNotEmpty).firstOrNull ??
         lanes.where((l) => l.cards.isNotEmpty).firstOrNull ??
         lanes.firstOrNull;
+    final total = lanes.fold<int>(0, (n, l) => n + l.cards.length);
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Tugas di PC', style: context.tt.titleMedium),
-        actions: [IconButton(tooltip: 'Segarkan', icon: const Icon(Icons.refresh), onPressed: r.connected ? r.refreshBoard : null)],
-      ),
-      floatingActionButton: r.connected && b != null
-          ? Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
-              child: FloatingActionButton.extended(
-                onPressed: () => _newTask(context, b),
-                icon: const Icon(Icons.add),
-                label: const Text('Tugas'),
-              ),
-            )
-          : null,
-      body: RefreshIndicator(
-        onRefresh: r.refreshBoard,
-        child: b == null
-            ? ListView(children: [
-                if (r.boardLoading)
-                  const Padding(padding: EdgeInsets.all(40), child: CenterLoader(label: 'memuat papan…'))
-                else
-                  EmptyState(
-                    icon: Icons.view_kanban_outlined,
-                    title: r.connected ? 'Papan belum bisa dibaca' : 'Belum terhubung ke PC',
-                    body: r.boardError ?? 'Papan Kanban agen di PC muncul di sini.',
-                  ),
-              ])
-            : Column(children: [
-                SizedBox(
-                  height: 52,
-                  child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), children: [
-                    for (final l in lanes)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ChoiceChip(
-                          label: Text('${laneLabel(l.name)} ${l.cards.length}'),
-                          selected: cur?.name == l.name,
-                          onSelected: (_) => setState(() => lane = l.name),
-                        ),
+      body: Column(children: [
+        NvHeader(
+          kicker: 'kanban · ${r.desktop?.name ?? 'pc'}',
+          title: 'Tugas',
+          status: Text(b == null ? 'papan agen di PC' : '$total tugas · ${lanes.length} kolom',
+              style: NV.monoLabel(size: 10).copyWith(letterSpacing: 0.4)),
+          actions: [
+            NvIconButton(tooltip: 'Segarkan', icon: Icons.refresh_rounded, onPressed: r.connected ? r.refreshBoard : null),
+            NvIconButton(tooltip: 'Tugas baru', icon: Icons.add_rounded, accent: true, onPressed: r.connected && b != null ? () => _newTask(context, b) : null),
+          ],
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: r.refreshBoard,
+            child: b == null
+                ? ListView(children: [
+                    if (r.boardLoading)
+                      const Padding(padding: EdgeInsets.all(40), child: CenterLoader(label: 'memuat papan…'))
+                    else
+                      NvEmpty(
+                        art: 'assets/art/feat-automation.webp',
+                        kicker: r.connected ? 'papan' : 'offline',
+                        title: r.connected ? 'Papan belum bisa dibaca' : 'Belum terhubung ke PC',
+                        body: r.boardError ?? 'Papan Kanban agen di PC muncul di sini: tugas yang siap, sedang jalan, dan menunggu review.',
                       ),
+                  ])
+                : Column(children: [
+                    SizedBox(
+                      height: 78,
+                      child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(16, 4, 16, 10), children: [
+                        for (final l in lanes)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _LaneTile(lane: l, selected: cur?.name == l.name, onTap: () => setState(() => lane = l.name)),
+                          ),
+                      ]),
+                    ),
+                    if (r.boardError != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: NvNotice(r.boardError!)),
+                    NvSection(laneLabel(cur?.name ?? ''), count: cur?.cards.length, padding: const EdgeInsets.fromLTRB(20, 6, 20, 10)),
+                    Expanded(
+                      child: cur == null || cur.cards.isEmpty
+                          ? ListView(children: [
+                              NvEmpty(title: 'Kolom ${laneLabel(cur?.name ?? '')} kosong', body: 'Tidak ada tugas di kolom ini sekarang.'),
+                            ])
+                          : ListView(padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.paddingOf(context).bottom), children: [
+                              for (final t in cur.cards) _TaskCard(task: t, onTap: () => _detail(context, t)),
+                            ]),
+                    ),
                   ]),
-                ),
-                if (r.boardError != null) ErrorBanner(r.boardError!, dense: true),
-                Expanded(
-                  child: cur == null || cur.cards.isEmpty
-                      ? ListView(children: [EmptyState(icon: Icons.inbox_outlined, title: 'Kolom ${laneLabel(cur?.name ?? '')} kosong')])
-                      : ListView(padding: const EdgeInsets.fromLTRB(12, 4, 12, 96), children: [
-                          for (final t in cur.cards) _TaskCard(task: t, onTap: () => _detail(context, t)),
-                        ]),
-                ),
-              ]),
-      ),
+          ),
+        ),
+      ]),
     );
   }
 
-  void _detail(BuildContext context, KanbanCard t) => showPaperSheet(
+  void _detail(BuildContext context, KanbanCard t) => showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         builder: (ctx) => _TaskSheet(task: t),
       );
 
-  void _newTask(BuildContext context, KanbanSnapshot b) => showPaperSheet(
+  void _newTask(BuildContext context, KanbanSnapshot b) => showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         builder: (ctx) => _NewTaskSheet(assignees: b.assignees),
+      );
+}
+
+class _LaneTile extends StatelessWidget {
+  const _LaneTile({required this.lane, required this.selected, required this.onTap});
+  final KanbanLane lane;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(
+        color: selected ? NV.redWash : NV.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(NV.rCtl),
+          side: BorderSide(color: selected ? NV.red : NV.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 84),
+            padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(laneLabel(lane.name).toUpperCase(), style: NV.monoLabel(size: 9.5, color: selected ? NV.red : NV.muted)),
+              const SizedBox(height: 2),
+              Text('${lane.cards.length}', style: NV.display(size: 28, color: lane.cards.isEmpty && !selected ? NV.faint : NV.text)),
+            ]),
+          ),
+        ),
       );
 }
 
@@ -126,43 +156,55 @@ class _TaskCard extends StatelessWidget {
   final KanbanCard task;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => PaperScope(
-        child: Builder(
-          builder: (context) => Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: InkWell(
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    MetaLabel(task.id, size: 10),
-                    const Spacer(),
-                    if (task.priority > 0) StatusPill('P${task.priority}', mono: true, color: context.cs.primary),
-                  ]),
-                  const SizedBox(height: 4),
-                  Text(task.title, style: context.tt.titleSmall),
-                  if ((task.summary ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(task.summary!, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.bodySmall),
-                  ],
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    Icon(Icons.person_outline, size: 14, color: context.hc.mutedForeground),
-                    const SizedBox(width: 4),
-                    Text(task.assignee ?? 'belum ditugaskan', style: context.tt.bodySmall),
-                    if (task.comments > 0) ...[
-                      const SizedBox(width: 10),
-                      Icon(Icons.mode_comment_outlined, size: 13, color: context.hc.mutedForeground),
-                      const SizedBox(width: 3),
-                      Text('${task.comments}', style: context.tt.bodySmall),
-                    ],
-                  ]),
-                ]),
-              ),
+  Widget build(BuildContext context) => NvPanel(
+        margin: const EdgeInsets.only(bottom: 10),
+        onTap: onTap,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text(task.id.toUpperCase(), style: NV.monoLabel(size: 9.5, color: NV.faint)),
+            const Spacer(),
+            if (task.priority > 0) NvPill('P${task.priority}', color: NV.red),
+          ]),
+          const SizedBox(height: 8),
+          Text(task.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3, color: NV.text)),
+          if ((task.summary ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(task.summary!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.45, color: NV.muted)),
+          ],
+          const SizedBox(height: 12),
+          Row(children: [
+            _Avatar(task.assignee),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(task.assignee ?? 'belum ditugaskan',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10.5, color: NV.muted).copyWith(letterSpacing: 0.3)),
             ),
-          ),
+            if (task.comments > 0) ...[
+              const Icon(Icons.mode_comment_outlined, size: 13, color: NV.muted),
+              const SizedBox(width: 4),
+              Text('${task.comments}', style: NV.monoLabel(size: 10.5)),
+            ],
+          ]),
+        ]),
+      );
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar(this.name);
+  final String? name;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 24,
+        height: 24,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: name == null ? NV.raised : NV.redWash,
+          border: Border.all(color: name == null ? NV.border : NV.darkRed),
         ),
+        child: name == null
+            ? const Icon(Icons.person_outline_rounded, size: 13, color: NV.faint)
+            : Text(initials(name!).substring(0, 1), style: const TextStyle(fontFamily: NV.mono, fontSize: 10.5, color: NV.text)),
       );
 }
 
@@ -192,35 +234,31 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
     final r = ref.read(remoteProvider);
     final moves = laneMoves[t.status] ?? const <String>[];
     return Padding(
-      padding: EdgeInsets.fromLTRB(18, 18, 18, 18 + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          MetaLabel('${t.id} · ${laneLabel(t.status)}'),
-          const SizedBox(height: 6),
-          Text(t.title, style: context.tt.titleLarge),
-          const SizedBox(height: 8),
-          KeyValue('Penanggung', t.assignee ?? '—'),
-          if ((t.body ?? '').isNotEmpty) ...[const SizedBox(height: 8), Text(t.body!, style: context.tt.bodyMedium)],
+          NvSheetTitle(kicker: '${t.id} · ${laneLabel(t.status)}', title: t.title),
+          const SizedBox(height: 12),
+          NvKv('Penanggung', t.assignee ?? '—'),
+          if (t.priority > 0) NvKv('Prioritas', 'P${t.priority}', mono: true),
+          if ((t.body ?? '').isNotEmpty) ...[const SizedBox(height: 8), Text(t.body!, style: const TextStyle(fontSize: 14, height: 1.5, color: NV.text))],
           if ((t.summary ?? '').isNotEmpty) ...[
-            const SectionLabel('Ringkasan terakhir', padding: EdgeInsets.fromLTRB(0, 14, 0, 6)),
-            Text(t.summary!, style: context.tt.bodySmall),
+            const NvSection('ringkasan terakhir', padding: EdgeInsets.fromLTRB(0, 16, 0, 8)),
+            Text(t.summary!, style: const TextStyle(fontSize: 13, height: 1.5, color: NV.muted)),
           ],
           if (moves.isNotEmpty) ...[
-            const SectionLabel('Pindahkan ke', padding: EdgeInsets.fromLTRB(0, 16, 0, 6)),
+            const NvSection('pindahkan ke', padding: EdgeInsets.fromLTRB(0, 18, 0, 10)),
             Wrap(spacing: 8, runSpacing: 6, children: [
               for (final m in moves)
-                m == 'done' || m == 'ready'
-                    ? FilledButton.tonal(
-                        onPressed: busy ? null : () => _run(() => r.moveTask(t.id, m), 'Dipindah ke ${laneLabel(m)}'),
-                        child: Text(laneLabel(m)),
-                      )
-                    : OutlinedButton(
-                        onPressed: busy ? null : () => _run(() => r.moveTask(t.id, m), 'Dipindah ke ${laneLabel(m)}'),
-                        child: Text(laneLabel(m)),
-                      ),
+                // Lane moves are secondary; the one red action on the sheet is
+                // "Kirim komentar".
+                OutlinedButton(
+                  onPressed: busy ? null : () => _run(() => r.moveTask(t.id, m), 'Dipindah ke ${laneLabel(m)}'),
+                  child: Text(laneLabel(m)),
+                ),
             ]),
           ],
-          const SectionLabel('Komentar / arahan', padding: EdgeInsets.fromLTRB(0, 16, 0, 6)),
+          const NvSection('komentar / arahan', padding: EdgeInsets.fromLTRB(0, 18, 0, 10)),
           TextField(controller: _comment, minLines: 1, maxLines: 4, decoration: const InputDecoration(hintText: 'Tulis arahan untuk agen…')),
           const SizedBox(height: 8),
           FilledButton(
@@ -254,16 +292,18 @@ class _NewTaskSheetState extends ConsumerState<_NewTaskSheet> {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: EdgeInsets.fromLTRB(18, 18, 18, 18 + MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          Text('Tugas baru di PC', style: context.tt.titleMedium),
-          const SizedBox(height: 12),
+          NvSheetTitle(kicker: 'kanban · tugas baru', title: 'Tugas baru di PC'),
+          const SizedBox(height: 16),
           TextField(controller: _title, autofocus: true, decoration: const InputDecoration(labelText: 'Judul')),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           TextField(controller: _body, minLines: 2, maxLines: 5, decoration: const InputDecoration(labelText: 'Uraian (opsional)')),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           DropdownButtonFormField<String?>(
             initialValue: assignee,
+            dropdownColor: NV.raised,
+            borderRadius: BorderRadius.circular(NV.rCtl),
             decoration: const InputDecoration(labelText: 'Penanggung'),
             items: [
               const DropdownMenuItem(value: null, child: Text('Belum ditugaskan (triase)')),
@@ -272,7 +312,7 @@ class _NewTaskSheetState extends ConsumerState<_NewTaskSheet> {
             onChanged: (v) => setState(() => assignee = v),
           ),
           const SizedBox(height: 6),
-          Text('Tugas dengan penanggung dikerjakan agen di PC saat siap.', style: context.tt.bodySmall),
+          Text('Tugas dengan penanggung dikerjakan agen di PC saat siap.', style: const TextStyle(fontSize: 12.5, color: NV.muted)),
           const SizedBox(height: 14),
           FilledButton(
             onPressed: busy

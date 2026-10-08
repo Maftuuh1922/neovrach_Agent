@@ -180,13 +180,13 @@ Future<bool> confirmDialog(BuildContext context,
   final r = await showPaperDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(title, style: ctx.tt.titleMedium),
+      title: Text(title, style: DialogTheme.of(ctx).titleTextStyle ?? ctx.tt.titleMedium),
       content: Text(body, style: ctx.tt.bodyMedium),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
         FilledButton(
           autofocus: true,
-          style: destructive ? FilledButton.styleFrom(backgroundColor: ctx.hc.destructive, foregroundColor: Colors.white) : null,
+          style: destructive ? FilledButton.styleFrom(backgroundColor: ctx.hc.destructive, foregroundColor: ctx.cs.onError) : null,
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(confirm),
         ),

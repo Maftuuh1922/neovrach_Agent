@@ -84,16 +84,19 @@ class Wordmark extends StatelessWidget {
 
 /// Neovarch monogram (N + halo, from the NEOVARCHAGENT wordmark), tinted.
 /// [label] = the full logo card instead (portrait 894:1377).
+/// [halo] = false draws the bare N (same placement), for callers that paint
+/// their own animated halo over it.
 class BrandBadge extends StatelessWidget {
-  const BrandBadge({super.key, this.height = 56, this.color, this.label = false});
+  const BrandBadge({super.key, this.height = 56, this.color, this.label = false, this.halo = true});
   final double height;
   final Color? color;
   final bool label;
+  final bool halo;
   @override
   Widget build(BuildContext context) {
     if (label) return LogoCard(height: height);
     final c = color ?? (context.hc.brand ? context.cs.onSurface : context.cs.primary);
-    return Image.asset('assets/brand/monogram.png',
+    return Image.asset(halo ? 'assets/brand/monogram.png' : 'assets/brand/monogram_n.png',
         height: height, width: height, color: c, colorBlendMode: BlendMode.srcIn, filterQuality: FilterQuality.medium, semanticLabel: 'Neovarch Agent');
   }
 }

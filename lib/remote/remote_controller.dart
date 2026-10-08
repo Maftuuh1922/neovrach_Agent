@@ -46,7 +46,11 @@ class RemoteController extends ChangeNotifier {
   Map<String, dynamic> serverInfo = const {};
 
   bool get connected => status == RemoteStatus.connected;
-  List<RemoteApproval> get approvals => gateway?.approvals ?? const [];
+  List<RemoteApproval> get approvals => debugApprovals ?? gateway?.approvals ?? const [];
+
+  /// Screenshot / widget-test harness only: approvals to show without a gateway.
+  @visibleForTesting
+  List<RemoteApproval>? debugApprovals;
   bool get running => transcript.running;
 
   String get statusLabel => switch (status) {

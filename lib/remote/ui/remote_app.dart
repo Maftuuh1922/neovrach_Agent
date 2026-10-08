@@ -6,14 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../state/app_controller.dart' show settingsProvider;
 import '../../state/settings_controller.dart';
-import '../../theme/app_theme.dart';
-import '../../theme/hermes_themes.dart';
-import '../../ui/screens/intro_screen.dart';
+import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/screens/startup_splash.dart';
-import '../../ui/widgets/brand.dart';
 import '../remote_controller.dart';
 import '../saved_desktops.dart';
 import 'connect_screen.dart';
+import 'remote_intro_screen.dart';
 import 'remote_shell.dart';
 
 Future<void> runRemoteApp(
@@ -32,6 +30,9 @@ Future<void> runRemoteApp(
   if (openSession != null && remote.connected) await remote.openSession(openSession);
 }
 
+/// Built once; the remote never switches themes.
+final neovarchMobileTheme = buildNeovarchMobileTheme();
+
 class RemoteNeovarchApp extends ConsumerWidget {
   const RemoteNeovarchApp({super.key, this.skipSplash = false});
   final bool skipSplash;
@@ -40,19 +41,22 @@ class RemoteNeovarchApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final remote = ref.watch(remoteProvider);
-    final theme = themeByName(s.themeName);
     final paired = remote.desktop != null || remote.desktops.items.isNotEmpty;
     return MaterialApp(
       title: 'Neovarch Remote',
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(theme, Brightness.light, fontChoice: s.fontChoice),
-      darkTheme: buildTheme(theme, Brightness.dark, fontChoice: s.fontChoice),
-      themeMode: theme.darkOnly ? ThemeMode.dark : s.themeMode,
-      builder: theme.brand ? (context, child) => Stack(children: [child!, const Positioned.fill(child: GrainOverlay())]) : null,
+      // The phone has one look (Neovarch dark red, rounded, flat): the
+      // desktop theme presets / light mode do not apply to the remote.
+      theme: neovarchMobileTheme,
+      darkTheme: neovarchMobileTheme,
+      themeMode: ThemeMode.dark,
       home: !s.introSeen
-          ? const IntroScreen()
+          ? const RemoteIntroScreen()
           : StartupSplash(
               enabled: !skipSplash,
+              background: NV.bg,
+              foreground: NV.text,
+              accent: NV.red,
               child: paired ? const RemoteShell() : const ConnectScreen(onboarding: true),
             ),
     );

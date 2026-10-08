@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/platform_caps.dart';
-import '../../theme/app_theme.dart';
+import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/common.dart';
 import '../pairing.dart';
 import '../remote_controller.dart';
+import 'nv_widgets.dart';
 import 'scan_screen.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
@@ -85,71 +86,102 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
     final saved = remote.desktops.items;
+    final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      appBar: widget.onboarding ? null : AppBar(title: Text('Tambah PC', style: context.tt.titleMedium)),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: ListView(padding: const EdgeInsets.fromLTRB(22, 24, 22, 32), children: [
-              if (widget.onboarding) ...[
-                const Center(child: LogoCard(height: 170)),
-                const SizedBox(height: 16),
-                const Center(child: Wordmark(height: 34)),
-                const SizedBox(height: 18),
-              ],
-              const MetaLabel('[ remote ]  hp = remote · pc = otak'),
-              const SizedBox(height: 6),
-              Text('Hubungkan ke PC', style: context.tt.headlineSmall),
-              const SizedBox(height: 8),
-              Text(
-                'Agen Neovarch berjalan di aplikasi desktop. HP ini hanya remote: kirim perintah, pantau tugas, dan setujui aksi agen dari mana saja di jaringanmu.',
-                style: context.tt.bodyMedium?.copyWith(color: context.hc.mutedForeground),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: ListView(padding: EdgeInsets.fromLTRB(16, widget.onboarding ? top + 16 : 0, 16, 32 + MediaQuery.paddingOf(context).bottom), children: [
+            if (!widget.onboarding)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: NvHeader(kicker: 'perangkat · tambah', title: 'Tambah PC', inset: 0, onBack: () => Navigator.of(context).maybePop()),
               ),
-              const SizedBox(height: 16),
-              PaperScope(
-                child: Builder(
-                  builder: (context) => Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: context.hc.popover,
-                      borderRadius: BorderRadius.circular(context.hc.corner + 2),
-                      border: Border.all(color: context.hc.border),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      for (final (i, t) in [
-                        'Buka Neovarch Desktop di PC.',
-                        'Masuk ke Pengaturan → Remote / Perangkat, aktifkan akses remote.',
-                        'Pindai QR yang muncul, atau ketik alamat dan token-nya di bawah.',
-                      ].indexed)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            SizedBox(width: 26, child: Text('0${i + 1}', style: monoStyle(context, size: 12, color: context.cs.primary))),
-                            Expanded(child: Text(t, style: context.tt.bodyMedium)),
-                          ]),
+            // Art plate and intro copy on first run only; "Tambah PC" goes
+            // straight to the steps and the pairing actions.
+            if (widget.onboarding) ...[
+              // Dithered art plate with the wordmark.
+              ClipRRect(
+                borderRadius: BorderRadius.circular(NV.rCard),
+                child: Container(
+                  foregroundDecoration: BoxDecoration(borderRadius: BorderRadius.circular(NV.rCard), border: Border.all(color: NV.border)),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: Stack(fit: StackFit.expand, children: [
+                      Image.asset('assets/art/feat-remote.webp', fit: BoxFit.cover, alignment: const Alignment(0.35, 0), filterQuality: FilterQuality.medium),
+                      Positioned(
+                        left: 14,
+                        top: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(color: NV.bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.border)),
+                          child: Text('HP = REMOTE · PC = OTAK', style: NV.monoLabel(size: 9.5, color: NV.text)),
                         ),
+                      ),
+                      const Positioned(left: 16, bottom: 14, child: Wordmark(height: 30, color: NV.text, haloColor: NV.red)),
                     ]),
                   ),
                 ),
               ),
+              const SizedBox(height: 22),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('// REMOTE', style: NV.monoLabel(color: NV.red)),
+                  const SizedBox(height: 8),
+                  Text('Hubungkan ke PC', style: NV.display(size: 40)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Agen Neovarch berjalan di aplikasi desktop. HP ini hanya remote: kirim perintah, pantau tugas, dan setujui aksi agen dari jaringan yang sama.',
+                    style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted),
+                  ),
+                ]),
+              ),
               const SizedBox(height: 18),
-              if (_error != null) ...[ErrorBanner(_error!), const SizedBox(height: 12)],
-              if (canUseCamera)
-                FilledButton.icon(
-                  onPressed: _busy ? null : _scan,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Pindai QR dari PC'),
-                ),
-              const SizedBox(height: 8),
-              if (!_manual)
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : () => setState(() => _manual = true),
-                  icon: const Icon(Icons.keyboard_outlined),
-                  label: const Text('Masukkan alamat & token'),
-                )
-              else ...[
-                const SizedBox(height: 8),
+            ] else
+              const SizedBox(height: 6),
+            NvPanel(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                for (final (i, t) in [
+                  'Buka Neovarch Desktop di PC.',
+                  'Masuk ke Pengaturan → Remote / Perangkat, aktifkan akses remote.',
+                  'Pindai QR yang muncul, atau ketik alamat dan token-nya di bawah.',
+                ].indexed) ...[
+                  if (i > 0) const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: NV.border)),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: NV.redWash, shape: BoxShape.circle, border: Border.all(color: NV.darkRed)),
+                      child: Text('${i + 1}', style: const TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.red)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(t, style: const TextStyle(fontSize: 14, height: 1.45, color: NV.text)))),
+                  ]),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 18),
+            if (_error != null) ...[NvNotice(_error!), const SizedBox(height: 12)],
+            if (canUseCamera)
+              FilledButton.icon(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
+                onPressed: _busy ? null : _scan,
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('Pindai QR dari PC'),
+              ),
+            const SizedBox(height: 10),
+            if (!_manual)
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                onPressed: _busy ? null : () => setState(() => _manual = true),
+                icon: const Icon(Icons.keyboard_outlined),
+                label: const Text('Masukkan alamat & token'),
+              )
+            else ...[
+              const NvSection('manual', padding: EdgeInsets.fromLTRB(4, 10, 4, 12)),
                 TextField(
                   controller: _addr,
                   keyboardType: TextInputType.url,
@@ -179,33 +211,38 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 TextField(controller: _name, decoration: const InputDecoration(labelText: 'Nama PC (opsional)', hintText: 'PC Kantor')),
                 const SizedBox(height: 14),
                 FilledButton(
+                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                   onPressed: _busy ? null : _submitManual,
                   child: Text(_busy ? 'Menghubungkan…' : 'Hubungkan'),
                 ),
               ],
-              if (_busy) const Padding(padding: EdgeInsets.only(top: 16), child: CenterLoader(label: 'menghubungi PC…')),
-              if (saved.isNotEmpty) ...[
-                const SectionLabel('PC tersimpan', padding: EdgeInsets.fromLTRB(0, 24, 0, 6)),
+            if (_busy) const Padding(padding: EdgeInsets.only(top: 16), child: CenterLoader(label: 'menghubungi PC…')),
+            if (saved.isNotEmpty) ...[
+              const NvSection('pc tersimpan', padding: EdgeInsets.fromLTRB(4, 26, 4, 10)),
+              NvList(margin: EdgeInsets.zero, children: [
                 for (final d in saved)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.computer_outlined),
-                    title: Text(d.name),
-                    subtitle: Text(d.url, style: monoStyle(context, size: 11.5)),
-                    trailing: const Icon(Icons.chevron_right, size: 18),
+                  NvRow(
+                    icon: Icons.desktop_windows_outlined,
+                    title: d.name,
+                    subtitle: d.url,
+                    mono: true,
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
                     onTap: () async {
                       await ref.read(remoteProvider).connectTo(d);
                       if (context.mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
                     },
                   ),
-              ],
-              const SizedBox(height: 20),
-              Text(
-                'Tip: HP dan PC harus di jaringan yang sama (Wi-Fi rumah/kantor) atau terhubung lewat Tailscale/VPN. Token disimpan terenkripsi di HP.',
-                style: context.tt.bodySmall,
+              ]),
+            ],
+            const SizedBox(height: 22),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                'HP dan PC harus di jaringan yang sama (Wi-Fi rumah/kantor) atau terhubung lewat Tailscale/VPN. Token disimpan terenkripsi di HP.',
+                style: TextStyle(fontSize: 12.5, height: 1.5, color: NV.faint),
               ),
-            ]),
-          ),
+            ),
+          ]),
         ),
       ),
     );
