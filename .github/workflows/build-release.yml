@@ -128,10 +128,23 @@ jobs:
     needs: [linux, windows, android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pack npm launcher
+        run: |
+          cd npm
+          npm version "$APP_VERSION" --no-git-tag-version --allow-same-version
+          npm pack
+          mv "neovarch-agent-$APP_VERSION.tgz" ../artifacts/neovarch-agent-npm.tgz
 
       - run: ls -la artifacts
 
@@ -142,6 +155,11 @@ jobs:
           name: Neovarch Agent ${{ env.APP_VERSION }}
           body: |
             Neovarch Agent ${{ env.APP_VERSION }}
+
+            Install:
+            - Linux (x64): curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.sh | sh
+            - Windows (x64, PowerShell): irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1 | iex
+            - npm (Node 18+): npm i -g https://github.com/Maftuuh1922/neovrach_Agent/releases/latest/download/neovarch-agent-npm.tgz
 
             Downloads:
             - Windows (x64): neovarch-agent-windows-x64.zip — unzip and run NeovarchAgent.exe

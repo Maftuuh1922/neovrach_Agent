@@ -1,4 +1,4 @@
-# Neovarch Agent (Flutter · Android & iOS)
+# Neovarch Agent (Flutter · Android, iOS, Windows & Linux)
 
 Aplikasi agen AI **mandiri** dari NeovarchLabs untuk Android dan iPhone, dibangun di atas runtime
 Hermes Agent (Nous Research, MIT) — seperti *Hermes Desktop*, tapi di ponsel.
@@ -24,6 +24,46 @@ UI berbahasa Indonesia, Material 3.
 * **Huruf**: Big Shoulders Display (judul), Barlow (teks), IBM Plex Mono (label) — semua SIL OFL, dibundel.
 * **Animasi**: intro 4 slide pertama kali (seni duotone merah/tulang), pembuka logo setiap start,
   indikator berpikir & aktivitas alat streaming ala Hermes Desktop, navbar mengambang.
+
+---
+
+## Install
+
+**Linux (x86_64)** — terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.sh | sh
+```
+
+Memasang ke `~/.local/share/neovarch-agent`, membuat perintah `neovarch` di `~/.local/bin`, dan menambahkan
+entri menu aplikasi. Butuh GTK 3 dan libsecret (installer memberi tahu perintah `apt`/`dnf`/`pacman` bila belum ada).
+Pilih versi tertentu: `curl -fsSL …/install.sh | NEOVARCH_VERSION=v1.1.0 sh`.
+Hapus: `curl -fsSL …/install.sh | sh -s -- --uninstall`.
+
+**Windows (x64)** — PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1 | iex
+```
+
+Memasang ke `%LOCALAPPDATA%\Programs\NeovarchAgent` (tanpa admin), membuat pintasan Start Menu + Desktop dan
+perintah `neovarch`, serta menawarkan pemasangan Microsoft Visual C++ runtime bila belum ada.
+Hapus: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1))) -Uninstall`.
+
+**npm (Node.js 18+, Linux x64 / Windows x64)**:
+
+```bash
+npm i -g https://github.com/Maftuuh1922/neovrach_Agent/releases/latest/download/neovarch-agent-npm.tgz
+neovarch
+```
+
+Aplikasi diunduh ke `~/.neovarch/app`. Setelah paket diterbitkan di registry npm, `npm i -g neovarch-agent`
+juga bisa dipakai (saat ini belum diterbitkan).
+
+**Android** — unduh APK dari [rilis terbaru](https://github.com/Maftuuh1922/neovrach_Agent/releases/latest):
+`neovarch-agent-android-arm64.apk` (kebanyakan HP modern) atau `neovarch-agent-android-universal.apk`.
+
+macOS dan Linux ARM64 belum tersedia. Semua unduhan: <https://github.com/Maftuuh1922/neovrach_Agent/releases/latest>.
 
 ---
 
