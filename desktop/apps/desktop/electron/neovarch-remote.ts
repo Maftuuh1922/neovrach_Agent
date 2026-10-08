@@ -5,7 +5,9 @@
 // the Hermes core refuses a non-loopback bind unless a dashboard auth provider is
 // registered (`--insecure` is a no-op since the June 2026 hardening). So when the
 // user enables remote access we spawn a SECOND, dedicated
-//   hermes serve --host 0.0.0.0 --port 9119 --isolated
+//   neovarch serve --host 0.0.0.0 --port 9319 --isolated
+// (9319, not Hermes' 9119: a co-installed Hermes dashboard/gateway keeps its
+// port. If the port is already taken we report it and never touch the owner.)
 // with the core's bundled username/password provider (plugins/dashboard_auth/basic)
 // configured through HERMES_DASHBOARD_BASIC_AUTH_* env vars. We own its signing
 // secret, so we mint the phone's access token ourselves in the exact format the
@@ -19,10 +21,13 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 
-export const REMOTE_DEFAULT_PORT = 9119
+export const REMOTE_DEFAULT_PORT = 9319
+/** Hermes Agent's dashboard/gateway default; Neovarch must never take it. */
+export const HERMES_DEFAULT_PORT = 9119
 const TOKEN_SUBJECT = 'neovarch-remote'
 const TOKEN_TTL_SECONDS = 5 * 365 * 24 * 60 * 60
 
@@ -112,6 +117,24 @@ export function verifyAccessToken(token: string, secret: Buffer, nowSeconds = Ma
   }
 }
 
+// ---- port ownership ---------------------------------------------------------
+
+/** True when something already accepts connections on 127.0.0.1:<port>. */
+export function portInUse(port: number, host = '127.0.0.1', timeoutMs = 800): Promise<boolean> {
+  return new Promise(resolve => {
+    const socket = net.connect({ port, host })
+    const done = (busy: boolean) => {
+      socket.removeAllListeners()
+      socket.destroy()
+      resolve(busy)
+    }
+
+    socket.setTimeout(timeoutMs, () => done(false))
+    socket.once('connect', () => done(true))
+    socket.once('error', () => done(false))
+  })
+}
+
 // ---- LAN addresses ----------------------------------------------------------
 
 const VIRTUAL_IFACE = /^(docker|br-|veth|virbr|vmnet|vboxnet|lo|utun|awdl|llw|zt|tun|tap)/i
@@ -196,7 +219,11 @@ export function createRemoteController(deps: RemoteControllerDeps) {
 
       return {
         enabled: parsed.enabled === true,
-        port: Number.isInteger(parsed.port) && parsed.port > 0 && parsed.port < 65536 ? parsed.port : base.port,
+        // v1.2.x defaulted to 9119, Hermes Agent's port; move those to Neovarch's own.
+        port:
+          Number.isInteger(parsed.port) && parsed.port > 0 && parsed.port < 65536 && parsed.port !== HERMES_DEFAULT_PORT
+            ? parsed.port
+            : base.port,
         secret: typeof parsed.secret === 'string' && decodeSecret(parsed.secret).length >= 32 ? parsed.secret : base.secret,
         issuedAt: Number.isInteger(parsed.issuedAt) && parsed.issuedAt > 0 ? parsed.issuedAt : base.issuedAt,
         preferredAddress: typeof parsed.preferredAddress === 'string' ? parsed.preferredAddress : null,
@@ -285,6 +312,19 @@ export function createRemoteController(deps: RemoteControllerDeps) {
     emit()
 
     try {
+      // Never fight another program (a co-installed Hermes on 9119, anything
+      // else) for the port: refuse up front instead of spawning and probing a
+      // server that is not ours.
+      if (await portInUse(settings.port)) {
+        error =
+          settings.port === HERMES_DEFAULT_PORT
+            ? `Port ${settings.port} dipakai Hermes Agent. Pilih port lain untuk Neovarch (bawaan ${REMOTE_DEFAULT_PORT}).`
+            : `Port ${settings.port} sudah dipakai aplikasi lain. Pilih port lain.`
+        deps.log(`[remote] port ${settings.port} busy; not starting`)
+
+        return
+      }
+
       const spec = await deps.resolveSpawn(['serve', '--host', '0.0.0.0', '--port', String(settings.port), '--isolated'])
 
       if (gen !== generation) {

@@ -1,10 +1,16 @@
 # Neovarch Remote — phone ↔ desktop protocol
 
 **Product split:** the agent runs in the **Neovarch desktop app** (a fork of Hermes Desktop: Electron + React
-driving the Hermes Agent Python core). The **phone app (Android/iOS, this Flutter project) is a remote only**:
-no local agent runtime, no provider/API-key settings, no local tools. It talks to the gateway the desktop
-already runs — the Hermes `tui_gateway` JSON-RPC API on `/api/ws` plus a few dashboard REST routes. There is
-**no Neovarch-specific server**; anything a stock `hermes serve` / `hermes dashboard` exposes works.
+driving the **Neovarch core** — the Python agent in `core/`, vendored from Hermes Agent and run as the
+`neovarch` CLI with its own home `~/.neovarch`). The **phone app (Android/iOS, this Flutter project) is a
+remote only**: no local agent runtime, no provider/API-key settings, no local tools. It talks to the gateway
+the desktop already runs — the core's `tui_gateway` JSON-RPC API on `/api/ws` plus a few dashboard REST
+routes (wire-compatible with a stock `hermes serve` / `hermes dashboard`).
+
+**Port:** Neovarch's remote gateway listens on **9319** by default. 9119 is Hermes Agent's dashboard port;
+Neovarch never binds it, so both can run on one PC. Desktops that were set to 9119 by v1.2.x move to 9319
+on upgrade, and phones paired to `:9119` must scan the new QR once. If the port is taken by another
+program the desktop reports it and does not start (it never stops or replaces the other process).
 
 Code: `lib/remote/` (`pairing.dart`, `remote_gateway.dart`, `remote_transcript.dart`, `remote_controller.dart`,
 `saved_desktops.dart`, `ui/`). Transport reuses `lib/data/gateway_client.dart`. Tests:
@@ -18,11 +24,11 @@ The desktop's **Remote / Perangkat** screen shows a QR and the same data as text
 
 | Form | Example |
 |---|---|
-| **Pairing URI (preferred)** | `neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9119&token=<token>&name=PC%20Kantor&profile=default` |
-| JSON | `{"url":"http://192.168.1.5:9119","token":"<token>","name":"PC Kantor","profile":"default","headers":{"CF-Access-Client-Id":"…"}}` |
-| Dashboard URL with token | `http://192.168.1.5:9119/?token=<token>` |
-| WebSocket URL | `ws://192.168.1.5:9119/api/ws?token=<token>` |
-| Manual | address `192.168.1.5:9119` (port defaults to **9119**, scheme to `http`) + token typed separately |
+| **Pairing URI (preferred)** | `neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9319&token=<token>&name=PC%20Kantor&profile=default` |
+| JSON | `{"url":"http://192.168.1.5:9319","token":"<token>","name":"PC Kantor","profile":"default","headers":{"CF-Access-Client-Id":"…"}}` |
+| Dashboard URL with token | `http://192.168.1.5:9319/?token=<token>` |
+| WebSocket URL | `ws://192.168.1.5:9319/api/ws?token=<token>` |
+| Manual | address `192.168.1.5:9319` (port defaults to **9319**, scheme to `http`) + token typed separately |
 
 Fields: `url` = gateway HTTP origin (optionally with a base path behind a reverse proxy; `ws(s)` and a trailing
 `/api/ws` are normalized away), `token` = gateway auth token, `name` = label, `profile` = Hermes profile to pass
@@ -36,7 +42,7 @@ Settings ▸ **Remote / Perangkat** ("Aktifkan akses remote"):
 1. The desktop's own backend stays on `127.0.0.1` (loopback peers only). The Hermes core refuses any
    non-loopback bind without a dashboard auth provider (`--insecure` is a no-op since the June 2026
    hardening), so the desktop spawns a **second** process
-   `hermes serve --host 0.0.0.0 --port 9119 --isolated` with the core's bundled password provider
+   `neovarch serve --host 0.0.0.0 --port 9319 --isolated` with the core's bundled password provider
    enabled through env: `HERMES_DASHBOARD_BASIC_AUTH_USERNAME=neovarch-remote`, a random never-shown
    `…_PASSWORD`, and `…_SECRET=<base64 32-byte secret>` stored in the desktop's userData
    (`neovarch-remote.json`, mode 0600).
@@ -44,7 +50,7 @@ Settings ▸ **Remote / Perangkat** ("Aktifkan akses remote"):
    `urlsafe_b64encode(json.dumps({"sub":"neovarch-remote","kind":"access","exp":…}, separators=(",",":")) + HMAC_SHA256(secret, json))`
    (padding kept, signature appended without separator). It is accepted as `Authorization: Bearer` on REST
    and as `?token=` on `/api/ws` (gated mode). `X-Hermes-Session-Token` is ignored in gated mode (harmless).
-3. The screen shows the QR (`neovarch://pair?v=1&url=http://<LAN-IP>:9119&token=…&name=<PC>&profile=<profile>`),
+3. The screen shows the QR (`neovarch://pair?v=1&url=http://<LAN-IP>:9319&token=…&name=<PC>&profile=<profile>`),
    address + token with copy buttons, a LAN-IP picker when the PC has several addresses, a connection check
    (`GET /api/plugins/kanban/board` with the phone token via the LAN address) and **Buat token baru**
    (new secret → gateway restart → every paired phone must re-scan). The process stops on quit and

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neovarch-agent"
+dynamic = ["version"]
+description = "Neovarch Agent core: the agent loop, tools, sessions and the `neovarch serve` gateway for the Neovarch desktop and phone apps."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "NeovarchLabs" }]
+requires-python = ">=3.11"
+dependencies = [
+  "aiohttp>=3.9,<4",
+  "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+neovarch = "neovarch.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "neovarch.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["neovarch*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

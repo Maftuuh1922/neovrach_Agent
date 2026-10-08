@@ -5,13 +5,23 @@ import path from 'node:path'
 import { app } from 'electron'
 
 import { resolveDesktopHermesHome } from './data-paths'
+import { pinNeovarchEnvironment } from './neovarch-env'
 import { readDesktopLaunchConfig } from './renderer-heap-flags'
 import { wslgLaunchArgs } from './wslg-launch'
 import { spawnWslgLaunch } from './wslg-launch-process'
+import { readWindowsUserEnvVar } from './windows-user-env'
+
+// Before anything resolves a path: drop inherited Hermes variables and pin the
+// Neovarch home (see neovarch-env.ts). main.ts is imported dynamically below,
+// so every module it loads already sees the pinned environment.
+pinNeovarchEnvironment({
+  home: os.homedir(),
+  readWindowsHome: () => (process.platform === 'win32' ? readWindowsUserEnvVar('NEOVARCH_HOME') : null)
+})
 
 function configuredElectronFlags(env: NodeJS.ProcessEnv): string[] {
   // Resolve the home exactly like main.ts does, through the shared resolver:
-  // HERMES_DATA_DIR_SUFFIX channel installs and profiles/-rooted HERMES_HOME
+  // NEOVARCH_DATA_DIR_SUFFIX channel installs and profiles/-rooted NEOVARCH_HOME
   // values must pick the same config.yaml before the relaunch and inside the
   // app, or desktop.electron_flags silently never reaches the relaunch.
   const home = resolveDesktopHermesHome({

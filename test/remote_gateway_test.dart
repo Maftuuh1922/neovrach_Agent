@@ -203,14 +203,14 @@ class MockGateway {
 void main() {
   group('pairing payload', () {
     test('QR URI, JSON, dashboard URL and bare host:port', () {
-      final qr = const GatewayPairing(url: 'http://192.168.1.5:9119', token: 'abc', name: 'PC Kantor').toUri();
+      final qr = const GatewayPairing(url: 'http://192.168.1.5:9319', token: 'abc', name: 'PC Kantor').toUri();
       final a = GatewayPairing.parse(qr)!;
-      expect(a.url, 'http://192.168.1.5:9119');
+      expect(a.url, 'http://192.168.1.5:9319');
       expect(a.token, 'abc');
       expect(a.name, 'PC Kantor');
 
       final b = GatewayPairing.parse('{"url":"192.168.1.9","token":"t"}')!;
-      expect(b.url, 'http://192.168.1.9:9119');
+      expect(b.url, 'http://192.168.1.9:9319');
       expect(b.token, 't');
 
       final c = GatewayPairing.parse('ws://10.0.0.2:47800/api/ws?token=zz')!;

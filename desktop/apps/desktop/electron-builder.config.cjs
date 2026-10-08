@@ -79,7 +79,7 @@ module.exports = {
   protocols: [
     {
       name: `${displayName} Protocol`,
-      schemes: ['hermes']
+      schemes: ['neovarch']
     }
   ],
   // A store build is archived, never served to a feed — prefix its artifact

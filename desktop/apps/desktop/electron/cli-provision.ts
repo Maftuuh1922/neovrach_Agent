@@ -52,6 +52,13 @@ export function provisionCliLinks(
   for (const source of Object.values(commands)) {
     // The map keys are backend entrypoint identities, not public shell names.
     const name: string = path.basename(source)
+
+    // Neovarch never publishes a `hermes*` command: that name belongs to a
+    // co-installed Hermes Agent, whose ~/.local/bin entries must stay as they are.
+    if (/^hermes/i.test(name)) {
+      continue
+    }
+
     const target = path.join(binDir, name)
 
     try {

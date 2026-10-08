@@ -1,21 +1,32 @@
 #!/bin/sh
-# Neovarch Agent installer (Linux x86_64) — installs the desktop app (Electron).
+# Neovarch Agent installer (Linux x86_64 / arm64 core, Linux x86_64 desktop).
 #
 #   curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.sh | sh
 #
+# Installs, all as the current user (no root):
+#   * the Neovarch core (original Python agent, in core/ of
+#     this repo) into ~/.neovarch/neovarch-agent, with its own Python and venv;
+#   * the `neovarch` command (~/.local/bin/neovarch);
+#   * the desktop app (Electron) into ~/.local/share/neovarch-agent, started
+#     with `neovarch desktop` / `neovarch-desktop` or from the app menu.
+#
+# Neovarch never uses, reads or changes a Hermes Agent install: no `hermes`
+# command, no ~/.hermes, no HERMES_HOME. Both can be installed side by side.
+#
 # Options (pass after `sh -s --` when piping):
-#   --uninstall        remove Neovarch Agent
+#   --core-only        install only the core and the `neovarch` command
+#   --uninstall        remove Neovarch (~/.neovarch, the app, its shims)
 #   --help             show help
+# Desktop-bootstrap protocol (used by the desktop app on first launch):
+#   --manifest | --stage <name> [--non-interactive] [--json]
+#   [--dir <install dir>] [--neovarch-home <dir>] [--branch <b>] [--commit <sha>]
 # Environment:
-#   NEOVARCH_VERSION   release tag to install (e.g. v1.2.1). Default: latest.
-#
-# Installs to ~/.local/share/neovarch-agent, links ~/.local/bin/neovarch to the
-# app executable and adds a desktop menu entry. No root needed.
-#
-# The Neovarch core (Hermes Agent, Python) is not installed by this script:
-# on first launch the app itself offers to install it (Hermes Agent's own
-# installer, pinned to the revision the app was built against) or to connect
-# to an existing Hermes gateway. An existing `hermes` install is used as is.
+#   NEOVARCH_HOME       data home (default ~/.neovarch)
+#   NEOVARCH_VERSION    desktop release tag (e.g. v1.3.0). Default: latest.
+#   NEOVARCH_REF        git ref of this repo to take the core from. Default:
+#                       NEOVARCH_VERSION when set, else main.
+#   NEOVARCH_CORE_SRC   local checkout of this repo (or its core/ dir) to
+#                       install the core from instead of downloading.
 
 set -eu
 
@@ -23,17 +34,27 @@ REPO="Maftuuh1922/neovrach_Agent"
 RELEASES_URL="https://github.com/$REPO/releases"
 ASSET="neovarch-agent-linux-x64.tar.gz"
 EXE="neovarch-agent"
+PY_VERSION="3.14"
+
+NEOVARCH_HOME="${NEOVARCH_HOME:-$HOME/.neovarch}"
+CORE_DIR=""            # set after argument parsing (default $NEOVARCH_HOME/neovarch-agent)
+RECEIPT_NAME=".neovarch-bootstrap-complete"
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-INSTALL_DIR="$DATA_HOME/neovarch-agent"
+APP_DIR="$DATA_HOME/neovarch-agent"
 BIN_DIR="$HOME/.local/bin"
-BIN_LINK="$BIN_DIR/neovarch"
+CLI_SHIM="$BIN_DIR/neovarch"
+DESKTOP_SHIM="$BIN_DIR/neovarch-desktop"
 APPS_DIR="$DATA_HOME/applications"
 DESKTOP_FILE="$APPS_DIR/neovarch-agent.desktop"
 ICON_DIR="$DATA_HOME/icons/hicolor/512x512/apps"
 ICON_FILE="$ICON_DIR/neovarch-agent.png"
 
+# The core installer must never be steered by a co-installed Hermes.
+unset HERMES_HOME HERMES_DATA_DIR_SUFFIX HERMES_RUNTIME_DIR HERMES_INSTALL_ROOT 2>/dev/null || true
+
 # ---------------------------------------------------------------- output ---
+JSON=0
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RED=$(printf '\033[31m'); C_GRN=$(printf '\033[32m'); C_YLW=$(printf '\033[33m')
   C_BLD=$(printf '\033[1m');  C_DIM=$(printf '\033[2m');  C_RST=$(printf '\033[0m')
@@ -45,11 +66,15 @@ say()  { printf '%s\n' "$*"; }
 step() { printf '%s==>%s %s\n' "$C_RED$C_BLD" "$C_RST" "$*"; }
 ok()   { printf '%s ok%s %s\n' "$C_GRN" "$C_RST" "$*"; }
 warn() { printf '%swarn%s %s\n' "$C_YLW" "$C_RST" "$*" >&2; }
-die()  { printf '%serror%s %s\n' "$C_RED$C_BLD" "$C_RST" "$*" >&2; exit 1; }
-
-banner() {
-  printf '\n%sNeovarch Agent%s %sinstaller%s\n\n' "$C_RED$C_BLD" "$C_RST" "$C_DIM" "$C_RST"
+die()  {
+  printf '%serror%s %s\n' "$C_RED$C_BLD" "$C_RST" "$*" >&2
+  if [ "$JSON" = 1 ] && [ -n "${CUR_STAGE:-}" ]; then
+    printf '{"ok":false,"stage":"%s","reason":"%s"}\n' "$CUR_STAGE" "$(printf '%s' "$*" | tr '"\\' "''")"
+  fi
+  exit 1
 }
+
+banner() { printf '\n%sNeovarch Agent%s %sinstaller%s\n\n' "$C_RED$C_BLD" "$C_RST" "$C_DIM" "$C_RST"; }
 
 usage() {
   cat <<EOF
@@ -57,14 +82,19 @@ Neovarch Agent installer
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sh -s -- --core-only
   curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sh -s -- --uninstall
 
 Options:
-  --uninstall   Remove Neovarch Agent from this machine
+  --core-only   Install only the Neovarch core and the \`neovarch\` command
+  --uninstall   Remove Neovarch Agent (only Neovarch files; Hermes is never touched)
   -h, --help    Show this help
 
 Environment:
-  NEOVARCH_VERSION   Release tag to install, e.g. v1.2.1 (default: latest)
+  NEOVARCH_HOME      data home (default ~/.neovarch)
+  NEOVARCH_VERSION   desktop release tag, e.g. v1.3.0 (default: latest)
+  NEOVARCH_REF       git ref for the core (default: NEOVARCH_VERSION or main)
+  NEOVARCH_CORE_SRC  install the core from a local checkout instead
 EOF
 }
 
@@ -73,33 +103,221 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 download() { # url dest
   if have curl; then
-    if [ -t 2 ]; then
+    if [ -t 2 ] && [ "$JSON" = 0 ]; then
       curl -fL --retry 3 --progress-bar -o "$2" "$1"
     else
       curl -fsSL --retry 3 -o "$2" "$1"
     fi
   elif have wget; then
-    wget -q --show-progress -O "$2" "$1" 2>/dev/null || wget -O "$2" "$1"
+    wget -q -O "$2" "$1"
   else
     die "need curl or wget to download Neovarch Agent"
   fi
 }
 
-has_lib() { # soname
-  if have ldconfig && ldconfig -p 2>/dev/null | grep -q "$1"; then
-    return 0
+fetch_text() { # url
+  if have curl; then curl -fsSL --retry 2 "$1"; else wget -q -O - "$1"; fi
+}
+
+# Is $1 inside the Neovarch home? (refuses to operate on anything else)
+inside_home() {
+  case "$1" in "$NEOVARCH_HOME"|"$NEOVARCH_HOME"/*) return 0 ;; *) return 1 ;; esac
+}
+
+# A path we may create/replace/remove as "ours": never a Hermes path.
+assert_not_hermes() {
+  case "$1" in
+    "$HOME/.hermes"|"$HOME/.hermes/"*|*/bin/hermes|*/bin/hermes-*) die "refusing to touch $1 (belongs to Hermes Agent)" ;;
+  esac
+}
+
+# --------------------------------------------------------------- core ---
+TOOLS_DIR=""   # $NEOVARCH_HOME/tools
+UV=""
+
+core_paths() {
+  CORE_DIR="${CORE_DIR:-$NEOVARCH_HOME/neovarch-agent}"
+  TOOLS_DIR="$NEOVARCH_HOME/tools"
+  inside_home "$CORE_DIR" || [ -n "${NEOVARCH_ALLOW_EXTERNAL_DIR:-}" ] || die "--dir must be inside $NEOVARCH_HOME"
+  assert_not_hermes "$CORE_DIR"
+  # uv keeps its Python, cache and tool state under the Neovarch home.
+  export UV_PYTHON_INSTALL_DIR="$TOOLS_DIR/python"
+  export UV_CACHE_DIR="$NEOVARCH_HOME/cache/uv"
+  export UV_TOOL_DIR="$TOOLS_DIR/uv-tools"
+  export UV_NO_MODIFY_PATH=1
+}
+
+stage_uv() {
+  if [ -x "$TOOLS_DIR/uv/uv" ]; then UV="$TOOLS_DIR/uv/uv"; ok "uv ($UV)"; return 0; fi
+  if have uv; then
+    # Use (never modify) a uv already on PATH: it is a generic tool, not Hermes.
+    UV=$(command -v uv)
+    case "$UV" in "$HOME/.hermes/"*) UV="" ;; esac
   fi
+  if [ -z "$UV" ]; then
+    step "Installing uv into $TOOLS_DIR/uv"
+    mkdir -p "$TOOLS_DIR/uv"
+    tmp_uv=$(mktemp)
+    download "https://astral.sh/uv/install.sh" "$tmp_uv" || die "could not download the uv installer"
+    env UV_INSTALL_DIR="$TOOLS_DIR/uv" UV_UNMANAGED_INSTALL="$TOOLS_DIR/uv" UV_NO_MODIFY_PATH=1 INSTALLER_NO_MODIFY_PATH=1 sh "$tmp_uv" >/dev/null 2>&1 \
+      || die "uv installation failed"
+    rm -f "$tmp_uv"
+    UV="$TOOLS_DIR/uv/uv"
+  fi
+  [ -x "$UV" ] || die "uv not available"
+  ok "uv ($UV)"
+}
+
+resolve_commit() { # ref -> sha (best effort)
+  case "$1" in
+    *[!0-9a-f]*|'') ;;
+    *) if [ ${#1} -ge 40 ]; then printf '%s' "$1"; return 0; fi ;;
+  esac
+  sha=$(fetch_text "https://api.github.com/repos/$REPO/commits/$1" 2>/dev/null | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -n 1 || true)
+  printf '%s' "${sha:-}"
+}
+
+stage_core() {
+  mkdir -p "$NEOVARCH_HOME"
+  staging="$NEOVARCH_HOME/.core-staging"
+  rm -rf "$staging"; mkdir -p "$staging"
+  commit=""
+  # Run from a checkout of this repo (scripts/install.sh next to core/)? Then
+  # install that core instead of downloading one, unless a ref was asked for.
+  if [ -z "${NEOVARCH_CORE_SRC:-}" ] && [ -z "${COMMIT_ARG:-}${NEOVARCH_REF:-}" ]; then
+    case "$0" in
+      */install.sh)
+        here=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || here=""
+        if [ -n "$here" ] && [ -f "$here/../core/neovarch/cli.py" ]; then
+          NEOVARCH_CORE_SRC=$(cd "$here/.." && pwd)
+        fi ;;
+    esac
+  fi
+  if [ -n "${NEOVARCH_CORE_SRC:-}" ]; then
+    src="$NEOVARCH_CORE_SRC"
+    [ -d "$src/core" ] && src="$src/core"
+    [ -f "$src/neovarch/cli.py" ] || die "NEOVARCH_CORE_SRC has no Neovarch core: $NEOVARCH_CORE_SRC"
+    step "Copying the Neovarch core from $src"
+    (cd "$src" && tar --exclude=venv --exclude=__pycache__ --exclude=node_modules -cf - .) | (cd "$staging" && tar -xf -)
+    commit=$(git -C "$src" rev-parse HEAD 2>/dev/null || true)
+  else
+    ref="${COMMIT_ARG:-${NEOVARCH_REF:-${BRANCH_ARG:-${NEOVARCH_VERSION:-main}}}}"
+    commit=$(resolve_commit "$ref")
+    url="https://codeload.github.com/$REPO/tar.gz/${commit:-$ref}"
+    step "Downloading the Neovarch core ($ref)"
+    say "    $C_DIM$url$C_RST"
+    download "$url" "$staging.tgz" || die "core download failed ($url)"
+    mkdir -p "$staging.x"
+    tar -xzf "$staging.tgz" -C "$staging.x" --wildcards '*/core/*' || die "archive has no core/ directory"
+    top=$(find "$staging.x" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+    rm -rf "$staging"; mv "$top/core" "$staging"
+    rm -rf "$staging.x" "$staging.tgz"
+  fi
+  [ -f "$staging/neovarch/cli.py" ] || die "downloaded core is incomplete"
+  # Keep an existing venv across updates when the Python still matches.
+  if [ -d "$CORE_DIR/venv" ]; then mv "$CORE_DIR/venv" "$staging/venv"; fi
+  rm -rf "$CORE_DIR.old"
+  [ -d "$CORE_DIR" ] && mv "$CORE_DIR" "$CORE_DIR.old"
+  mv "$staging" "$CORE_DIR"
+  rm -rf "$CORE_DIR.old"
+  printf '%s\n' "${commit:-unknown}" > "$CORE_DIR/.neovarch-source-commit"
+  ok "core in $CORE_DIR"
+}
+
+stage_python() {
+  [ -n "$UV" ] || stage_uv
+  [ -f "$CORE_DIR/pyproject.toml" ] || die "core not installed yet (run the core stage first)"
+  step "Preparing Python $PY_VERSION and the core's dependencies"
+  if [ ! -x "$CORE_DIR/venv/bin/python" ]; then
+    "$UV" venv --quiet --python "$PY_VERSION" --python-preference only-managed "$CORE_DIR/venv" \
+      || die "could not create the Python $PY_VERSION environment"
+  fi
+  VIRTUAL_ENV="$CORE_DIR/venv" "$UV" pip install --quiet --python "$CORE_DIR/venv/bin/python" -e "$CORE_DIR" \
+    || die "dependency installation failed"
+  [ -x "$CORE_DIR/venv/bin/neovarch" ] || die "the neovarch entry point was not created"
+  ok "dependencies installed"
+}
+
+stage_cli() {
+  [ -x "$CORE_DIR/venv/bin/neovarch" ] || die "core environment missing (run the python stage first)"
+  launcher_dir="$CORE_DIR/.neovarch/bin"
+  mkdir -p "$launcher_dir"
+  cat > "$launcher_dir/neovarch" <<EOF
+#!/bin/sh
+# Neovarch Agent CLI launcher (generated by scripts/install.sh)
+NEOVARCH_HOME="\${NEOVARCH_HOME:-$NEOVARCH_HOME}"
+export NEOVARCH_HOME
+exec "$CORE_DIR/venv/bin/neovarch" "\$@"
+EOF
+  chmod 755 "$launcher_dir/neovarch"
+  mkdir -p "$BIN_DIR"
+  assert_not_hermes "$CLI_SHIM"
+  if [ -e "$CLI_SHIM" ] || [ -L "$CLI_SHIM" ]; then
+    target=$(readlink "$CLI_SHIM" 2>/dev/null || true)
+    case "$target" in
+      "$NEOVARCH_HOME"/*|"$APP_DIR"/*|'') ;;
+      *) if [ -n "$target" ]; then warn "replacing $CLI_SHIM (pointed to $target)"; fi ;;
+    esac
+    rm -f "$CLI_SHIM"
+  fi
+  ln -s "$launcher_dir/neovarch" "$CLI_SHIM"
+  ok "linked $CLI_SHIM -> $launcher_dir/neovarch"
+
+  commit=$(cat "$CORE_DIR/.neovarch-source-commit" 2>/dev/null || echo unknown)
+  [ ${#commit} -ge 7 ] || commit="unknown-local"
+  if [ -n "${BRANCH_ARG:-}" ]; then branch_json="\"$BRANCH_ARG\""; else branch_json=null; fi
+  cat > "$CORE_DIR/$RECEIPT_NAME" <<EOF
+{
+  "schemaVersion": 1,
+  "pinnedCommit": "$commit",
+  "pinnedBranch": $branch_json,
+  "completedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "installer": "scripts/install.sh"
+}
+EOF
+  "$CLI_SHIM" --version >/dev/null 2>&1 || die "neovarch --version failed"
+  ok "$("$CLI_SHIM" --version | head -n 1)"
+}
+
+install_core() {
+  core_paths
+  stage_uv
+  stage_core
+  stage_python
+  stage_cli
+}
+
+# ---------------------------------------------------- desktop protocol ---
+manifest() {
+  cat <<'EOF'
+{"protocol_version":1,"stages":[{"name":"uv","title":"Alat Python (uv)","category":"tooling","needs_user_input":false},{"name":"core","title":"Inti Neovarch","category":"source","needs_user_input":false},{"name":"python","title":"Lingkungan Python","category":"dependencies","needs_user_input":false},{"name":"cli","title":"Perintah neovarch","category":"launcher","needs_user_input":false}]}
+EOF
+}
+
+run_stage() { # name
+  CUR_STAGE="$1"
+  core_paths
+  case "$1" in
+    uv) stage_uv ;;
+    core) stage_core ;;
+    python) stage_uv; stage_python ;;
+    cli) stage_cli ;;
+    *) die "unknown stage: $1" ;;
+  esac
+  [ "$JSON" = 1 ] && printf '{"ok":true,"stage":"%s"}\n' "$1"
+  return 0
+}
+
+# ------------------------------------------------------------ desktop ---
+has_lib() { # soname
+  if have ldconfig && ldconfig -p 2>/dev/null | grep -q "$1"; then return 0; fi
   for d in /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/local/lib; do
     [ -e "$d/$1" ] && return 0
   done
   return 1
 }
 
-refresh_menu() {
-  if have update-desktop-database; then
-    update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
-  fi
-}
+refresh_menu() { if have update-desktop-database; then update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true; fi; }
 
 check_deps() {
   missing=''
@@ -108,24 +326,13 @@ check_deps() {
   has_lib libasound.so.2 || missing="$missing alsa"
   has_lib libsecret-1.so.0 || missing="$missing libsecret"
   [ -z "$missing" ] && { ok "runtime libraries found (GTK 3, NSS, ALSA, libsecret)"; return 0; }
-
   warn "missing runtime libraries:$missing"
-  if have apt-get; then
-    say "      install with: sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libsecret-1-0"
-  elif have dnf; then
-    say "      install with: sudo dnf install -y gtk3 nss alsa-lib libsecret"
-  elif have pacman; then
-    say "      install with: sudo pacman -S --needed gtk3 nss alsa-lib libsecret"
-  elif have zypper; then
-    say "      install with: sudo zypper install gtk3 mozilla-nss libasound2 libsecret-1-0"
-  else
-    say "      install GTK 3, NSS, ALSA and libsecret with your package manager"
-  fi
+  if have apt-get; then say "      install with: sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libsecret-1-0"
+  elif have dnf; then say "      install with: sudo dnf install -y gtk3 nss alsa-lib libsecret"
+  elif have pacman; then say "      install with: sudo pacman -S --needed gtk3 nss alsa-lib libsecret"
+  else say "      install GTK 3, NSS, ALSA and libsecret with your package manager"; fi
 }
 
-# Chromium needs either a root-owned setuid chrome-sandbox or unprivileged
-# user namespaces. Ubuntu 23.10+ restricts the latter by default, so check and
-# fall back to --no-sandbox for the menu entry when neither is available.
 sandbox_ok() { # app dir
   sb="$1/chrome-sandbox"
   [ -e "$sb" ] || return 0
@@ -134,13 +341,70 @@ sandbox_ok() { # app dir
   return 1
 }
 
-core_note() {
-  if have hermes; then
-    ok "Neovarch core (Hermes Agent) found: $(command -v hermes)"
+write_desktop_entry() { # icon exec_flags
+  cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Neovarch Agent
+Comment=Neovarch Agent desktop
+Exec="$APP_DIR/$EXE"$2 %U
+Icon=$1
+Path=$APP_DIR
+Terminal=false
+Categories=Development;Utility;
+MimeType=x-scheme-handler/neovarch;
+StartupWMClass=Neovarch Agent
+EOF
+  chmod 644 "$DESKTOP_FILE"
+}
+
+install_desktop() {
+  version="${NEOVARCH_VERSION:-}"
+  if [ -n "$version" ]; then
+    case "$version" in v*) ;; *) version="v$version" ;; esac
+    url="$RELEASES_URL/download/$version/$ASSET"; label="$version"
   else
-    say "    The Neovarch core (Hermes Agent) is not installed yet. On first launch the"
-    say "    app offers to install it for you, or to connect to an existing gateway."
+    url="$RELEASES_URL/latest/download/$ASSET"; label="latest"
   fi
+  have tar || die "need tar to unpack Neovarch Agent"
+  tmp=$(mktemp -d 2>/dev/null || mktemp -d -t neovarch)
+  trap 'rm -rf "$tmp"' EXIT INT TERM
+
+  step "Downloading the Neovarch desktop app ($label)"
+  say "    $C_DIM$url$C_RST"
+  download "$url" "$tmp/$ASSET" || die "download failed. Check the tag or see $RELEASES_URL"
+  mkdir -p "$tmp/x"
+  tar -xzf "$tmp/$ASSET" -C "$tmp/x" || die "could not unpack $ASSET"
+  src=$(find "$tmp/x" -maxdepth 3 -type f -name "$EXE" 2>/dev/null | head -n 1)
+  [ -n "$src" ] || die "archive layout unexpected (no $EXE executable)"
+  src=$(dirname "$src"); chmod 755 "$src/$EXE"
+
+  # Close a running Neovarch desktop (only ours: matched by its install path).
+  if have pkill; then pkill -f "$APP_DIR/$EXE" >/dev/null 2>&1 || true; fi
+
+  mkdir -p "$DATA_HOME" "$BIN_DIR" "$APPS_DIR" "$ICON_DIR"
+  rm -rf "$APP_DIR"; mv "$src" "$APP_DIR"
+  ok "desktop app in $APP_DIR"
+  rm -f "$DESKTOP_SHIM"; ln -s "$APP_DIR/$EXE" "$DESKTOP_SHIM"
+  ok "linked $DESKTOP_SHIM -> $APP_DIR/$EXE"
+
+  icon="neovarch-agent"
+  if [ -f "$APP_DIR/resources/app.asar.unpacked/dist/apple-touch-icon.png" ]; then
+    cp "$APP_DIR/resources/app.asar.unpacked/dist/apple-touch-icon.png" "$ICON_FILE"
+  elif ! download "https://raw.githubusercontent.com/$REPO/main/assets/brand/app_icon.png" "$ICON_FILE" >/dev/null 2>&1; then
+    icon="utilities-terminal"
+  fi
+  exec_flags=''
+  if ! sandbox_ok "$APP_DIR"; then
+    exec_flags=' --no-sandbox'
+    warn "the Chromium sandbox is unavailable here; the menu entry starts the app with --no-sandbox"
+    say "      to keep the sandbox (needs sudo once):"
+    say "        sudo chown root:root '$APP_DIR/chrome-sandbox' && sudo chmod 4755 '$APP_DIR/chrome-sandbox'"
+  fi
+  write_desktop_entry "$icon" "$exec_flags"
+  refresh_menu
+  ok "added menu entry $DESKTOP_FILE"
+  check_deps
 }
 
 # ----------------------------------------------------------- uninstall ---
@@ -148,157 +412,85 @@ uninstall() {
   banner
   step "Removing Neovarch Agent"
   removed=0
-  if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then rm -f "$BIN_LINK"; ok "removed $BIN_LINK"; removed=1; fi
-  if [ -e "$DESKTOP_FILE" ]; then rm -f "$DESKTOP_FILE"; ok "removed $DESKTOP_FILE"; removed=1; fi
-  if [ -e "$ICON_FILE" ]; then rm -f "$ICON_FILE"; fi
-  if [ -d "$INSTALL_DIR" ]; then rm -rf "$INSTALL_DIR"; ok "removed $INSTALL_DIR"; removed=1; fi
+  for shim in "$CLI_SHIM" "$DESKTOP_SHIM"; do
+    if [ -L "$shim" ] || [ -e "$shim" ]; then
+      assert_not_hermes "$shim"; rm -f "$shim"; ok "removed $shim"; removed=1
+    fi
+  done
+  if have pkill; then pkill -f "$APP_DIR/$EXE" >/dev/null 2>&1 || true; fi
+  [ -e "$DESKTOP_FILE" ] && { rm -f "$DESKTOP_FILE"; ok "removed $DESKTOP_FILE"; removed=1; }
+  rm -f "$ICON_FILE"
+  [ -d "$APP_DIR" ] && { rm -rf "$APP_DIR"; ok "removed $APP_DIR"; removed=1; }
+  if [ -d "$NEOVARCH_HOME" ]; then
+    assert_not_hermes "$NEOVARCH_HOME"
+    case "$NEOVARCH_HOME" in "$HOME"|"/"|"") die "refusing to remove $NEOVARCH_HOME" ;; esac
+    rm -rf "$NEOVARCH_HOME"; ok "removed $NEOVARCH_HOME"; removed=1
+  fi
   refresh_menu
-  if [ "$removed" -eq 0 ]; then
-    say "Neovarch Agent is not installed."
-  else
-    say ""
-    say "Neovarch Agent uninstalled. Your chats, settings and the Neovarch core"
-    say "(Hermes Agent, in ~/.hermes) were left in place."
-  fi
-}
-
-# ------------------------------------------------------------- install ---
-write_desktop_entry() { # icon exec_flags
-  cat > "$DESKTOP_FILE" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Neovarch Agent
-Comment=Neovarch Agent desktop
-Exec="$INSTALL_DIR/$EXE"$2 %U
-Icon=$1
-Path=$INSTALL_DIR
-Terminal=false
-Categories=Development;Utility;
-StartupWMClass=Neovarch Agent
-EOF
-  chmod 644 "$DESKTOP_FILE"
-}
-
-install_linux_x64() {
-  version="${NEOVARCH_VERSION:-}"
-  if [ -n "$version" ]; then
-    case "$version" in v*) ;; *) version="v$version" ;; esac
-    url="$RELEASES_URL/download/$version/$ASSET"
-    label="$version"
-  else
-    url="$RELEASES_URL/latest/download/$ASSET"
-    label="latest"
-  fi
-
-  have tar || die "need tar to unpack Neovarch Agent"
-
-  tmp=$(mktemp -d 2>/dev/null || mktemp -d -t neovarch)
-  trap 'rm -rf "$tmp"' EXIT INT TERM
-
-  step "Downloading Neovarch Agent ($label)"
-  say "    $C_DIM$url$C_RST"
-  download "$url" "$tmp/$ASSET" || die "download failed. Check the tag or see $RELEASES_URL"
-
-  step "Unpacking"
-  mkdir -p "$tmp/x"
-  tar -xzf "$tmp/$ASSET" -C "$tmp/x" || die "could not unpack $ASSET"
-  src=$(find "$tmp/x" -maxdepth 3 -type f -name "$EXE" 2>/dev/null | head -n 1)
-  [ -n "$src" ] || die "archive layout unexpected (no $EXE executable)"
-  src=$(dirname "$src")
-  chmod 755 "$src/$EXE"
-
-  # Close a running copy so its files can be replaced.
-  if have pkill; then pkill -f "$INSTALL_DIR/$EXE" >/dev/null 2>&1 || true; fi
-
-  mkdir -p "$DATA_HOME" "$BIN_DIR" "$APPS_DIR" "$ICON_DIR"
-  rm -rf "$INSTALL_DIR"
-  mv "$src" "$INSTALL_DIR"
-  ok "installed to $INSTALL_DIR"
-
-  ln -sf "$INSTALL_DIR/$EXE" "$BIN_LINK"
-  ok "linked $BIN_LINK -> $INSTALL_DIR/$EXE"
-
-  icon="neovarch-agent"
-  if [ -f "$INSTALL_DIR/resources/app.asar.unpacked/dist/apple-touch-icon.png" ]; then
-    cp "$INSTALL_DIR/resources/app.asar.unpacked/dist/apple-touch-icon.png" "$ICON_FILE"
-  elif ! download "https://raw.githubusercontent.com/$REPO/main/assets/brand/app_icon.png" "$ICON_FILE" >/dev/null 2>&1; then
-    icon="utilities-terminal"
-  fi
-
-  exec_flags=''
-  if ! sandbox_ok "$INSTALL_DIR"; then
-    exec_flags=' --no-sandbox'
-    warn "the Chromium sandbox is unavailable here (user namespaces restricted, chrome-sandbox not setuid root)"
-    say "      the menu entry starts the app with --no-sandbox; from a terminal run: neovarch --no-sandbox"
-    say "      to keep the sandbox instead (needs sudo once):"
-    say "        sudo chown root:root '$INSTALL_DIR/chrome-sandbox' && sudo chmod 4755 '$INSTALL_DIR/chrome-sandbox'"
-  fi
-
-  write_desktop_entry "$icon" "$exec_flags"
-  refresh_menu
-  ok "added menu entry $DESKTOP_FILE"
-
-  check_deps
-  core_note
-
-  case ":${PATH:-}:" in
-    *":$BIN_DIR:"*) ;;
-    *)
-      warn "$BIN_DIR is not in your PATH"
-      say "      add this to your shell profile (~/.bashrc, ~/.zshrc):"
-      say "        export PATH=\"\$HOME/.local/bin:\$PATH\""
-      ;;
-  esac
-
-  say ""
-  say "${C_BLD}Neovarch Agent is installed.${C_RST} Run ${C_RED}${C_BLD}neovarch${C_RST} or open it from your app menu."
-  say "Uninstall: curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sh -s -- --uninstall"
-}
-
-not_available() { # platform
-  banner
-  say "Neovarch Agent for $1 is not available yet."
-  say "Builds for Linux x86_64, Windows x64 and Android are on the releases page:"
-  say "  $RELEASES_URL/latest"
-  exit 1
+  if [ "$removed" -eq 0 ]; then say "Neovarch Agent is not installed."
+  else say ""; say "Neovarch Agent uninstalled. A Hermes Agent install, if any, was not touched."; fi
 }
 
 # ---------------------------------------------------------------- main ---
 main() {
-  action=install
-  for arg in "$@"; do
-    case "$arg" in
+  action=install; core_only=0; STAGE=''; BRANCH_ARG=''; COMMIT_ARG=''
+  while [ $# -gt 0 ]; do
+    case "$1" in
       --uninstall) action=uninstall ;;
+      --core-only|--no-desktop) core_only=1 ;;
+      --manifest) action=manifest ;;
+      --stage) action=stage; STAGE="${2:-}"; shift ;;
+      --non-interactive) ;;
+      --json) JSON=1 ;;
+      --dir) CORE_DIR="${2:-}"; shift ;;
+      --neovarch-home) NEOVARCH_HOME="${2:-}"; shift ;;
+      --branch) BRANCH_ARG="${2:-}"; shift ;;
+      --commit) COMMIT_ARG="${2:-}"; shift ;;
       -h|--help) usage; exit 0 ;;
-      *) die "unknown option: $arg (try --help)" ;;
+      *) die "unknown option: $1 (try --help)" ;;
     esac
+    shift
   done
+  NEOVARCH_HOME="${NEOVARCH_HOME%/}"
+  assert_not_hermes "$NEOVARCH_HOME"
 
-  if [ "$action" = uninstall ]; then
-    uninstall
-    exit 0
-  fi
+  case "$action" in
+    uninstall) uninstall; exit 0 ;;
+    manifest) manifest; exit 0 ;;
+    stage) run_stage "$STAGE"; exit 0 ;;
+  esac
 
   os=$(uname -s 2>/dev/null || echo unknown)
   arch="${NEOVARCH_FORCE_ARCH:-$(uname -m 2>/dev/null || echo unknown)}"
-
   case "$os" in
-    Linux)
-      case "$arch" in
-        x86_64|amd64) banner; install_linux_x64 ;;
-        aarch64|arm64) not_available "Linux ARM64" ;;
-        *) not_available "Linux $arch" ;;
-      esac
-      ;;
-    Darwin) not_available "macOS" ;;
+    Linux) ;;
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
-      banner
-      say "On Windows, run this in PowerShell instead:"
-      say "  irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex"
-      exit 1
-      ;;
-    *) not_available "$os" ;;
+      banner; say "On Windows, run this in PowerShell instead:"
+      say "  irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex"; exit 1 ;;
+    Darwin) banner; say "macOS builds are not available yet: $RELEASES_URL/latest"; exit 1 ;;
+    *) banner; say "Neovarch Agent for $os is not available yet."; exit 1 ;;
   esac
+
+  banner
+  install_core
+  if [ "$core_only" = 0 ]; then
+    case "$arch" in
+      x86_64|amd64) install_desktop ;;
+      *) warn "the desktop app is available for Linux x86_64 only; installed the core and CLI" ;;
+    esac
+  fi
+
+  case ":${PATH:-}:" in
+    *":$BIN_DIR:"*) ;;
+    *) warn "$BIN_DIR is not in your PATH"
+       say "      add this to your shell profile (~/.bashrc, ~/.zshrc):"
+       say "        export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
+  esac
+  say ""
+  say "${C_BLD}Neovarch Agent is installed.${C_RST} Data: $NEOVARCH_HOME"
+  say "  ${C_RED}${C_BLD}neovarch${C_RST}            chat in the terminal"
+  [ "$core_only" = 0 ] && say "  ${C_RED}${C_BLD}neovarch desktop${C_RST}    open the desktop app"
+  say "Uninstall: curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sh -s -- --uninstall"
 }
 
 main "$@"

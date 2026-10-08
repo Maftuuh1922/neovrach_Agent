@@ -10,7 +10,7 @@ import { ListRow, SectionHeading, SettingsContent, ToggleRow } from './primitive
 
 // Settings ▸ Remote / Perangkat — pair the Neovarch phone app with this PC.
 // The main process (electron/neovarch-remote.ts) runs a LAN-bound, auth-gated
-// `hermes serve` on port 9119 and mints the phone's token; this page shows the
+// `neovarch serve` on port 9319 and mints the phone's token; this page shows the
 // pairing QR (neovarch://pair?v=1&url=…&token=…&name=…&profile=…).
 
 const CAPTION = 'text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)'
@@ -21,16 +21,16 @@ const PREVIEW_STATUS: NeovarchRemoteStatus = {
   enabled: true,
   running: true,
   starting: false,
-  port: 9119,
+  port: 9319,
   addresses: [
     { address: '192.168.1.5', iface: 'wlan0' },
     { address: '100.84.12.7', iface: 'tailscale0' }
   ],
   address: '192.168.1.5',
-  url: 'http://192.168.1.5:9119',
+  url: 'http://192.168.1.5:9319',
   token: 'eyJzdWIiOiJuZW92YXJjaC1yZW1vdGUiLCJraW5kIjoiYWNjZXNzIiwiZXhwIjoxOTE3NjgwMDAwfdcg06aPZhiOLEAVRMba-pi23576xtM_tVRtdvf8-eZL',
   pairingUri:
-    'neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9119&token=eyJzdWIiOiJuZW92YXJjaC1yZW1vdGUiLCJraW5kIjoiYWNjZXNzIiwiZXhwIjoxOTE3NjgwMDAwfdcg06aPZhiOLEAVRMba-pi23576xtM_tVRtdvf8-eZL&name=PC+Kantor&profile=default',
+    'neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9319&token=eyJzdWIiOiJuZW92YXJjaC1yZW1vdGUiLCJraW5kIjoiYWNjZXNzIiwiZXhwIjoxOTE3NjgwMDAwfdcg06aPZhiOLEAVRMba-pi23576xtM_tVRtdvf8-eZL&name=PC+Kantor&profile=default',
   deviceName: 'PC Kantor',
   profile: 'default',
   error: null,
@@ -147,7 +147,7 @@ export function RemoteSettings() {
 
       <ToggleRow
         checked={Boolean(status?.enabled)}
-        description="Menjalankan gateway kedua yang terkunci token di 0.0.0.0:9119 agar HP bisa terhubung."
+        description="Menjalankan gateway kedua yang terkunci token di 0.0.0.0:9319 agar HP bisa terhubung."
         disabled={busy || !status || preview}
         label="Aktifkan akses remote"
         onChange={on => api && void run(() => api.setEnabled(on))}

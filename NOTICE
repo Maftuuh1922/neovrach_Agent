@@ -1,0 +1,36 @@
+Neovarch Agent
+==============
+
+Copyright (c) 2026 Maftuuh1922 / NeovarchLabs. Licensed under the MIT License
+(see LICENSE), except where a directory carries its own license as noted below.
+
+Neovarch core (core/)
+---------------------
+The agent "brain" in core/ (the `neovarch` CLI, the agent loop, tools, sessions,
+memory, skills and the `neovarch serve` gateway) is original code written for
+Neovarch Agent. It contains no code from Hermes Agent.
+
+Its design and its wire protocol are inspired by Hermes Agent by Nous Research
+(https://github.com/NousResearch/hermes-agent, MIT License, Copyright (c) 2025
+Nous Research). The gateway re-implements, from the public behaviour of that
+project, the JSON-RPC-over-WebSocket and REST shapes that the Neovarch desktop
+(derived from Hermes Desktop) and the Neovarch phone remote speak, including the
+`HERMES_BACKEND_READY` readiness line and the `X-Hermes-Session-Token` header
+name, so that the derived desktop works unchanged. We thank Nous Research for
+publishing Hermes Agent openly.
+
+Neovarch Desktop (desktop/)
+---------------------------
+desktop/ is derived from Hermes Desktop by Nous Research (apps/desktop and
+apps/shared of https://github.com/NousResearch/hermes-agent, forked from commit
+61b7f957bac7fa25c7c22d54e4b215fa446e5331). That code is licensed under the MIT
+License, Copyright (c) 2025 Nous Research; the full text is in desktop/LICENSE
+and desktop/NOTICE and applies to the derived code in that directory. Those
+notices are kept as-is.
+
+Trademarks
+----------
+"Hermes", "Hermes Agent", "Hermes Desktop", "Hermes Cloud" and "Nous Portal"
+are names of Nous Research projects and services. They are used here only to
+give credit and to describe protocol compatibility. Neovarch Agent is not
+affiliated with or endorsed by Nous Research.

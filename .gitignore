@@ -73,3 +73,9 @@ landing/next-env.d.ts
 # Kotlin daemon sessions
 .kotlin/
 **/.kotlin/
+
+# Neovarch core (Python)
+core/**/__pycache__/
+core/*.egg-info/
+core/.pytest_cache/
+core/.venv/

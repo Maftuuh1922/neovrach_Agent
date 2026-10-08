@@ -16,7 +16,10 @@ icons, the default "Neovarch" theme preset, removal of the desktop usage
 metrics offer, packaging targets (NSIS installer, zip, AppImage, tar.gz, deb)
 and the release/update target (GitHub Releases of Maftuuh1922/neovrach_Agent).
 
-Neovarch Agent still runs the Hermes Agent Python core (the `hermes` CLI and
-gateway) from Nous Research as its runtime. "Hermes", "Hermes Agent",
-"Hermes Cloud" and "Nous Portal" are names of Nous Research projects and
-services; they are referenced only to describe that integration.
+Since the "Separate Neovarch core and data from Hermes" change, Neovarch
+Agent no longer runs the Hermes Agent Python core. The desktop drives the
+Neovarch core in ../core (original code, MIT, see ../NOTICE), which keeps its
+data in ~/.neovarch and never touches a Hermes Agent install. "Hermes",
+"Hermes Agent", "Hermes Cloud" and "Nous Portal" are names of Nous Research
+projects and services; they are referenced only to give credit and to describe
+protocol compatibility.

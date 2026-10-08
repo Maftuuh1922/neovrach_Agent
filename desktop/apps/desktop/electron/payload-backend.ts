@@ -33,7 +33,8 @@ export function bundledPayload(
     storePython: path.join(root, runtime.storePython),
     sitePackages: path.join(root, runtime.sitePackages),
     commands,
-    shim: commands.hermes
+    // Neovarch payloads publish `neovarch`; the key stays for older bundle stamps.
+    shim: commands.neovarch ?? commands.hermes
   }
 }
 

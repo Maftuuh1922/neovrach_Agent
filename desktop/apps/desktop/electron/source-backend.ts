@@ -28,7 +28,7 @@ export async function resolveSourceInstallationBackend(
   args: string[],
   options: SourceOptions & { hermesHome?: string } = {}
 ): Promise<SourceBackend | null> {
-  if (!existsSync(path.join(root, 'hermes_cli', 'main.py'))) {
+  if (!existsSync(path.join(root, 'neovarch', 'cli.py'))) {
     return null
   }
 
@@ -58,7 +58,7 @@ export async function resolveSourceInstallationBackend(
 
   return {
     kind: 'command',
-    label: `Hermes at ${root}`,
+    label: `Neovarch at ${root}`,
     command,
     args: [...args],
     env,
@@ -93,9 +93,9 @@ export function createSourcePythonBackend(
 
   return {
     kind: 'python',
-    label: `Hermes source at ${root}`,
+    label: `Neovarch core at ${root}`,
     command,
-    args: ['-m', 'hermes_cli.main', ...args],
+    args: ['-m', 'neovarch', ...args],
     // The backend runs in the user's workspace cwd, and the selected
     // interpreter need not have this checkout installed: name it explicitly.
     // (The scrubbed inherited value could point at another checkout.)

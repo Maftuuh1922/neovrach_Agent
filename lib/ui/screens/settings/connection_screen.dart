@@ -144,7 +144,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
         ],
         if (mode == ConnectionMode.gateway) ...[
           const SectionLabel('Gateway jarak jauh', padding: EdgeInsets.fromLTRB(0, 12, 0, 8)),
-          TextField(controller: _gw, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'URL backend', hintText: 'http://100.x.y.z:9119')),
+          TextField(controller: _gw, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'URL backend', hintText: 'http://100.x.y.z:9319')),
           const SizedBox(height: 12),
           TextField(controller: _token, obscureText: true, decoration: const InputDecoration(labelText: 'Token sesi', helperText: 'dikirim sebagai ?token= dan Authorization: Bearer')),
           const SizedBox(height: 12),
@@ -158,7 +158,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
             decoration: const InputDecoration(labelText: 'Header tambahan', hintText: 'CF-Access-Client-Id: …\nX-Proxy-Token: …', alignLabelWithHint: true),
           ),
           const SizedBox(height: 6),
-          Text('Di server: `hermes serve --host 0.0.0.0 --port 9119` di jaringan tepercaya (mis. Tailscale).', style: context.tt.bodySmall),
+          Text('Di server: `neovarch serve --host 0.0.0.0 --port 9319` di jaringan tepercaya (mis. Tailscale).', style: context.tt.bodySmall),
         ],
         const SizedBox(height: 16),
         Row(children: [

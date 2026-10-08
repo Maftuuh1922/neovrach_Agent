@@ -73,7 +73,7 @@ test('fresh bootstrap args include the packaged commit pin', () => {
       activeRoot: '/tmp/hermes-agent',
       hermesHome: '/tmp/hermes'
     }),
-    ['--dir', '/tmp/hermes-agent', '--hermes-home', '/tmp/hermes', '--branch', 'main', '--commit', installStamp.commit]
+    ['--dir', '/tmp/hermes-agent', '--neovarch-home', '/tmp/hermes', '--branch', 'main', '--commit', installStamp.commit]
   )
 })
 
@@ -88,7 +88,7 @@ test('existing-checkout bootstrap args keep branch but skip the packaged commit 
       hermesHome: '/tmp/hermes',
       pinCommit: false
     }),
-    ['--dir', '/tmp/hermes-agent', '--hermes-home', '/tmp/hermes', '--branch', 'main']
+    ['--dir', '/tmp/hermes-agent', '--neovarch-home', '/tmp/hermes', '--branch', 'main']
   )
 })
 
@@ -109,7 +109,7 @@ test('fallback install stamps use an unpinned branch ref', () => {
       activeRoot: '/tmp/hermes',
       hermesHome: '/tmp/home'
     }),
-    ['--dir', '/tmp/hermes', '--hermes-home', '/tmp/home', '--branch', 'main']
+    ['--dir', '/tmp/hermes', '--neovarch-home', '/tmp/home', '--branch', 'main']
   )
 })
 

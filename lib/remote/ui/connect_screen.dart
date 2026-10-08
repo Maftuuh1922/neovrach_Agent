@@ -74,7 +74,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _submitManual() async {
     final p = GatewayPairing.parse(_addr.text);
     if (p == null) {
-      setState(() => _error = 'Alamat tidak valid. Contoh: 192.168.1.5:9119');
+      setState(() => _error = 'Alamat tidak valid. Contoh: 192.168.1.5:9319');
       return;
     }
     final token = _token.text.trim().isNotEmpty ? _token.text.trim() : p.token;
@@ -156,8 +156,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   autocorrect: false,
                   decoration: const InputDecoration(
                     labelText: 'Alamat gateway PC',
-                    hintText: '192.168.1.5:9119 atau tautan pemasangan',
-                    helperText: 'Port bawaan 9119. Tautan neovarch://pair… juga bisa ditempel di sini.',
+                    hintText: '192.168.1.5:9319 atau tautan pemasangan',
+                    helperText: 'Port bawaan 9319. Tautan neovarch://pair… juga bisa ditempel di sini.',
                   ),
                 ),
                 const SizedBox(height: 10),

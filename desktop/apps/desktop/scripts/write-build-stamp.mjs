@@ -153,12 +153,11 @@ export function writeDesktopStamp(outDir, built) {
 }
 
 /**
- * Neovarch Agent: the desktop app lives in the Neovarch repository, but the
- * first-launch bootstrap installs the Hermes Agent core from
- * NousResearch/hermes-agent at the stamp's commit. Pin the stamp to the
- * upstream core revision this desktop was forked from (HERMES_CORE_COMMIT at
- * the workspace root, or NEOVARCH_CORE_COMMIT), never to a Neovarch commit
- * that does not exist upstream.
+ * Upstream Hermes Agent revision the vendored Neovarch core (core/) and this
+ * desktop were derived from (HERMES_CORE_COMMIT at the workspace root, or
+ * NEOVARCH_CORE_COMMIT). Provenance only: the first-launch bootstrap installs
+ * the Neovarch core from THIS repository (Maftuuh1922/neovrach_Agent) at the
+ * stamp's own commit, so the stamp is never rewritten to an upstream commit.
  */
 export function neovarchCorePin(env = process.env, root = REPO_ROOT) {
   const fromEnv = (env.NEOVARCH_CORE_COMMIT || '').trim()
@@ -172,9 +171,7 @@ export function neovarchCorePin(env = process.env, root = REPO_ROOT) {
 }
 
 function main() {
-  const resolved = resolveStamp()
-  const corePin = ['ci', 'local', 'fallback'].includes(resolved?.source) ? neovarchCorePin() : null
-  const stamp = corePin ? { ...resolved, commit: corePin, branch: 'main', dirty: false } : resolved
+  const stamp = resolveStamp()
   if (!stamp || !stamp.commit) {
     // Should not happen — fromFallback() always provides a commit.
     console.error(
