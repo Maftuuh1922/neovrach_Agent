@@ -3405,6 +3405,8 @@ export const en: Translations = {
       'Mau kerjakan apa?',
       'Beri Neovarch tugas',
       'Tulis apa yang kamu butuhkan',
+      'Apa yang sedang kamu pikirkan?',
+      'Kita mulai dari mana?',
       'Tanya apa saja',
       'Mulai dari tujuanmu'
     ],
