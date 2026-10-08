@@ -398,6 +398,12 @@ class Gateway:
             return {"projects": [], "active_id": None, "scoped_session_ids": []}
         if method == "bot_relay.roster.sync":
             return {"count": 0}
+        if method == "subagent.list":
+            return {"subagents": [], "delegations": []}
+        if method in ("subscription.state", "billing.state"):
+            return {"ok": True, "logged_in": False}
+        if method == "plugins.manage":
+            return {"plugins": [], "user_count": 0, "bundled_count": 0, "ok": True}
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
 

@@ -164,7 +164,8 @@ async def test_boot_endpoints_answer_quietly(mock_provider, monkeypatch):
         assert opts["model"] == "mock-model" and opts["providers"][0]["is_current"] is True
         for method, key, value in (("pet.info", "enabled", False), ("free_tier.status", "enabled", False),
                                    ("wake.status", "available", False), ("projects.tree", "projects", []),
-                                   ("bot_relay.roster.sync", "count", 0)):
+                                   ("bot_relay.roster.sync", "count", 0), ("subagent.list", "subagents", []),
+                                   ("billing.state", "logged_in", False), ("plugins.manage", "plugins", [])):
             assert (await ws.call(method, {}))["result"][key] == value
         for path in ("/api/profiles/active", "/api/local-models/status", "/api/local-models/jobs",
                      "/api/audio/voice-live/status", "/api/tools/terminal/backends"):
