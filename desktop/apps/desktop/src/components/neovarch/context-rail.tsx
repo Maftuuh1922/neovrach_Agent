@@ -9,6 +9,7 @@ import { $reviewFiles } from '@/store/review'
 import { $currentModel, $currentProvider, $messages, setModelPickerOpen } from '@/store/session'
 
 import { shortModelName } from './command-bar'
+import { NeovarchOfficeMini } from './office'
 
 const PATH_KEYS = ['path', 'file_path', 'filepath', 'filename', 'file', 'target_file']
 
@@ -152,6 +153,8 @@ export function NeovarchContextRail() {
           </ul>
         )}
       </section>
+
+      <NeovarchOfficeMini />
     </aside>
   )
 }

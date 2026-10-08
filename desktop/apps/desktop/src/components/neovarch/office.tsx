@@ -1,0 +1,230 @@
+import { useStore } from '@nanostores/react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
+
+import { sessionRoute } from '@/app/routes'
+import { Brain, Users } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+
+import {
+  $office,
+  $officeError,
+  initials,
+  OFFICE_ROUTE,
+  OFFICE_STATUS_LABEL,
+  type OfficeAgent,
+  type OfficeFeedItem,
+  relativeTime
+} from './office-store'
+
+function useNow(intervalMs = 5000): number {
+  const [now, setNow] = useState(() => Date.now() / 1000)
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now() / 1000), intervalMs)
+
+    return () => window.clearInterval(t)
+  }, [intervalMs])
+
+  return now
+}
+
+export function StatusDot({ status }: { status: OfficeAgent['status'] }) {
+  return <span aria-hidden="true" className="nv-office-dot" data-status={status} />
+}
+
+function Desk({ agent, now }: { agent: OfficeAgent; now: number }) {
+  const navigate = useNavigate()
+  const open = agent.session_id ? () => navigate(sessionRoute(agent.session_id!)) : undefined
+
+  return (
+    <article className="nv-office-desk" data-nv-desk={agent.id} data-status={agent.status}>
+      <header className="nv-office-desk-head">
+        <span className="nv-office-avatar">{initials(agent.name)}</span>
+        <div className="min-w-0">
+          <h3 className="nv-office-name">{agent.name}</h3>
+          <p className="nv-office-role">{agent.role}</p>
+        </div>
+        <span className="nv-office-status" data-status={agent.status}>
+          <StatusDot status={agent.status} />
+          {OFFICE_STATUS_LABEL[agent.status]}
+        </span>
+      </header>
+      <dl className="nv-office-facts">
+        <div>
+          <dt>Tugas</dt>
+          <dd title={agent.current_task ?? undefined}>{agent.current_task || 'Belum ada tugas'}</dd>
+        </div>
+        {agent.current_tool && (
+          <div>
+            <dt>Sedang</dt>
+            <dd className="nv-office-mono" title={agent.current_tool}>
+              {agent.current_tool}
+            </dd>
+          </div>
+        )}
+        {agent.pending_approval?.command && (
+          <div>
+            <dt>Minta izin</dt>
+            <dd className="nv-office-mono" title={agent.pending_approval.command}>
+              {agent.pending_approval.command}
+            </dd>
+          </div>
+        )}
+        <div>
+          <dt>Aktivitas</dt>
+          <dd title={agent.last_activity_text ?? undefined}>
+            {relativeTime(agent.last_activity, now)}
+            {agent.last_activity_text ? ` · ${agent.last_activity_text}` : ''}
+          </dd>
+        </div>
+      </dl>
+      {open && (
+        <button className="nv-office-open" onClick={open} type="button">
+          Buka obrolan
+        </button>
+      )}
+    </article>
+  )
+}
+
+function FeedRow({ item, now }: { item: OfficeFeedItem; now: number }) {
+  return (
+    <li className="nv-office-feed-row" data-kind={item.kind}>
+      <span className="nv-office-feed-who">{item.agent}</span>
+      <span className="nv-office-feed-text">{item.text}</span>
+      <time className="nv-office-feed-time">{relativeTime(item.ts, now)}</time>
+    </li>
+  )
+}
+
+/** The Office page: every agent the core runs, at its desk, plus a live feed. */
+export function NeovarchOfficePage() {
+  const office = useStore($office)
+  const error = useStore($officeError)
+  const now = useNow()
+  const navigate = useNavigate()
+
+  return (
+    <div className="nv-office" data-slot="nv-office">
+      <header className="nv-office-header">
+        <div>
+          <p className="nv-office-kicker">Kantor</p>
+          <h1 className="nv-office-title">Pegawai Neovarch</h1>
+          <p className="nv-office-sub">
+            Agen yang sedang berjalan di PC ini, statusnya, dan apa yang mereka kerjakan. Diperbarui langsung.
+          </p>
+        </div>
+        <div className="nv-office-counters">
+          <span>
+            <StatusDot status="working" /> {office?.counts.working ?? 0} bekerja
+          </span>
+          <span>
+            <StatusDot status="waiting-approval" /> {office?.counts['waiting-approval'] ?? 0} menunggu
+          </span>
+          <span>
+            <StatusDot status="idle" /> {office?.counts.idle ?? 0} santai
+          </span>
+        </div>
+      </header>
+
+      <div className="nv-office-body">
+        <section aria-label="Meja agen" className="nv-office-grid">
+          {office === null && !error && <p className="nv-office-empty">Memuat kantor…</p>}
+          {error && <p className="nv-office-empty">Kantor belum bisa dimuat: {error}</p>}
+          {office && office.agents.length === 0 && (
+            <div className="nv-office-empty">
+              <Users className="size-5" />
+              <p>Belum ada pegawai. Mulai obrolan atau beri tugas di Kanban, agennya akan duduk di sini.</p>
+            </div>
+          )}
+          {office?.agents.map(agent => <Desk agent={agent} key={agent.id} now={now} />)}
+        </section>
+
+        <aside className="nv-office-side">
+          <section className="nv-office-card" data-slot="nv-office-vault">
+            <h2 className="nv-office-card-title">
+              <Brain className="size-3.5" /> Memori Obsidian
+            </h2>
+            {office?.vault.connected ? (
+              <>
+                <p className="nv-office-vault-state" data-state="connected">
+                  <StatusDot status="working" /> Terhubung · {office.vault.note_count} catatan
+                </p>
+                <p className="nv-office-mono nv-office-path" title={office.vault.path}>
+                  {office.vault.path}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="nv-office-vault-state" data-state="off">
+                  <StatusDot status="idle" />{' '}
+                  {office?.vault.configured ? `Folder tidak ditemukan: ${office.vault.path}` : 'Belum dihubungkan'}
+                </p>
+                <button
+                  className="nv-office-open"
+                  onClick={() => navigate('/settings?tab=config%3Amemory')}
+                  type="button"
+                >
+                  Pilih vault
+                </button>
+              </>
+            )}
+          </section>
+
+          <section className="nv-office-card nv-office-feed-card">
+            <h2 className="nv-office-card-title">Aktivitas</h2>
+            {office && office.feed.length === 0 ? (
+              <p className="nv-office-empty-line">Belum ada aktivitas.</p>
+            ) : (
+              <ol className="nv-office-feed" data-slot="nv-office-feed">
+                {office?.feed.map(item => <FeedRow item={item} key={item.id} now={now} />)}
+              </ol>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+/** Compact "Kantor" card for the context rail beside the conversation. */
+export function NeovarchOfficeMini() {
+  const office = useStore($office)
+  const navigate = useNavigate()
+  const agents = office?.agents.slice(0, 5) ?? []
+
+  return (
+    <button
+      className={cn('nv-context-card nv-office-mini')}
+      data-slot="nv-office-mini"
+      onClick={() => navigate(OFFICE_ROUTE)}
+      title="Buka Kantor"
+      type="button"
+    >
+      <span className="nv-context-label">
+        <Users className="size-3.5" /> Kantor
+        <span className="nv-office-mini-count">{office ? `${office.counts.working} bekerja` : ''}</span>
+      </span>
+      {agents.length === 0 ? (
+        <span className="nv-context-empty">Belum ada agen yang bekerja.</span>
+      ) : (
+        <span className="nv-office-mini-list">
+          {agents.map(agent => (
+            <span className="nv-office-mini-row" data-status={agent.status} key={agent.id}>
+              <span className="nv-office-avatar nv-office-avatar-sm">{initials(agent.name)}</span>
+              <span className="min-w-0">
+                <span className="nv-office-mini-name">
+                  <StatusDot status={agent.status} /> {agent.name}
+                </span>
+                <span className="nv-office-mini-task">
+                  {agent.current_tool || agent.current_task || OFFICE_STATUS_LABEL[agent.status]}
+                </span>
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
+    </button>
+  )
+}

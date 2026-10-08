@@ -10,6 +10,8 @@ import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview
 import { IdleMount } from '@/components/idle-mount'
 import { NeovarchCommandBar } from '@/components/neovarch/command-bar'
 import { NeovarchContextRail } from '@/components/neovarch/context-rail'
+import { NeovarchOfficePage } from '@/components/neovarch/office'
+import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { NeovarchRail } from '@/components/neovarch/rail'
 import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
@@ -118,7 +120,7 @@ import { AppContextMenu } from '../context-menu/app-context-menu'
 import { HudShell } from '../hud/hud-shell'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { terminalPaletteToggle } from '../right-sidebar/terminal/reveal-focus'
-import { $workspaceIsPage, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
+import { $workspaceIsPage, ROUTES_AREA, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
 import { Butterbar } from '../shell/butterbar'
 import { TermsButterbar } from '../shell/terms-butterbar'
 
@@ -746,6 +748,16 @@ registry.register(
   syncStripTabToggles()
   registry.subscribeArea('panes', syncStripTabToggles)
 }
+
+// Neovarch's Office: a first-party full page at /office (the rail opens it).
+registry.register({
+  id: 'nv-office',
+  area: ROUTES_AREA,
+  source: 'core',
+  title: 'Kantor',
+  data: { path: OFFICE_ROUTE },
+  render: () => <NeovarchOfficePage />
+})
 
 // YOLO (dangerous-command approval bypass) is a status-bar zap and a /yolo
 // command; ⌘K is the third door onto the SAME store function, so a user who

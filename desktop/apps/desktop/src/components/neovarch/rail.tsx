@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router'
 
 import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, MESSAGING_ROUTE, navigateToWorkspacePage } from '@/app/routes'
 import { openNeovarchKanban } from '@/components/neovarch/home'
+import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { Tip } from '@/components/ui/tooltip'
 import {
   Clock,
@@ -16,6 +17,7 @@ import {
   QrCode,
   Settings,
   Sun,
+  Users,
   Zap
 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -37,6 +39,7 @@ export const NV_COPY = {
   messaging: 'Bot & pesan',
   artifacts: 'Artefak',
   cron: 'Jadwal',
+  office: 'Kantor',
   pairPhone: 'Pasangkan HP',
   settings: 'Pengaturan',
   toDark: 'Tema gelap',
@@ -108,6 +111,13 @@ export function NeovarchRail() {
   ]
 
   const middle: RailItem[] = [
+    {
+      active: path.startsWith(OFFICE_ROUTE),
+      icon: <Users className={icon} />,
+      id: 'office',
+      label: NV_COPY.office,
+      onSelect: () => navigate(OFFICE_ROUTE)
+    },
     {
       active: path.startsWith(CAPABILITIES_ROUTE),
       icon: <Zap className={icon} />,
