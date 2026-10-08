@@ -219,17 +219,17 @@ void main() {
       expect(find.descendant(of: lens, matching: find.byType(RawMagnifier)), findsOneWidget);
       final x0 = tester.getCenter(lens).dx;
       expect((x0 - tester.getCenter(find.text('CHAT')).dx).abs(), lessThan(2));
-      await tester.tap(find.text('TUGAS'));
+      await tester.tap(find.text('PROFIL'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
       final mid = tester.getCenter(lens).dx;
       expect(mid, greaterThan(x0)); // moving, not jumping
-      expect(mid, lessThan(tester.getCenter(find.text('TUGAS')).dx));
+      expect(mid, lessThan(tester.getCenter(find.text('PROFIL')).dx));
       // (other tabs keep spinners running, so no pumpAndSettle here)
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect((tester.getCenter(lens).dx - tester.getCenter(find.text('TUGAS')).dx).abs(), lessThan(2));
+      expect((tester.getCenter(lens).dx - tester.getCenter(find.text('PROFIL')).dx).abs(), lessThan(2));
     });
   });
 }

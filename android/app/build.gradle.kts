@@ -1,8 +1,27 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Fixed Neovarch signing key (dev/debug key, committed on purpose) so every
+// APK — debug and release — carries the same certificate and installs over
+// the previous one. Config lives in android/key.properties; if it or the
+// keystore is missing, the build falls back to the default debug key.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+val neovarchStoreFile: File? = keystoreProperties.getProperty("storeFile")
+    ?.let { file(it) }
+    ?.takeIf { it.exists() }
+val hasNeovarchSigning = neovarchStoreFile != null &&
+    keystoreProperties.getProperty("keyAlias") != null
 
 android {
     namespace = "com.neovarch.agent"
@@ -28,11 +47,28 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasNeovarchSigning) {
+            create("neovarch") {
+                storeFile = neovarchStoreFile
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        val appSigning = if (hasNeovarchSigning) {
+            signingConfigs.getByName("neovarch")
+        } else {
+            signingConfigs.getByName("debug")
+        }
+        debug {
+            signingConfig = appSigning
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = appSigning
         }
     }
 }

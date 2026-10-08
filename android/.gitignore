@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Neovarch fixed dev/debug signing key: committed on purpose.
+!/key.properties
+!/app/neovarch-signing.keystore

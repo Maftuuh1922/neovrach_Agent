@@ -184,8 +184,6 @@ class RemotePcScreen extends ConsumerWidget {
                   ),
                 ),
             ]),
-          const NvSection('tampilan'),
-          const AppearancePanel(),
           const NvSection('hp ini'),
           NvList(children: [
             _SwitchRow(

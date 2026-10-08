@@ -271,6 +271,7 @@ class RemoteController extends ChangeNotifier {
       await deviceCall<String>('notify', {
         'title': 'Neovarch · perlu persetujuan',
         'body': '${a.toolName ?? 'Agen'} di ${desktop?.name ?? 'PC'}: ${a.description.isNotEmpty ? a.description : a.command}',
+        'route': 'approvals', // tap → Chat + approvals sheet
       });
     } catch (_) {
       // No notification bridge: the in-app badge still shows it.

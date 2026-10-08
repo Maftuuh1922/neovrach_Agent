@@ -88,6 +88,8 @@ class AppearanceController extends ChangeNotifier {
     _apply();
   }
   final SharedPreferences _prefs;
+  /// For sibling phone settings stored next to the theme (launcher icon).
+  SharedPreferences get prefs => _prefs;
 
   static const _kFollow = 'nv.theme.follow';
   static const _kAccent = 'nv.theme.accent';

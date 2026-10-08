@@ -13,6 +13,7 @@ import '../../ui/screens/chat/message_widgets.dart';
 import '../../ui/widgets/common.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
+import 'nv_glass_text.dart';
 import 'nv_widgets.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
@@ -133,14 +134,19 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
         ),
         Divider(height: 1, color: NV.border),
         ],
-        if (others > 0)
+        // 1.4.2: approvals live in Chat. Inline cards for this session sit
+        // above the composer; this pinned glass chip opens the full list.
+        if (r.approvals.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: NvNotice(
-              '$others persetujuan menunggu di sesi lain',
-              color: NV.warn,
-              icon: CupertinoIcons.checkmark_shield,
-              action: TextButton(onPressed: widget.onOpenApprovals, child: const Text('Lihat')),
+            padding: EdgeInsets.fromLTRB(16, empty ? 8 : 10, 16, 0),
+            child: Center(
+              child: NvGlassChip(
+                key: const ValueKey('chat-approvals-chip'),
+                icon: CupertinoIcons.checkmark_shield_fill,
+                label: '${r.approvals.length} menunggu persetujuan${others > 0 && mine.isNotEmpty ? ' · $others di sesi lain' : ''}',
+                color: NV.red,
+                onTap: widget.onOpenApprovals,
+              ),
             ),
           ),
         // Messages run under the composer and the glass nav bar (both are
@@ -224,7 +230,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             child: Center(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(28, 0, 28, _dockH),
-                child: Text(greetingFor(DateTime.now()),
+                child: NvGlassText(greetingFor(DateTime.now()),
                     key: const ValueKey('chat-greeting'), textAlign: TextAlign.center, style: NV.display(size: 40)),
               ),
             ),

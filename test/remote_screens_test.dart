@@ -23,6 +23,7 @@ import 'package:neovarch_agent/remote/remote_transcript.dart';
 import 'package:neovarch_agent/remote/saved_desktops.dart';
 import 'package:neovarch_agent/remote/ui/connect_screen.dart';
 import 'package:neovarch_agent/remote/ui/remote_app.dart' show neovarchMobileTheme;
+import 'package:neovarch_agent/remote/ui/remote_kantor_tab.dart' show previewKantorSegment, kantorSegTasks, kantorSegOffice;
 import 'package:neovarch_agent/remote/ui/remote_shell.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
@@ -275,24 +276,30 @@ void main() {
   });
 
   testWidgets('05 tasks', (tester) async {
-    app.previewTab = 2;
+    app.previewTab = 1;
+    previewKantorSegment = kantorSegTasks;
+    addTearDown(() => previewKantorSegment = kantorSegOffice);
     await run(tester, '05_tasks', () => const RemoteShell());
   });
 
   testWidgets('06 task sheet', (tester) async {
-    app.previewTab = 2;
+    app.previewTab = 1;
+    previewKantorSegment = kantorSegTasks;
+    addTearDown(() => previewKantorSegment = kantorSegOffice);
     await run(tester, '06_task_sheet', () => const RemoteShell(), act: () async {
       await tester.tap(find.text('Rapikan folder unduhan').first);
     });
   });
 
-  testWidgets('07 approvals', (tester) async {
-    app.previewTab = 3;
-    await run(tester, '07_approvals', () => const RemoteShell());
+  testWidgets('07 approvals (Chat chip → sheet)', (tester) async {
+    app.previewTab = 0;
+    await run(tester, '07_approvals', () => const RemoteShell(), act: () async {
+      await tester.tap(find.byKey(const ValueKey('chat-approvals-chip')));
+    });
   });
 
   testWidgets('08 pc', (tester) async {
-    app.previewTab = 4;
+    app.previewTab = 3;
     await run(tester, '08_pc', () => const RemoteShell());
   });
 
@@ -307,7 +314,7 @@ void main() {
   });
 
   testWidgets('10 confirm dialog', (tester) async {
-    app.previewTab = 4;
+    app.previewTab = 3;
     await run(tester, '10_dialog', () => const RemoteShell(), act: () async {
       await tester.tap(find.byTooltip('Lupakan').first);
     });
@@ -425,7 +432,9 @@ void main() {
   testWidgets('25 tasks over custom background · biru', (tester) async {
     await accent('#2563EB', 'dark');
     await background('assets/art/feat-automation.webp', dim: 0.45, blur: 8);
-    app.previewTab = 2;
+    app.previewTab = 1;
+    previewKantorSegment = kantorSegTasks;
+    addTearDown(() => previewKantorSegment = kantorSegOffice);
     await run(tester, '25_tasks_background', () => const RemoteShell());
     NV.palette = NvPalette.red;
   });
@@ -436,7 +445,7 @@ void main() {
     TestGesture? g;
     await run(tester, '26_nav_drag', () => const RemoteShell(), act: () async {
       final bar = tester.getRect(find.byKey(const ValueKey('nv-nav-bar')));
-      final w = (bar.width - 8) / 5;
+      final w = (bar.width - 8) / 4;
       g = await tester.startGesture(Offset(bar.left + 4 + w * 0.5, bar.center.dy));
       for (var i = 0; i < 12; i++) {
         await g!.moveBy(Offset(w * 1.6 / 12, 0));
@@ -447,7 +456,7 @@ void main() {
   });
 
   testWidgets('27 PC tab · Cupertino icons + Inter', (tester) async {
-    app.previewTab = 4;
+    app.previewTab = 3;
     await run(tester, '27_pc_icons_font', () => const RemoteShell());
   });
 

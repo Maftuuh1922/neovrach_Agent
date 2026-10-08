@@ -1,7 +1,8 @@
-// Remote shell: Chat · Kantor · Tugas · Setujui · PC on a floating iOS-style
+// Remote shell: Chat · Kantor · Profil · PC on a floating iOS-style
 // liquid glass bar (content scrolls under it), with a connection strip whenever the link to the PC is not up
 // and an "Update tersedia" strip when a newer phone app is released.
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,14 +13,16 @@ import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/motion.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
-import 'remote_approvals_screen.dart';
-import 'remote_office_screen.dart';
+import '../../data/device_tools.dart' show deviceCall;
+import 'remote_approvals_screen.dart' show showApprovalsSheet;
 import 'remote_chat_screen.dart';
+import 'remote_kantor_tab.dart';
 import 'remote_pc_screen.dart';
+import 'remote_profile_screen.dart';
 import 'nv_widgets.dart';
 import 'remote_background.dart' show NvAppBackground;
 import '../appearance.dart' show appearanceProvider;
-import 'remote_tasks_screen.dart';
+import '../profile_avatar.dart';
 
 class RemoteShell extends ConsumerStatefulWidget {
   const RemoteShell({super.key});
@@ -28,15 +31,20 @@ class RemoteShell extends ConsumerStatefulWidget {
 }
 
 class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingObserver {
-  int index = previewTab.clamp(0, 4);
+  int index = previewTab.clamp(0, 3);
+  int kantorSegment = previewKantorSegment;
 
-  static const tabChat = 0, tabApprovals = 3, tabPc = 4; // 1 Kantor, 2 Tugas
+  // 1.4.2: 4 tabs. Setujui merged into Chat (pinned chip + sheet), Tugas
+  // into Kantor (segmented), Tampilan moved from PC to the new Profil tab.
+  static const tabChat = 0, tabKantor = 1, tabProfile = 2, tabPc = 3;
   int _lastApprovals = 0;
+  bool _sheetOpen = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _takeRoute());
   }
 
   @override
@@ -45,12 +53,53 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     super.dispose();
   }
 
+  /// Chat + the pending-approvals sheet (snackbar "Lihat", Kantor's
+  /// "menunggu", a tapped approval notification).
+  void openApprovals() {
+    setState(() => index = tabChat);
+    if (_sheetOpen) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      _sheetOpen = true;
+      await showApprovalsSheet(context, onOpenChat: () => setState(() => index = tabChat));
+      _sheetOpen = false;
+    });
+  }
+
+  /// Kantor tab on the Tugas segment (old Tugas tab routes).
+  void openTasks() => setState(() {
+        index = tabKantor;
+        kantorSegment = kantorSegTasks;
+      });
+
+  /// Route handed over by a tapped notification (MainActivity `nv_route`).
+  void route(String? r) {
+    switch (r) {
+      case 'approvals':
+        openApprovals();
+      case 'tasks':
+        openTasks();
+      case 'chat':
+        setState(() => index = tabChat);
+      case 'profile':
+        setState(() => index = tabProfile);
+    }
+  }
+
+  Future<void> _takeRoute() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      route(await deviceCall<String>('takeRoute'));
+    } catch (_) {}
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Back in the foreground: phones drop sockets in the background.
     if (state == AppLifecycleState.resumed) {
       final r = ref.read(remoteProvider);
       if (!r.connected) r.reconnect();
+      _takeRoute();
     }
   }
 
@@ -59,8 +108,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   static const _dest = <(IconData, IconData, String)>[
     (CupertinoIcons.chat_bubble, CupertinoIcons.chat_bubble_fill, 'Chat'),
     (CupertinoIcons.building_2_fill, CupertinoIcons.building_2_fill, 'Kantor'),
-    (CupertinoIcons.rectangle_grid_2x2, CupertinoIcons.rectangle_grid_2x2_fill, 'Tugas'),
-    (CupertinoIcons.checkmark_shield, CupertinoIcons.checkmark_shield_fill, 'Setujui'),
+    (CupertinoIcons.person_crop_circle, CupertinoIcons.person_crop_circle_fill, 'Profil'),
     (CupertinoIcons.desktopcomputer, CupertinoIcons.desktopcomputer, 'PC'),
   ];
 
@@ -68,14 +116,14 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
     final pending = remote.approvals.length;
-    if (pending > _lastApprovals && index != tabApprovals && index != tabChat) {
+    if (pending > _lastApprovals && index != tabChat) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Agen di PC menunggu persetujuanmu'),
           // Float above the nav bar instead of on top of it.
           margin: EdgeInsets.fromLTRB(16, 0, 16, _barH + _gap + 8),
-          action: SnackBarAction(label: 'Lihat', onPressed: () => setState(() => index = tabApprovals)),
+          action: SnackBarAction(label: 'Lihat', onPressed: openApprovals),
         ));
       });
     }
@@ -83,11 +131,14 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
 
     final pages = IndexedStack(index: index, children: [
       for (final (i, w) in <Widget>[
-        RemoteChatScreen(onOpenApprovals: () => setState(() => index = tabApprovals)),
-        RemoteOfficeScreen(
-            onOpenChat: () => setState(() => index = tabChat), onOpenApprovals: () => setState(() => index = tabApprovals)),
-        const RemoteTasksScreen(),
-        RemoteApprovalsScreen(onOpenChat: () => setState(() => index = tabChat)),
+        RemoteChatScreen(onOpenApprovals: openApprovals),
+        RemoteKantorTab(
+          segment: kantorSegment,
+          onSegment: (i) => setState(() => kantorSegment = i),
+          onOpenChat: () => setState(() => index = tabChat),
+          onOpenApprovals: openApprovals,
+        ),
+        const RemoteProfileScreen(),
         RemotePcScreen(onOpenChat: () => setState(() => index = tabChat)),
       ].indexed)
         TabFade(active: index == i, child: w),
@@ -148,7 +199,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
                 index: index,
                 onTap: (i) => setState(() => index = i),
                 items: _dest,
-                badges: {tabApprovals: pending},
+                badges: {tabChat: pending},
+                avatars: {tabProfile: ref.watch(profileAvatarProvider)},
                 dots: {if (!remote.connected) tabPc: NV.warn},
               ),
             ),

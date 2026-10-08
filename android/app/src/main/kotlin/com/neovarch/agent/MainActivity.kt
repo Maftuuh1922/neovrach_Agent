@@ -6,6 +6,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -46,6 +47,8 @@ class MainActivity : FlutterActivity() {
     private val permRequests = HashMap<Int, MethodChannel.Result>()
     private val docRequests = HashMap<Int, MethodChannel.Result>()
     private var nextCode = 4100
+    /** Where a tapped notification wants the app to go ("approvals"); taken once by Dart. */
+    private var pendingRoute: String? = null
 
     /**
      * Cold start in the user's theme: the Dart side stores the resolved
@@ -67,6 +70,53 @@ class MainActivity : FlutterActivity() {
             // keep the neutral default
         }
         super.onCreate(savedInstanceState)
+        pendingRoute = intent?.getStringExtra(EXTRA_ROUTE) ?: pendingRoute
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_ROUTE)?.let { pendingRoute = it }
+    }
+
+    // ------------------------------------------------------ launcher icon --
+    /** Launcher icon colour: one enabled <activity-alias> (AndroidManifest). */
+    private fun aliasName(id: String) = "$packageName.Launcher" + id.replaceFirstChar { it.uppercase() }
+
+    private fun launcherIcon(): String {
+        val pm = packageManager
+        for (id in ICON_IDS) {
+            val st = pm.getComponentEnabledSetting(ComponentName(this, aliasName(id)))
+            if (st == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return id
+            // DEFAULT = the manifest value: only Merah is enabled there
+            if (st == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && id == ICON_IDS[0]) {
+                val others = ICON_IDS.drop(1).any {
+                    pm.getComponentEnabledSetting(ComponentName(this, aliasName(it))) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                }
+                if (!others) return id
+            }
+        }
+        return ICON_IDS[0]
+    }
+
+    /** Enables [id]'s alias, then disables every other one, so the launcher never sees zero entries. */
+    private fun setLauncherIcon(id: String): String {
+        if (id !in ICON_IDS) throw IllegalArgumentException("ikon tidak dikenal: $id")
+        val pm = packageManager
+        val on = ComponentName(this, aliasName(id))
+        val flags = PackageManager.DONT_KILL_APP
+        if (Build.VERSION.SDK_INT >= 33) {
+            val list = ArrayList<PackageManager.ComponentEnabledSetting>()
+            list.add(PackageManager.ComponentEnabledSetting(on, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, flags))
+            for (other in ICON_IDS) if (other != id) list.add(PackageManager.ComponentEnabledSetting(
+                ComponentName(this, aliasName(other)), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, flags))
+            pm.setComponentEnabledSettings(list)
+        } else {
+            pm.setComponentEnabledSetting(on, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, flags)
+            for (other in ICON_IDS) if (other != id) pm.setComponentEnabledSetting(
+                ComponentName(this, aliasName(other)), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, flags)
+        }
+        return id
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -135,11 +185,14 @@ class MainActivity : FlutterActivity() {
                 startActivityForResult(i, code)
             }
             "openIntent" -> result.success(openIntent(call))
-            "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: ""))
+            "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: "", call.argument<String>("route")))
             "location" -> location(result)
             "contacts" -> result.success(contacts(call.argument<String>("query") ?: "", call.argument<Int>("limit") ?: 20))
             "calendar" -> result.success(calendar(call.argument<Int>("days") ?: 7, call.argument<Int>("limit") ?: 40))
             "apps" -> result.success(apps(call.argument<String>("query") ?: ""))
+            "launcherIcon" -> result.success(launcherIcon())
+            "setLauncherIcon" -> result.success(setLauncherIcon(call.argument<String>("id") ?: ""))
+            "takeRoute" -> { result.success(pendingRoute); pendingRoute = null }
             else -> result.notImplemented()
         }
     }
@@ -277,7 +330,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun notify(title: String, body: String): String {
+    private fun notify(title: String, body: String, route: String?): String {
         if (!granted(Manifest.permission.POST_NOTIFICATIONS)) return "izin notifikasi belum diberikan"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val id = "neovarch_agent"
@@ -293,8 +346,11 @@ class MainActivity : FlutterActivity() {
             .setContentText(body)
             .setStyle(Notification.BigTextStyle().bigText(body))
             .setAutoCancel(true)
-            .setContentIntent(android.app.PendingIntent.getActivity(this, 0,
-                Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE))
+            .setContentIntent(android.app.PendingIntent.getActivity(this, if (route != null) 1 else 0,
+                Intent(this, MainActivity::class.java).apply {
+                    if (route != null) putExtra(EXTRA_ROUTE, route)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
             .build()
         nm.notify((System.currentTimeMillis() % 100000).toInt(), n)
         return "terkirim"
@@ -369,5 +425,11 @@ class MainActivity : FlutterActivity() {
             .filter { q.isEmpty() || (it["label"] as String).lowercase().contains(q) || (it["package"] as String).contains(q) }
             .distinctBy { it["package"] }
             .sortedBy { (it["label"] as String).lowercase() }
+    }
+
+    companion object {
+        private const val EXTRA_ROUTE = "nv_route"
+        /** Order = the Dart picker (lib/remote/app_icon.dart); first is the manifest default. */
+        private val ICON_IDS = listOf("merah", "biru", "ungu", "toska", "hijau", "oranye", "monokrom")
     }
 }

@@ -23,6 +23,7 @@ import 'package:neovarch_agent/remote/ui/remote_app.dart' show PaletteScope, the
 import 'package:neovarch_agent/remote/ui/remote_background.dart';
 import 'package:neovarch_agent/remote/ui/remote_intro_screen.dart';
 import 'package:neovarch_agent/remote/ui/remote_pc_screen.dart' show AppearancePanel;
+import 'package:neovarch_agent/remote/ui/nv_widgets.dart' show NvGlassButton;
 import 'package:neovarch_agent/remote/ui/remote_shell.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
@@ -120,11 +121,11 @@ void main() {
       expect(prefs.getBool('nv.theme.follow'), isFalse);
       expect(prefs.getString('nv.theme.accent'), '#2563EB');
       // the button and progress dots follow the accent
-      final btn = tester.widget<FilledButton>(find.byKey(const ValueKey('intro-next')));
+      final btn = tester.widget<NvGlassButton>(find.byKey(const ValueKey('intro-next')));
       expect(Theme.of(tester.element(find.byKey(const ValueKey('intro-next')))).colorScheme.primary, _biru);
       expect(btn.onPressed, isNotNull);
-      final dot = tester.widgetList<AnimatedContainer>(find.byType(AnimatedContainer)).map((c) => (c.decoration as BoxDecoration?)?.color);
-      expect(dot, contains(_biru));
+      final dot = tester.widget<Container>(find.byKey(const ValueKey('intro-dot-3')));
+      expect((dot.decoration as BoxDecoration).color, _biru);
       expect(find.byKey(const ValueKey('intro-theme-note')), findsOneWidget);
 
       await tester.tap(find.text('Terang'));
@@ -297,7 +298,7 @@ void main() {
       expect(stack().index, 0);
 
       final bar = tester.getRect(find.byKey(const ValueKey('nv-nav-bar')));
-      final tabW = (bar.width - 8) / 5;
+      final tabW = (bar.width - 8) / 4;
       double lensX() => tester.getRect(find.byKey(const ValueKey('nv-nav-lens'))).center.dx;
       final start = Offset(bar.left + 4 + tabW * 0.5, bar.center.dy);
       final g = await tester.startGesture(start);
@@ -311,7 +312,7 @@ void main() {
       expect(lensX(), closeTo(start.dx + tabW * 2, tabW * 0.15));
       expect(stack().index, 0); // not switched until release
       // the tab under the lens is highlighted (filled icon)
-      expect(find.byIcon(CupertinoIcons.rectangle_grid_2x2_fill), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.person_crop_circle_fill), findsOneWidget);
       expect(haptics.where((h) => h.contains('selectionClick')).length, 2); // crossed into tab 1, then 2
       await g.up();
       await settle(tester);
@@ -326,9 +327,9 @@ void main() {
       expect(stack().index, 3);
 
       // plain taps still switch
-      await tester.tap(find.descendant(of: find.byKey(const ValueKey('nv-nav-bar')), matching: find.text('PC')));
+      await tester.tap(find.descendant(of: find.byKey(const ValueKey('nv-nav-bar')), matching: find.text('KANTOR')));
       await settle(tester);
-      expect(stack().index, 4);
+      expect(stack().index, 1);
       await tester.tap(find.descendant(of: find.byKey(const ValueKey('nv-nav-bar')), matching: find.text('CHAT')));
       await settle(tester);
       expect(stack().index, 0);
@@ -376,7 +377,7 @@ void main() {
   });
 
   group('Accent consistency', () {
-    for (final tab in [0, 2, 3, 4]) {
+    for (final tab in [0, 1, 2, 3]) {
       testWidgets('a non-red accent leaves no default red anywhere (tab $tab)', (tester) async {
         final look = AppearanceController(prefs, systemBrightness: Brightness.dark)..setLocal(accent: const Color(0xFFEA580C));
         app.previewTab = tab;
@@ -403,7 +404,7 @@ void main() {
           if (c != null && c.withAlpha(255).toARGB32() == red.toARGB32()) bad.add('${w.runtimeType}');
         }
         expect(bad, isEmpty);
-        expect(Theme.of(tester.element(find.byType(IndexedStack))).colorScheme.primary, const Color(0xFFEA580C));
+        expect(Theme.of(tester.element(find.byType(IndexedStack).first)).colorScheme.primary, const Color(0xFFEA580C));
       });
     }
   });
@@ -427,7 +428,7 @@ void main() {
       await pump(tester, const RemoteShell());
       await settle(tester);
       expect(find.byIcon(CupertinoIcons.chat_bubble_fill), findsWidgets);
-      expect(find.byIcon(CupertinoIcons.checkmark_shield), findsWidgets);
+      expect(find.byIcon(CupertinoIcons.person_crop_circle), findsWidgets);
       expect(find.byIcon(CupertinoIcons.desktopcomputer), findsWidgets);
       expect(find.byIcon(Icons.chat_bubble_rounded), findsNothing);
     });

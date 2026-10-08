@@ -379,8 +379,8 @@ void main() {
           expect(dec.boxShadow == null || dec.boxShadow!.isEmpty, isTrue);
         }
       }
-      // five tabs, Indonesian
-      for (final t in ['CHAT', 'KANTOR', 'TUGAS', 'SETUJUI', 'PC']) {
+      // four tabs, Indonesian (1.4.2: Tugas in Kantor, Setujui in Chat)
+      for (final t in ['CHAT', 'KANTOR', 'PROFIL', 'PC']) {
         expect(find.text(t), findsOneWidget);
       }
     });

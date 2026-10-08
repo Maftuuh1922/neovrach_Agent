@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../theme/neovarch_mobile_theme.dart';
 import '../appearance.dart';
+import 'app_icon_panel.dart';
 import 'nv_widgets.dart';
 import 'remote_pc_screen.dart' show AppearancePanel;
 
@@ -120,6 +121,8 @@ Future<void> showAppearanceSheet(BuildContext context) => showModalBottomSheet<v
           children: const [
             Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 14), child: NvSheetTitle(kicker: 'hp ini', title: 'Tampilan')),
             AppearancePanel(),
+            NvSection('ikon aplikasi'),
+            AppIconPanel(),
           ],
         ),
       ),

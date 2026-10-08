@@ -480,15 +480,66 @@ class NvApprovalCard extends StatelessWidget {
 /// a clear glass lens on the active tab that magnifies what is under it and
 /// springs between tabs, stretching a little while it moves.
 class NvNavBar extends StatefulWidget {
-  const NvNavBar({super.key, required this.index, required this.onTap, required this.items, this.badges = const {}, this.dots = const {}});
+  const NvNavBar({super.key, required this.index, required this.onTap, required this.items, this.badges = const {}, this.dots = const {}, this.avatars = const {}});
   final int index;
   final ValueChanged<int> onTap;
   final List<(IconData, IconData, String)> items;
   final Map<int, int> badges;
   final Map<int, Color> dots;
+  /// Optional photo per tab (e.g. Profil): drawn as a circular avatar in
+  /// place of the icon, accent ring when active, dimmed when not. A null
+  /// value falls back to the item's icons.
+  final Map<int, ImageProvider?> avatars;
+
+  /// Avatar diameter in the bar.
+  static const avatarSize = 26.0;
+
+  /// Label magnification of the lens at rest (it zooms more while held).
+  static const restMagnification = 1.08;
+
+  /// Horizontal room kept between the magnified label and the lens rim.
+  static const lensPadding = 11.0;
+
+  static TextStyle labelStyle([Color? color]) => NV.monoLabel(size: 9.5, color: color);
 
   @override
   State<NvNavBar> createState() => _NvNavBarState();
+}
+
+/// Sizes the nav lens so the widest (magnified) tab label always sits inside
+/// it with [NvNavBar.lensPadding] on each side: the lens grows past its tab
+/// slot when needed (centred, so it reaches a little into the neighbours,
+/// at most [maxOverreach] of a slot), and if even that is not enough on a
+/// narrow screen the magnification is lowered instead.
+class NvLensFit {
+  NvLensFit._(this.width, this.labelWidth);
+  /// Resting lens width (before the liquid stretch).
+  final double width;
+  /// Widest unmagnified label, in logical px.
+  final double labelWidth;
+
+  static const maxOverreach = 0.24;
+
+  factory NvLensFit.of(BuildContext context, double tabW, List<String> labels) {
+    final scaler = MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    var widest = 0.0;
+    for (final l in labels) {
+      final tp = TextPainter(text: TextSpan(text: l, style: NvNavBar.labelStyle()), textDirection: TextDirection.ltr, textScaler: scaler, maxLines: 1)..layout();
+      widest = math.max(widest, tp.width);
+      tp.dispose();
+    }
+    final need = widest * NvNavBar.restMagnification + 2 * NvNavBar.lensPadding;
+    final width = need.clamp(tabW, tabW * (1 + maxOverreach)).toDouble();
+    return NvLensFit._(width, widest);
+  }
+
+  /// The magnification to use for a lens [lensW] wide: [wanted], lowered
+  /// (never below 1) so the widest label keeps its padding.
+  double magFor(double lensW, double wanted) {
+    if (labelWidth <= 0) return wanted;
+    final fits = (lensW - 2 * NvNavBar.lensPadding) / labelWidth;
+    return math.max(1.0, math.min(wanted, fits));
+  }
 }
 
 class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin {
@@ -578,6 +629,7 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
         child: LayoutBuilder(builder: (context, c) {
           final w = c.maxWidth / items.length;
           _tabW = w;
+          final fit = NvLensFit.of(context, w, [for (final it in items) it.$3.toUpperCase()]);
           return GestureDetector(
             key: const ValueKey('nv-nav-drag'),
             behavior: HitTestBehavior.translucent,
@@ -592,9 +644,10 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
                 // liquid stretch while moving, back to a round capsule at rest;
                 // while held the lens lifts (a little bigger, stronger zoom).
                 final stretch = _dragging ? 0.12 : (_pos.velocity.abs() * 0.045).clamp(0.0, 0.32);
-                final lensW = w * (1 + stretch);
+                final lensW = fit.width * (1 + stretch);
                 final lift = _dragging ? 4.0 : 0.0;
                 final lensH = c.maxHeight + lift;
+                final mag = fit.magFor(lensW, _dragging ? 1.24 : NvNavBar.restMagnification);
                 return Stack(clipBehavior: Clip.none, children: [
                   Row(children: [
                     for (var i = 0; i < items.length; i++)
@@ -606,7 +659,7 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
                     width: lensW,
                     height: lensH,
                     child: IgnorePointer(
-                      child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH), magnification: _dragging ? 1.24 : 1.14),
+                      child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH), magnification: mag),
                     ),
                   ),
                 ]);
@@ -635,7 +688,10 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
         },
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Stack(clipBehavior: Clip.none, children: [
-            Icon(on > 0.5 ? it.$2 : it.$1, size: 21, color: iconColor),
+            if (widget.avatars[i] != null)
+              _NavAvatar(key: ValueKey('nv-nav-avatar-$i'), image: widget.avatars[i]!, on: on)
+            else
+              Icon(on > 0.5 ? it.$2 : it.$1, size: 21, color: iconColor),
             if ((widget.badges[i] ?? 0) > 0)
               Positioned(
                 right: -10,
@@ -653,8 +709,40 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
               Positioned(right: -3, top: -2, child: NvDot(widget.dots[i]!, size: 8)),
           ]),
           const SizedBox(height: 4),
-          Text(it.$3.toUpperCase(), style: NV.monoLabel(size: 9.5, color: labelColor)),
+          Text(it.$3.toUpperCase(), style: NvNavBar.labelStyle(labelColor)),
         ]),
+      ),
+    );
+  }
+}
+
+class _NavAvatar extends StatelessWidget {
+  const _NavAvatar({super.key, required this.image, required this.on});
+  final ImageProvider image;
+  final double on; // 0 inactive … 1 active
+  @override
+  Widget build(BuildContext context) {
+    const d = NvNavBar.avatarSize;
+    return Opacity(
+      opacity: 0.55 + 0.45 * on,
+      child: Container(
+        width: d,
+        height: d,
+        padding: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Color.lerp(NV.border, NV.red, on)!, width: 1.5),
+        ),
+        child: ClipOval(
+          child: Image(
+            image: image,
+            width: d,
+            height: d,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (context, e, s) => Icon(CupertinoIcons.person_crop_circle_fill, size: 21, color: NV.muted),
+          ),
+        ),
       ),
     );
   }
@@ -792,7 +880,7 @@ ImageFilter nvGlassFilter(double sigma) => ImageFilter.compose(
 /// Liquid glass surface: backdrop blur + saturation, a translucent
 /// accent-tinted fill, a hairline and a specular rim. No drop shadow.
 class NvGlass extends StatelessWidget {
-  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true});
+  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true, this.backdrop = true});
   final Widget child;
   final double radius;
   final BorderRadius? borderRadius;
@@ -802,6 +890,9 @@ class NvGlass extends StatelessWidget {
   final Color? tint;
   final bool border;
   final bool rim;
+  /// False: no BackdropFilter (tint + rim only) — for small glass over an
+  /// already-blurred, soft backdrop, so a screen doesn't stack many blurs.
+  final bool backdrop;
   @override
   Widget build(BuildContext context) {
     final br = borderRadius ?? BorderRadius.circular(radius);
@@ -817,6 +908,7 @@ class NvGlass extends StatelessWidget {
         child: Padding(padding: padding, child: child),
       ),
     );
+    if (!backdrop) return ClipRRect(borderRadius: br, child: inner);
     return ClipRRect(
       borderRadius: br,
       child: ValueListenableBuilder<double>(
@@ -850,5 +942,172 @@ class NvRenderSizeReporter extends RenderProxyBox {
     if (_last == h) return;
     _last = h;
     WidgetsBinding.instance.addPostFrameCallback((_) => onHeight(h));
+  }
+}
+
+/// Liquid-glass segmented control ("Kantor | Tugas"): a glass capsule with
+/// the same clear lens as the nav bar gliding under the selected segment.
+class NvGlassSegmented extends StatelessWidget {
+  const NvGlassSegmented({super.key, required this.labels, required this.index, required this.onChanged, this.height = 40});
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int> onChanged;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final dur = reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 320);
+    return SizedBox(
+      height: height,
+      child: NvGlass(
+        radius: height / 2,
+        tint: NV.navGlass,
+        padding: const EdgeInsets.all(3),
+        child: LayoutBuilder(builder: (context, c) {
+          final w = c.maxWidth / labels.length;
+          return Stack(children: [
+            AnimatedPositioned(
+              duration: dur,
+              curve: Curves.easeOutBack,
+              left: w * index,
+              top: 0,
+              bottom: 0,
+              width: w,
+              child: IgnorePointer(child: NvLens(size: Size(w, c.maxHeight), magnification: 1.0)),
+            ),
+            Row(children: [
+              for (var i = 0; i < labels.length; i++)
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: i == index,
+                    child: GestureDetector(
+                      key: ValueKey('segment-${labels[i]}'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (i == index) return;
+                        HapticFeedback.selectionClick();
+                        onChanged(i);
+                      },
+                      child: Center(
+                        child: AnimatedDefaultTextStyle(
+                          duration: dur,
+                          style: NV.monoLabel(size: 10, color: i == index ? NV.text : NV.muted),
+                          child: Text(labels[i].toUpperCase()),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
+          ]);
+        }),
+      ),
+    );
+  }
+}
+
+/// Small liquid-glass chip (e.g. "2 menunggu persetujuan" pinned on Chat).
+class NvGlassChip extends StatelessWidget {
+  const NvGlassChip({super.key, required this.label, this.icon, this.onTap, this.color});
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onTap;
+  final Color? color;
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? NV.red;
+    return GestureDetector(
+      onTap: onTap,
+      child: NvGlass(
+        radius: 18,
+        tint: Color.lerp(NV.navGlass, c, 0.18),
+        padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[Icon(icon, size: 16, color: c), const SizedBox(width: 8)],
+          Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10, color: NV.text))),
+          const SizedBox(width: 6),
+          Icon(CupertinoIcons.chevron_right, size: 13, color: NV.muted),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Accent-tinted liquid-glass button (intro "Lanjut"): backdrop blur, accent
+/// glass fill, specular rim; presses scale down with a highlight.
+class NvGlassButton extends StatefulWidget {
+  const NvGlassButton({super.key, required this.onPressed, required this.child, this.minSize = const Size(148, 50)});
+  final VoidCallback? onPressed;
+  final Widget child;
+  final Size minSize;
+  @override
+  State<NvGlassButton> createState() => _NvGlassButtonState();
+}
+
+class _NvGlassButtonState extends State<NvGlassButton> {
+  bool _down = false;
+  void _set(bool v) {
+    if (_down != v) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = reduceMotion(context);
+    final enabled = widget.onPressed != null;
+    final r = widget.minSize.height / 2;
+    final fg = NV.onRed;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: GestureDetector(
+        onTapDown: enabled ? (_) => _set(true) : null,
+        onTapUp: enabled ? (_) => _set(false) : null,
+        onTapCancel: () => _set(false),
+        onTap: widget.onPressed == null
+            ? null
+            : () {
+                HapticFeedback.lightImpact();
+                widget.onPressed!();
+              },
+        child: AnimatedScale(
+          scale: _down ? 0.95 : 1,
+          duration: still ? Duration.zero : const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: widget.minSize.width, minHeight: widget.minSize.height),
+            child: NvGlass(
+              key: const ValueKey('nv-glass-button'),
+              radius: r,
+              tint: NV.red.withValues(alpha: enabled ? 0.70 : 0.30),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Stack(alignment: Alignment.center, children: [
+                // press highlight
+                Positioned.fill(
+                  child: AnimatedOpacity(
+                    opacity: _down ? 1 : 0,
+                    duration: still ? Duration.zero : const Duration(milliseconds: 120),
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(colors: [Color(0x40FFFFFF), Color(0x00FFFFFF)], radius: 1.1),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: widget.minSize.height,
+                  child: Center(
+                    child: DefaultTextStyle.merge(
+                      style: TextStyle(fontFamily: NV.sans, fontSize: 16, fontWeight: FontWeight.w600, color: fg),
+                      child: IconTheme.merge(data: IconThemeData(color: fg, size: 18), child: widget.child),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
