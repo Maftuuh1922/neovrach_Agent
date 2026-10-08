@@ -11,12 +11,12 @@ import 'nv_widgets.dart';
 
 const laneLabels = {
   'triage': 'Triase',
-  'todo': 'Todo',
+  'todo': 'Akan dikerjakan',
   'scheduled': 'Terjadwal',
   'ready': 'Siap',
   'running': 'Jalan',
   'blocked': 'Terhambat',
-  'review': 'Review',
+  'review': 'Ditinjau',
   'done': 'Selesai',
   'archived': 'Arsip',
 };

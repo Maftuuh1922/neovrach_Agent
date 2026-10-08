@@ -8,6 +8,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:neovarch_agent/remote/remote_controller.dart';
+import 'package:neovarch_agent/remote/saved_desktops.dart';
+import 'package:neovarch_agent/remote/update_check.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:neovarch_agent/remote/pairing.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart';
 import 'package:neovarch_agent/remote/remote_transcript.dart';
@@ -493,6 +499,41 @@ void main() {
       // LAN, then MagicDNS, then the tailnet IP
       expect(g.candidates.indexOf('http://pc.tail1234.ts.net:${mock.port}'), lessThan(g.candidates.indexOf('http://100.101.2.3:${mock.port}')));
       await g.close();
+    });
+
+    test('controller: Office + appearance load once, then follow WebSocket pushes (no polling)', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final desktops = SavedDesktops(prefs)..load();
+      final r = RemoteController(desktops)
+        ..updateChecker = UpdateChecker(client: MockClient((_) async => http.Response('{"tag_name":"v1.4.0"}', 200)));
+      final looks = <Map<String, dynamic>>[];
+      r.onAppearance = looks.add;
+      final d = await desktops.upsert(GatewayPairing(url: 'http://127.0.0.1:${mock.port}', token: _token, name: 'PC'));
+      await r.connectTo(d);
+      for (var i = 0; i < 50 && (r.office == null || looks.isEmpty); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(r.connected, isTrue);
+      expect(r.office!.agents.single.name, 'Raka');
+      expect(looks.single['accent'], '#2563EB');
+      // pushes
+      mock.publish('office.update', {
+        'agents': [
+          {'id': 'session:x', 'session_id': 'x', 'name': 'Sari', 'role': 'Agen', 'status': 'idle'}
+        ],
+        'feed': [],
+      });
+      mock.publish('appearance.changed', {'accent': '#16A34A', 'base': 'dark'});
+      mock.publish('vault.changed', {'tool': 'obsidian_write'});
+      for (var i = 0; i < 50 && (r.office!.agents.single.name != 'Sari' || looks.length < 2); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(r.office!.agents.single.name, 'Sari');
+      expect(looks.last['accent'], '#16A34A');
+      expect(r.vaultRevision, 1);
+      expect(desktops.items.single.alternates, contains('http://pc.tail1234.ts.net:${mock.port}'));
+      await r.disconnect();
     });
   });
 }
