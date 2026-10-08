@@ -45,6 +45,8 @@ from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
 from neovarch.office import Office
 from neovarch import cron as cronmod
+from neovarch import netinfo
+from neovarch.realtime import EventBus
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -233,6 +235,8 @@ class Gateway:
         self.live: dict[str, LiveSession] = {}
         self.started = time.time()
         self.port = 0
+        self.bus = EventBus()
+        self.kanban.on_event = lambda ev: self.broadcast_event("kanban.changed", None, ev)
         self.office = Office(self)
         self.cron = cronmod.CronStore()
         self.scheduler = cronmod.Scheduler(
@@ -268,10 +272,18 @@ class Gateway:
     def broadcast_event(self, kind: str, sid: str | None, payload: dict) -> None:
         if kind != "office.update":
             self.office.observe(kind, sid, payload)
-        frame = {"jsonrpc": "2.0", "method": "event", "params": {"type": kind, "session_id": sid, "payload": payload}}
+        if (kind == "tool.complete" and isinstance(payload, dict)
+                and str(payload.get("name") or "").startswith("obsidian_write")):
+            self.broadcast_event("vault.changed", None, {"tool": payload.get("name")})
+        ev = self.bus.publish(kind, sid, payload)
+        frame = {"jsonrpc": "2.0", "method": "event",
+                 "params": {"type": kind, "session_id": sid, "payload": payload, "seq": ev["seq"]}}
         for conn in list(self.conns):
             if sid is None or sid in conn.attached:
-                asyncio.create_task(conn.send(frame))
+                try:
+                    asyncio.get_running_loop().create_task(conn.send(frame))
+                except RuntimeError:  # no loop (sync caller outside the gateway)
+                    pass
 
     async def server_request(self, conn: Conn, method: str, params: dict, answer: asyncio.Future) -> None:
         rid = "srq-" + secrets.token_hex(6)
@@ -306,7 +318,19 @@ class Gateway:
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
         if method == "ping":
-            return {"pong": True}
+            return {"pong": True, "seq": self.bus.seq, "boot_id": self.bus.boot_id, "ts": time.time()}
+        if method == "events.replay":
+            sids = p.get("session_ids")
+            if isinstance(sids, list):
+                conn.attached.update(str(x) for x in sids)
+            try:
+                since = int(p.get("since") or 0)
+            except (TypeError, ValueError):
+                since = 0
+            return self.bus.replay(since, p.get("boot_id") or None,
+                                   [str(x) for x in sids] if isinstance(sids, list) else sorted(conn.attached))
+        if method == "network.addresses":
+            return netinfo.addresses(self.port)
         if method == "client.capabilities":
             conn.server_requests = bool(p.get("server_requests"))
             return {"ok": True, "server_requests": conn.server_requests}
@@ -643,7 +667,25 @@ def build_app(gw: Gateway) -> web.Application:
         gw.conns.add(conn)
         await conn.send({"jsonrpc": "2.0", "method": "event", "params": {
             "type": "gateway.ready", "session_id": None,
-            "payload": {"product": "neovarch", "version": __version__, "skin": None}}})
+            "payload": {"product": "neovarch", "version": __version__, "skin": None,
+                        "boot_id": gw.bus.boot_id, "seq": gw.bus.seq}}})
+        # ?since=<seq>&boot_id=<id>: replay global events missed while offline
+        # (session events come back through events.replay / session.resume).
+        if "since" in request.query:
+            try:
+                since = int(request.query.get("since") or 0)
+            except ValueError:
+                since = 0
+            rep = gw.bus.replay(since, request.query.get("boot_id") or None, [])
+            if rep["resync"]:
+                await conn.send({"jsonrpc": "2.0", "method": "event", "params": {
+                    "type": "resync.required", "session_id": None,
+                    "payload": {"reason": rep.get("reason"), "boot_id": rep["boot_id"], "seq": rep["seq"]}}})
+            else:
+                for ev in rep["events"]:
+                    await conn.send({"jsonrpc": "2.0", "method": "event", "params": {
+                        "type": ev["type"], "session_id": None, "payload": ev["payload"],
+                        "seq": ev["seq"], "replayed": True}})
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -1022,6 +1064,69 @@ def build_app(gw: Gateway) -> web.Application:
             gw.office.unsubscribe(q)
         return resp
 
+    async def events_sse(request):
+        """Server-Sent Events: every gateway event with `id: <seq>`; resumes from
+        Last-Event-ID / ?since=; `event: resync` when the gap cannot be replayed."""
+        types = {t for t in (request.query.get("types") or "").split(",") if t}
+        sessions = {t for t in (request.query.get("session") or "").split(",") if t}
+
+        def wanted(ev: dict) -> bool:
+            if types and not any(ev["type"] == t or ev["type"].startswith(t.rstrip("*")) for t in types):
+                return False
+            return not sessions or ev["session_id"] is None or ev["session_id"] in sessions
+
+        def frame(ev: dict) -> bytes:
+            body = json.dumps({"type": ev["type"], "session_id": ev["session_id"], "payload": ev["payload"],
+                               "seq": ev["seq"]}, ensure_ascii=False, default=str)
+            return f"id: {ev['seq']}\nevent: {ev['type']}\ndata: {body}\n\n".encode()
+
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache",
+                                           "X-Accel-Buffering": "no", **_cors(request)})
+        await resp.prepare(request)
+        q = gw.bus.subscribe()
+        try:
+            hello = {"boot_id": gw.bus.boot_id, "seq": gw.bus.seq, "version": __version__}
+            await resp.write(f"retry: 1000\nevent: hello\ndata: {json.dumps(hello)}\n\n".encode())
+            last = request.headers.get("Last-Event-ID") or request.query.get("since")
+            if last not in (None, ""):
+                try:
+                    since = int(str(last))
+                except ValueError:
+                    since = -1
+                rep = gw.bus.replay(since, request.query.get("boot_id") or None) if since >= 0 else {"resync": True}
+                if rep["resync"]:
+                    await resp.write(f"event: resync\ndata: {json.dumps({'reason': rep.get('reason', 'bad-cursor'), 'seq': gw.bus.seq, 'boot_id': gw.bus.boot_id})}\n\n".encode())
+                else:
+                    for ev in rep["events"]:
+                        if wanted(ev):
+                            await resp.write(frame(ev))
+            while True:
+                try:
+                    ev = await asyncio.wait_for(q.get(), 15)
+                except asyncio.TimeoutError:
+                    await resp.write(b": keep-alive\n\n")
+                    continue
+                if ev.get("type") == "resync" and "seq" not in ev:
+                    await resp.write(f"event: resync\ndata: {json.dumps({'reason': ev.get('reason'), 'seq': gw.bus.seq, 'boot_id': gw.bus.boot_id})}\n\n".encode())
+                elif wanted(ev):
+                    await resp.write(frame(ev))
+        except (ConnectionResetError, asyncio.CancelledError, RuntimeError):
+            pass
+        finally:
+            gw.bus.unsubscribe(q)
+        return resp
+
+    async def events_replay(request):
+        try:
+            since = int(request.query.get("since") or 0)
+        except ValueError:
+            since = 0
+        sessions = [t for t in (request.query.get("session") or "").split(",") if t] or None
+        return web.json_response(gw.bus.replay(since, request.query.get("boot_id") or None, sessions), dumps=lambda o: json.dumps(o, default=str))
+
+    async def network_addresses(_):
+        return web.json_response(await asyncio.to_thread(netinfo.addresses, gw.port))
+
     async def obsidian_status(_):
         from neovarch import obsidian
         return web.json_response(obsidian.status())
@@ -1043,6 +1148,9 @@ def build_app(gw: Gateway) -> web.Application:
 
     r.add_get("/api/office", office_get)
     r.add_get("/api/office/events", office_events)
+    r.add_get("/api/events", events_sse)
+    r.add_get("/api/events/replay", events_replay)
+    r.add_get("/api/network/addresses", network_addresses)
     r.add_get("/api/memory/obsidian", obsidian_status)
 
     # ---- Obsidian vault viewer (desktop page, phone read-only) ---------------
