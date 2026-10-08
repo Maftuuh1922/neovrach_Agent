@@ -24,6 +24,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../data/gateway_client.dart';
 import '../models/models.dart';
@@ -394,6 +395,24 @@ class RemoteGateway implements VaultApi {
       if (_closed) return;
       try {
         await connect(); // a failure schedules the next attempt itself
+      } catch (_) {}
+    });
+  }
+
+  /// Test hook: drop the socket as a flaky network would and come back after
+  /// [away] (used by the real-core integration test).
+  @visibleForTesting
+  void debugDrop({Duration away = const Duration(seconds: 1)}) {
+    _beat?.cancel();
+    _beat = null;
+    _retry?.cancel();
+    client.close();
+    _setStatus(RemoteStatus.reconnecting);
+    _attempt = 1;
+    _retry = Timer(away, () async {
+      _retry = null;
+      try {
+        await connect();
       } catch (_) {}
     });
   }
