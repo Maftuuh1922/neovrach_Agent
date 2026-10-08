@@ -45,8 +45,11 @@ neovarch --version
   (see `../docs/remote-protocol.md`). Without any token the gateway mints one and prints it; it never runs open.
 * `/api/ws`: JSON-RPC 2.0. Implemented: `ping`, `client.capabilities`,
   `session.list|active_list|create|resume|activate|status|title|save|interrupt`, `prompt.submit`,
-  `approval.pending|respond`, `config.get|set`, `commands.catalog`, `profiles.list`, plus empty answers for
-  features the core does not have.
+  `approval.pending|respond`, `config.get|set`, `commands.catalog`, `profiles.list`, and the desktop's boot
+  checks `setup.status`, `setup.runtime_check`, `model.options` (answered from `config.yaml`), plus "off"
+  answers for features the core does not have (`pet.info`, `free_tier.status`, `wake.status`, `projects.tree`,
+  `subagent.list`, `billing.state`, `plugins.manage`, …). Session info carries `desktop_contract` (the
+  desktop session-protocol level this core speaks).
 * REST: `/api/health`, `/api/status`, sessions, config, model info/options/set, skills, toolsets, profiles,
   Kanban (`/api/plugins/kanban/*`), a small read-only file browser (`/api/fs/*`).
 * Features of Hermes Agent the core does not implement (voice, image generation, OAuth providers, MCP, cron,
@@ -67,4 +70,8 @@ neovarch --version
 uv venv .venv && uv pip install -p .venv -e '.[test]'
 .venv/bin/pytest -q
 python tests/mock_llm.py --port 18080   # OpenAI-compatible mock provider for manual runs
+python scripts/smoke_serve.py --port 9319   # neovarch serve + mock: session.create, prompt.submit, streamed reply + one tool call
 ```
+
+`neovarch --profile <name> …` keeps that profile's data in `~/.neovarch/profiles/<name>` (the desktop passes
+`--profile` when one is pinned).
