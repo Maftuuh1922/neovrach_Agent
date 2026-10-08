@@ -31,9 +31,14 @@ class RemoteTranscript {
   ChatMsg get _open => _cur ?? _assistant();
 
   /// Local echo of a prompt the phone just submitted.
-  void addUser(String text) {
+  void addUser(String text, {List<Map<String, dynamic>> attachments = const []}) {
     _close();
-    messages.add(ChatMsg(id: 'u${DateTime.now().microsecondsSinceEpoch}', role: 'user', content: text, ts: DateTime.now().millisecondsSinceEpoch));
+    messages.add(ChatMsg(
+        id: 'u${DateTime.now().microsecondsSinceEpoch}',
+        role: 'user',
+        content: text,
+        ts: DateTime.now().millisecondsSinceEpoch,
+        attachments: [...attachments]));
     running = true;
     error = null;
   }
@@ -159,7 +164,8 @@ class RemoteTranscript {
       }
       final ts = ((m['timestamp'] as num?)?.toDouble() ?? 0) * 1000;
       if (role == 'user') {
-        out.add(ChatMsg(id: 'h${i++}', role: 'user', content: '$content', ts: ts.toInt()));
+        final atts = [for (final a in (m['attachments'] as List? ?? const []).whereType<Map>()) Map<String, dynamic>.from(a)];
+        out.add(ChatMsg(id: 'h${i++}', role: 'user', content: '$content', ts: ts.toInt(), attachments: atts));
       } else if (role == 'assistant') {
         out.add(ChatMsg(id: 'h${i++}', role: 'assistant', content: '$content', reasoning: '${m['reasoning'] ?? ''}', ts: ts.toInt()));
       } else if (role == 'tool') {

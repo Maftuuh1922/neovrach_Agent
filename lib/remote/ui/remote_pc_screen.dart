@@ -16,6 +16,7 @@ import '../remote_gateway.dart';
 import 'connect_screen.dart';
 import 'nv_widgets.dart';
 import 'remote_background.dart' show BackgroundSection;
+import 'remote_social_screen.dart';
 
 class RemotePcScreen extends ConsumerWidget {
   const RemotePcScreen({super.key, this.onOpenChat});
@@ -130,6 +131,18 @@ class RemotePcScreen extends ConsumerWidget {
               ]),
             ]),
           ),
+          const NvSection('teman'),
+          NvList(children: [
+            NvRow(
+              key: const ValueKey('pc-social'),
+              icon: CupertinoIcons.person_2,
+              title: 'Profil & Teman',
+              subtitle: (r.socialFriends?.codingCount ?? 0) > 0
+                  ? '${r.socialFriends!.codingCount} teman lagi ngoding'
+                  : 'Profil GitHub, aktivitas, dan teman (lewat PC)',
+              onTap: ok ? () => open(const RemoteSocialScreen()) : null,
+            ),
+          ]),
           if (r.active.isNotEmpty) ...[
             NvSection('sedang berjalan di pc', count: r.active.length),
             NvList(children: [
