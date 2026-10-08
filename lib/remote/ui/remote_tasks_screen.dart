@@ -1,5 +1,6 @@
 // The PC's Kanban board (Neovarch core Kanban): read the lanes, move a card,
 // comment, add a task. Agents on the PC pick up ready tasks themselves.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -62,8 +63,8 @@ class _RemoteTasksScreenState extends ConsumerState<RemoteTasksScreen> {
           status: Text(b == null ? 'papan agen di PC' : '$total tugas · ${lanes.length} kolom',
               style: NV.monoLabel(size: 10).copyWith(letterSpacing: 0.4)),
           actions: [
-            NvIconButton(tooltip: 'Segarkan', icon: Icons.refresh_rounded, onPressed: r.connected ? r.refreshBoard : null),
-            NvIconButton(tooltip: 'Tugas baru', icon: Icons.add_rounded, accent: true, onPressed: r.connected && b != null ? () => _newTask(context, b) : null),
+            NvIconButton(tooltip: 'Segarkan', icon: CupertinoIcons.arrow_clockwise, onPressed: r.connected ? r.refreshBoard : null),
+            NvIconButton(tooltip: 'Tugas baru', icon: CupertinoIcons.add, accent: true, onPressed: r.connected && b != null ? () => _newTask(context, b) : null),
           ],
         ),
         Expanded(
@@ -180,7 +181,7 @@ class _TaskCard extends StatelessWidget {
                   maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10.5, color: NV.muted).copyWith(letterSpacing: 0.3)),
             ),
             if (task.comments > 0) ...[
-              Icon(Icons.mode_comment_outlined, size: 13, color: NV.muted),
+              Icon(CupertinoIcons.bubble_left, size: 13, color: NV.muted),
               const SizedBox(width: 4),
               Text('${task.comments}', style: NV.monoLabel(size: 10.5)),
             ],
@@ -203,8 +204,8 @@ class _Avatar extends StatelessWidget {
           border: Border.all(color: name == null ? NV.border : NV.darkRed),
         ),
         child: name == null
-            ? Icon(Icons.person_outline_rounded, size: 13, color: NV.faint)
-            : Text(initials(name!).substring(0, 1), style: TextStyle(fontFamily: NV.mono, fontSize: 10.5, color: NV.text)),
+            ? Icon(CupertinoIcons.person, size: 13, color: NV.faint)
+            : Text(initials(name!).substring(0, 1), style: TextStyle(fontFamily: NV.sans, fontWeight: FontWeight.w600, fontSize: 11, color: NV.text)),
       );
 }
 

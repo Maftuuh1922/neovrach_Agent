@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderProxyBox;
 import 'package:flutter/physics.dart' show SpringDescription, SpringSimulation;
@@ -31,7 +32,7 @@ class NvHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    final kick = Text('// ${kicker.toUpperCase()}', style: NV.monoLabel(color: NV.red));
+    final kick = Text(kicker.toUpperCase(), style: NV.monoLabel(color: NV.red));
     final head = Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.display(size: 34));
     final Widget body;
     if (onBack != null) {
@@ -41,7 +42,7 @@ class NvHeader extends StatelessWidget {
         Padding(padding: const EdgeInsets.only(left: 52), child: kick),
         const SizedBox(height: 6),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          NvIconButton(icon: Icons.arrow_back, tooltip: 'Kembali', onPressed: onBack),
+          NvIconButton(icon: CupertinoIcons.chevron_back, tooltip: 'Kembali', onPressed: onBack),
           const SizedBox(width: 12),
           Expanded(child: head),
           for (final a in actions) Padding(padding: const EdgeInsets.only(left: 6), child: a),
@@ -110,7 +111,7 @@ class NvSection extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: padding,
         child: Row(children: [
-          Text('// ${label.toUpperCase()}', style: NV.monoLabel()),
+          Text(label.toUpperCase(), style: NV.monoLabel()),
           if (count != null) ...[const SizedBox(width: 8), NvPill('$count')],
           const SizedBox(width: 10),
           Expanded(child: Divider(color: NV.border, height: 1)),
@@ -274,7 +275,7 @@ class NvEmpty extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 18),
-          if (kicker != null) ...[Text('// ${kicker!.toUpperCase()}', style: NV.monoLabel(color: NV.red)), const SizedBox(height: 8)],
+          if (kicker != null) ...[Text(kicker!.toUpperCase(), style: NV.monoLabel(color: NV.red)), const SizedBox(height: 8)],
           Text(title, style: NV.display(size: 28)),
           if (body != null) ...[
             const SizedBox(height: 8),
@@ -287,7 +288,7 @@ class NvEmpty extends StatelessWidget {
 
 /// Error / warning strip: rounded 12px, tinted, left rule kept inside.
 class NvNotice extends StatelessWidget {
-  const NvNotice(this.message, {super.key, Color? color, this.icon = Icons.error_outline, this.action}) : _color = color; // ignore: prefer_initializing_formals
+  const NvNotice(this.message, {super.key, Color? color, this.icon = CupertinoIcons.exclamationmark_circle, this.action}) : _color = color; // ignore: prefer_initializing_formals
   final String message;
   final Color? _color;
   Color get color => _color ?? NV.red;
@@ -339,7 +340,7 @@ class NvUserMessage extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(13, 10, 14, 12),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                      Text('// KAMU${msg.ts > 0 ? '  ·  ${clockOf(msg.ts)}' : ''}', style: NV.monoLabel(size: 9.5, color: NV.red)),
+                      Text('KAMU${msg.ts > 0 ? '  ·  ${clockOf(msg.ts)}' : ''}', style: NV.monoLabel(size: 9.5, color: NV.red)),
                       const SizedBox(height: 5),
                       SelectableText(msg.content, style: TextStyle(fontSize: 14.5 * scale, height: 1.5, color: NV.text)),
                     ]),
@@ -371,7 +372,7 @@ class NvAgentLabel extends StatelessWidget {
             child: Text('N', style: TextStyle(fontFamily: NV.serif, fontSize: 13, height: 1.1, color: NV.text)),
           ),
           const SizedBox(width: 8),
-          Flexible(child: Text('// ${label.toUpperCase()}', maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5))),
+          Flexible(child: Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5))),
           if (live) ...[const SizedBox(width: 8), const _LiveDot()],
         ]),
       );
@@ -433,9 +434,9 @@ class NvApprovalCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Icon(Icons.shield_outlined, size: 16, color: NV.red),
+          Icon(CupertinoIcons.checkmark_shield, size: 16, color: NV.red),
           const SizedBox(width: 8),
-          Text('// PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red)),
+          Text('PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red)),
           const SizedBox(width: 10),
           Expanded(
             child: origin != null && origin!.isNotEmpty
@@ -494,15 +495,68 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
   late final AnimationController _pos = AnimationController.unbounded(vsync: this, value: widget.index.toDouble());
   static const _spring = SpringDescription(mass: 1, stiffness: 420, damping: 29);
 
+  /// Finger is on the pill (horizontal drag): the lens follows it 1:1.
+  bool _dragging = false;
+  /// Tab currently under the lens while dragging (haptic tick on change).
+  int _hover = 0;
+  double _tabW = 1;
+
   @override
   void didUpdateWidget(NvNavBar old) {
     super.didUpdateWidget(old);
-    if (old.index == widget.index) return;
+    if (old.index == widget.index || _dragging) return;
+    _springTo(widget.index, _pos.velocity);
+  }
+
+  void _springTo(int target, double velocity) {
     if (reduceMotion(context)) {
-      _pos.value = widget.index.toDouble();
+      _pos.value = target.toDouble();
     } else {
-      _pos.animateWith(SpringSimulation(_spring, _pos.value, widget.index.toDouble(), _pos.velocity));
+      _pos.animateWith(SpringSimulation(_spring, _pos.value, target.toDouble(), velocity));
     }
+  }
+
+  double _posAt(double dx) {
+    final n = widget.items.length;
+    final raw = dx / _tabW - 0.5;
+    // Rubber band a little past the ends, like iOS.
+    if (raw < 0) return raw * 0.25;
+    if (raw > n - 1) return (n - 1) + (raw - (n - 1)) * 0.25;
+    return raw;
+  }
+
+  void _dragStart(DragStartDetails d) {
+    _pos.stop();
+    setState(() => _dragging = true);
+    _hover = widget.index;
+    _dragUpdate(DragUpdateDetails(globalPosition: d.globalPosition, localPosition: d.localPosition));
+  }
+
+  void _dragUpdate(DragUpdateDetails d) {
+    _pos.value = _posAt(d.localPosition.dx);
+    final h = _pos.value.round().clamp(0, widget.items.length - 1);
+    if (h != _hover) {
+      _hover = h;
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  void _dragEnd(DragEndDetails d) {
+    final v = (d.primaryVelocity ?? 0) / _tabW; // tabs per second
+    // A quick flick goes to the next tab in its direction; a slow release
+    // snaps to the nearest one.
+    final p = _pos.value;
+    final target = (v.abs() > 2.5 ? (v > 0 ? p.floor() + 1 : p.ceil() - 1) : p.round()).clamp(0, widget.items.length - 1);
+    setState(() => _dragging = false);
+    _springTo(target, v);
+    if (target != _hover) HapticFeedback.selectionClick();
+    if (target != widget.index) widget.onTap(target);
+  }
+
+  void _dragCancel() {
+    if (!_dragging) return;
+    setState(() => _dragging = false);
+    _springTo(widget.index, 0);
   }
 
   @override
@@ -523,30 +577,41 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
         padding: const EdgeInsets.all(4),
         child: LayoutBuilder(builder: (context, c) {
           final w = c.maxWidth / items.length;
-          return AnimatedBuilder(
-            animation: _pos,
-            builder: (context, _) {
-              final p = _pos.value.clamp(-0.3, items.length - 0.7);
-              // liquid stretch while moving, back to a round capsule at rest
-              final stretch = (_pos.velocity.abs() * 0.045).clamp(0.0, 0.32);
-              final lensW = w * (1 + stretch);
-              final lensH = c.maxHeight;
-              return Stack(clipBehavior: Clip.none, children: [
-                Row(children: [
-                  for (var i = 0; i < items.length; i++)
-                    Expanded(child: _tab(context, i, (1 - (p - i).abs()).clamp(0.0, 1.0))),
-                ]),
-                Positioned(
-                  left: w * p + (w - lensW) / 2,
-                  top: 0,
-                  width: lensW,
-                  height: lensH,
-                  child: IgnorePointer(
-                    child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH)),
+          _tabW = w;
+          return GestureDetector(
+            key: const ValueKey('nv-nav-drag'),
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragStart: _dragStart,
+            onHorizontalDragUpdate: _dragUpdate,
+            onHorizontalDragEnd: _dragEnd,
+            onHorizontalDragCancel: _dragCancel,
+            child: AnimatedBuilder(
+              animation: _pos,
+              builder: (context, _) {
+                final p = _pos.value.clamp(-0.3, items.length - 0.7);
+                // liquid stretch while moving, back to a round capsule at rest;
+                // while held the lens lifts (a little bigger, stronger zoom).
+                final stretch = _dragging ? 0.12 : (_pos.velocity.abs() * 0.045).clamp(0.0, 0.32);
+                final lensW = w * (1 + stretch);
+                final lift = _dragging ? 4.0 : 0.0;
+                final lensH = c.maxHeight + lift;
+                return Stack(clipBehavior: Clip.none, children: [
+                  Row(children: [
+                    for (var i = 0; i < items.length; i++)
+                      Expanded(child: _tab(context, i, (1 - (p - i).abs()).clamp(0.0, 1.0))),
+                  ]),
+                  Positioned(
+                    left: w * p + (w - lensW) / 2,
+                    top: -lift / 2,
+                    width: lensW,
+                    height: lensH,
+                    child: IgnorePointer(
+                      child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH), magnification: _dragging ? 1.24 : 1.14),
+                    ),
                   ),
-                ),
-              ]);
-            },
+                ]);
+              },
+            ),
           );
         }),
       );
@@ -581,7 +646,7 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.surface, width: 1.5)),
-                  child: Text('${widget.badges[i]}', style: TextStyle(fontFamily: NV.mono, fontSize: 9.5, color: NV.onRed, height: 1.1)),
+                  child: Text('${widget.badges[i]}', style: TextStyle(fontFamily: NV.sans, fontWeight: FontWeight.w600, fontSize: 10, color: NV.onRed, height: 1.1)),
                 ),
               )
             else if (widget.dots[i] != null)
@@ -643,7 +708,7 @@ class NvSheetTitle extends StatelessWidget {
   Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('// ${kicker.toUpperCase()}', style: NV.monoLabel(color: NV.red)),
+            Text(kicker.toUpperCase(), style: NV.monoLabel(color: NV.red)),
             const SizedBox(height: 6),
             Text(title, style: NV.display(size: 28)),
           ]),
@@ -727,34 +792,37 @@ ImageFilter nvGlassFilter(double sigma) => ImageFilter.compose(
 /// Liquid glass surface: backdrop blur + saturation, a translucent
 /// accent-tinted fill, a hairline and a specular rim. No drop shadow.
 class NvGlass extends StatelessWidget {
-  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur = NV.glassBlur, this.tint, this.border = true, this.borderRadius, this.rim = true});
+  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true});
   final Widget child;
   final double radius;
   final BorderRadius? borderRadius;
   final EdgeInsetsGeometry padding;
-  final double blur;
+  /// Fixed blur sigma; null follows the user's "Kekuatan kaca" ([NV.glassSigma]).
+  final double? blur;
   final Color? tint;
   final bool border;
   final bool rim;
   @override
   Widget build(BuildContext context) {
     final br = borderRadius ?? BorderRadius.circular(radius);
+    final inner = CustomPaint(
+      foregroundPainter: rim ? NvGlassRimPainter(borderRadius: br, rim: NV.glassRim) : null,
+      child: DecoratedBox(
+        key: const ValueKey('nv-glass'),
+        decoration: BoxDecoration(
+          color: tint ?? NV.glass,
+          borderRadius: br,
+          border: border ? Border.all(color: NV.glassBorder) : null,
+        ),
+        child: Padding(padding: padding, child: child),
+      ),
+    );
     return ClipRRect(
       borderRadius: br,
-      child: BackdropFilter(
-        filter: nvGlassFilter(blur),
-        child: CustomPaint(
-          foregroundPainter: rim ? NvGlassRimPainter(borderRadius: br, rim: NV.glassRim) : null,
-          child: DecoratedBox(
-            key: const ValueKey('nv-glass'),
-            decoration: BoxDecoration(
-              color: tint ?? NV.glass,
-              borderRadius: br,
-              border: border ? Border.all(color: NV.glassBorder) : null,
-            ),
-            child: Padding(padding: padding, child: child),
-          ),
-        ),
+      child: ValueListenableBuilder<double>(
+        valueListenable: NV.glassSigma,
+        child: inner,
+        builder: (context, sigma, inner) => BackdropFilter(filter: nvGlassFilter(blur ?? sigma), child: inner!),
       ),
     );
   }

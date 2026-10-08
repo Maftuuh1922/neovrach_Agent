@@ -375,14 +375,91 @@ void main() {
         ));
     NV.palette = NvPalette.red;
   });
+  // v1.4.2 screenshots: onboarding theme step (Merah + Biru), tinted slide
+  // art, Tampilan before pairing, custom background under the glass nav /
+  // composer, nav bar mid-drag, Cupertino icons + Inter.
+  Future<void> background(String asset, {double dim = 0.4, double blur = 6}) async {
+    await prefs.setString('nv.bg.source', 'asset:$asset');
+    await prefs.setDouble('nv.bg.dim', dim);
+    await prefs.setDouble('nv.bg.blur', blur);
+  }
+
+  testWidgets('19 onboarding theme step · merah', (tester) async {
+    await run(tester, '19_intro_theme_merah', () => const RemoteIntroScreen(initialPage: 3), remote: _controller(prefs, demo: false));
+  });
+
+  testWidgets('20 onboarding theme step · biru', (tester) async {
+    await accent('#2563EB', 'dark');
+    await run(tester, '20_intro_theme_biru', () => const RemoteIntroScreen(initialPage: 3), remote: _controller(prefs, demo: false));
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('21 intro slide · biru (art tinted)', (tester) async {
+    await accent('#2563EB', 'dark');
+    await run(tester, '21_intro_slide_biru', () => const RemoteIntroScreen(), remote: _controller(prefs, demo: false));
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('22 connect · toska terang with Tampilan button', (tester) async {
+    await accent('#0D9488', 'light');
+    await run(tester, '22_connect_toska_light', () => const ConnectScreen(onboarding: true), remote: _controller(prefs, demo: false));
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('23 Tampilan sheet before pairing', (tester) async {
+    await accent('#4F46E5', 'dark');
+    await run(tester, '23_appearance_sheet', () => const ConnectScreen(onboarding: true), remote: _controller(prefs, demo: false), act: () async {
+      await tester.tap(find.byKey(const ValueKey('connect-appearance')));
+    });
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('24 chat over custom background', (tester) async {
+    await accent('#7C3AED', 'dark');
+    await background('assets/art/portal-banner.webp', dim: 0.35, blur: 2);
+    app.previewTab = 0;
+    await run(tester, '24_chat_background', () => const RemoteShell());
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('25 tasks over custom background · biru', (tester) async {
+    await accent('#2563EB', 'dark');
+    await background('assets/art/feat-automation.webp', dim: 0.45, blur: 8);
+    app.previewTab = 2;
+    await run(tester, '25_tasks_background', () => const RemoteShell());
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('26 nav bar mid-drag (lens under the finger)', (tester) async {
+    await background('assets/art/feat-remote.webp', dim: 0.4, blur: 4);
+    app.previewTab = 0;
+    TestGesture? g;
+    await run(tester, '26_nav_drag', () => const RemoteShell(), act: () async {
+      final bar = tester.getRect(find.byKey(const ValueKey('nv-nav-bar')));
+      final w = (bar.width - 8) / 5;
+      g = await tester.startGesture(Offset(bar.left + 4 + w * 0.5, bar.center.dy));
+      for (var i = 0; i < 12; i++) {
+        await g!.moveBy(Offset(w * 1.6 / 12, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    });
+    await g?.up();
+  });
+
+  testWidgets('27 PC tab · Cupertino icons + Inter', (tester) async {
+    app.previewTab = 4;
+    await run(tester, '27_pc_icons_font', () => const RemoteShell());
+  });
+
 }
 
-/// "// TAMPILAN" header like on the PC tab.
+
+/// "TAMPILAN" header like on the PC tab.
 class NvSectionShim extends StatelessWidget {
   const NvSectionShim({super.key});
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
-        child: Text('// TAMPILAN', style: NV.monoLabel()),
+        child: Text('TAMPILAN', style: NV.monoLabel()),
       );
 }

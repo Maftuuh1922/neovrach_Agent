@@ -1,6 +1,7 @@
 // Remote shell: Chat · Kantor · Tugas · Setujui · PC on a floating iOS-style
 // liquid glass bar (content scrolls under it), with a connection strip whenever the link to the PC is not up
 // and an "Update tersedia" strip when a newer phone app is released.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,8 @@ import 'remote_office_screen.dart';
 import 'remote_chat_screen.dart';
 import 'remote_pc_screen.dart';
 import 'nv_widgets.dart';
+import 'remote_background.dart' show NvAppBackground;
+import '../appearance.dart' show appearanceProvider;
 import 'remote_tasks_screen.dart';
 
 class RemoteShell extends ConsumerStatefulWidget {
@@ -54,11 +57,11 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   static const _barH = 64.0, _gap = 12.0;
 
   static const _dest = <(IconData, IconData, String)>[
-    (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
-    (Icons.apartment_outlined, Icons.apartment_rounded, 'Kantor'),
-    (Icons.view_week_outlined, Icons.view_week_rounded, 'Tugas'),
-    (Icons.shield_outlined, Icons.shield_rounded, 'Setujui'),
-    (Icons.desktop_windows_outlined, Icons.desktop_windows_rounded, 'PC'),
+    (CupertinoIcons.chat_bubble, CupertinoIcons.chat_bubble_fill, 'Chat'),
+    (CupertinoIcons.building_2_fill, CupertinoIcons.building_2_fill, 'Kantor'),
+    (CupertinoIcons.rectangle_grid_2x2, CupertinoIcons.rectangle_grid_2x2_fill, 'Tugas'),
+    (CupertinoIcons.checkmark_shield, CupertinoIcons.checkmark_shield_fill, 'Setujui'),
+    (CupertinoIcons.desktopcomputer, CupertinoIcons.desktopcomputer, 'PC'),
   ];
 
   @override
@@ -90,6 +93,14 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
         TabFade(active: index == i, child: w),
     ]);
 
+    // Custom background: drawn once behind every tab; the tabs' scaffolds go
+    // transparent so the glass nav/composer refract the image.
+    final look = ref.watch(appearanceProvider);
+    final bgOn = look.background.active;
+    // Always wrapped (same tree shape) so toggling keeps every tab's state.
+    final theme = Theme.of(context);
+    final themed = Theme(data: bgOn ? theme.copyWith(scaffoldBackgroundColor: Colors.transparent) : theme, child: pages);
+
     final mq = MediaQuery.of(context);
     final keyboard = mq.viewInsets.bottom > 0;
     const barH = _barH, gap = _gap;
@@ -103,7 +114,9 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
       ),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
+        backgroundColor: bgOn ? NV.bg : null,
         body: Stack(children: [
+          if (bgOn) const Positioned.fill(child: NvAppBackground()),
           Positioned.fill(
             child: MediaQuery(
               data: mq.copyWith(
@@ -117,7 +130,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
                   // one that reserves room for the floating nav bar), not the
                   // shell's own context, or the composer slides under the bar.
                   child: Builder(
-                    builder: (inner) => MediaQuery.removePadding(context: inner, removeTop: !remote.connected, child: pages),
+                    builder: (inner) => MediaQuery.removePadding(context: inner, removeTop: !remote.connected, child: themed),
                   ),
                 ),
               ]),
@@ -159,11 +172,11 @@ class _ConnectionStrip extends ConsumerWidget {
         radius: NV.rCtl,
         padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
         child: Row(children: [
-          Icon(busy ? Icons.sync : Icons.link_off, size: 17, color: c),
+          Icon(busy ? CupertinoIcons.arrow_2_circlepath : CupertinoIcons.wifi_slash, size: 17, color: c),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Text(r.desktop == null ? '// BELUM ADA PC' : '// ${r.desktop!.name.toUpperCase()} · ${r.statusLabel.toUpperCase()}',
+              Text(r.desktop == null ? 'BELUM ADA PC' : '${r.desktop!.name.toUpperCase()} · ${r.statusLabel.toUpperCase()}',
                   maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5, color: c)),
               if (r.error != null && !busy)
                 Text(r.error!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
@@ -207,7 +220,7 @@ class _UpdateStrip extends ConsumerWidget {
             ),
           IconButton(
             tooltip: 'Tutup',
-            icon: Icon(Icons.close_rounded, size: 18, color: NV.muted),
+            icon: Icon(CupertinoIcons.xmark, size: 18, color: NV.muted),
             onPressed: r.dismissUpdate,
           ),
         ]),

@@ -1,5 +1,6 @@
 // Chat with the agent on the PC: streamed replies, thinking, live tool rows
 // and inline approval cards — the same transcript widgets as Desktop.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,6 +27,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   final _scroll = ScrollController();
   /// Height of the floating dock (approvals + composer) over the messages.
   double _dockH = 0;
+  double _lastKb = 0;
   bool _dictating = false;
 
   @override
@@ -93,7 +95,15 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final tps = r.transcript.tokensPerSecond;
 
     final empty = msgs.isEmpty && !r.opening;
+    // Keyboard: the shell hides the nav pill and this screen does NOT let the
+    // Scaffold shrink for it (the composer adds the keyboard inset itself);
+    // both at once double-counted it and left the composer half a screen
+    // above the keyboard (1.4.1 bug). Keep the newest message in view.
+    final kb = MediaQuery.viewInsetsOf(context).bottom;
+    if ((kb > 0) != (_lastKb > 0)) WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
+    _lastKb = kb;
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: Column(children: [
         if (empty)
           _MinimalTopBar(
@@ -117,8 +127,8 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             ),
           ]),
           actions: [
-            NvIconButton(tooltip: 'Riwayat sesi di PC', icon: Icons.history_rounded, onPressed: r.connected ? _sessions : null),
-            NvIconButton(tooltip: 'Sesi baru', icon: Icons.add_rounded, onPressed: r.connected ? r.newChat : null),
+            NvIconButton(tooltip: 'Riwayat sesi di PC', icon: CupertinoIcons.clock, onPressed: r.connected ? _sessions : null),
+            NvIconButton(tooltip: 'Sesi baru', icon: CupertinoIcons.add, onPressed: r.connected ? r.newChat : null),
           ],
         ),
         Divider(height: 1, color: NV.border),
@@ -129,7 +139,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             child: NvNotice(
               '$others persetujuan menunggu di sesi lain',
               color: NV.warn,
-              icon: Icons.shield_outlined,
+              icon: CupertinoIcons.checkmark_shield,
               action: TextButton(onPressed: widget.onOpenApprovals, child: const Text('Lihat')),
             ),
           ),
@@ -173,7 +183,10 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
               bottom: 0,
               child: NvSizeReporter(
                 onHeight: (h) {
-                  if ((h - _dockH).abs() > 0.5) setState(() => _dockH = h);
+                  if ((h - _dockH).abs() > 0.5) {
+                    setState(() => _dockH = h);
+                    if (_lastKb > 0) _toBottom();
+                  }
                 },
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         for (final a in mine)
@@ -220,9 +233,12 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
       );
 
   Widget _composer(BuildContext context, RemoteController r) {
+    // At rest: above the nav pill (the shell reserves it in padding.bottom).
+    // Keyboard open: 8px above the keyboard top (pill hidden).
     final bottom = MediaQuery.paddingOf(context).bottom;
     final kb = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
+      key: const ValueKey('chat-composer-dock'),
       padding: EdgeInsets.fromLTRB(16, 6, 16, (kb > 0 ? kb : bottom) + 8),
       child: NvGlass(
         key: const ValueKey('chat-composer'),
@@ -231,7 +247,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
           if (canDictate)
             NvIconButton(
               tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah',
-              icon: _dictating ? Icons.mic_rounded : Icons.mic_none_rounded,
+              icon: _dictating ? CupertinoIcons.mic_fill : CupertinoIcons.mic,
               accent: _dictating,
               onPressed: r.connected ? _dictate : null,
             ),
@@ -257,9 +273,9 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             ),
           ),
           if (r.running)
-            NvIconButton(tooltip: 'Hentikan', icon: Icons.stop_rounded, accent: true, onPressed: r.stop)
+            NvIconButton(tooltip: 'Hentikan', icon: CupertinoIcons.stop_fill, accent: true, onPressed: r.stop)
           else
-            NvIconButton(tooltip: 'Kirim', icon: Icons.arrow_upward_rounded, accent: true, onPressed: r.connected ? _send : null),
+            NvIconButton(tooltip: 'Kirim', icon: CupertinoIcons.arrow_up, accent: true, onPressed: r.connected ? _send : null),
         ]),
       ),
     );
@@ -281,7 +297,7 @@ class _SessionsSheet extends ConsumerWidget {
             child: NvSheetTitle(
               kicker: 'riwayat · ${r.desktop?.name ?? 'pc'}',
               title: 'Sesi di PC',
-              trailing: NvIconButton(tooltip: 'Segarkan', icon: Icons.refresh_rounded, onPressed: r.loadSessions),
+              trailing: NvIconButton(tooltip: 'Segarkan', icon: CupertinoIcons.arrow_clockwise, onPressed: r.loadSessions),
             ),
           ),
           Expanded(
@@ -293,7 +309,7 @@ class _SessionsSheet extends ConsumerWidget {
                         NvList(children: [
                           for (final s in r.sessions)
                             NvRow(
-                              icon: s.id == r.storedId ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded,
+                              icon: s.id == r.storedId ? CupertinoIcons.chat_bubble_fill : CupertinoIcons.chat_bubble,
                               accent: s.id == r.storedId,
                               title: s.title,
                               subtitle: '${relTime(s.updatedAt)} · ${s.messageCount} pesan',
@@ -332,9 +348,9 @@ class _MinimalTopBar extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + 10, 12, 0),
         child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          NvIconButton(tooltip: 'Riwayat sesi di PC', icon: Icons.history_rounded, onPressed: onHistory),
+          NvIconButton(tooltip: 'Riwayat sesi di PC', icon: CupertinoIcons.clock, onPressed: onHistory),
           const SizedBox(width: 6),
-          NvIconButton(tooltip: 'Sesi baru', icon: Icons.add_rounded, onPressed: onNew),
+          NvIconButton(tooltip: 'Sesi baru', icon: CupertinoIcons.add, onPressed: onNew),
         ]),
       );
 }

@@ -1,5 +1,6 @@
 // PC: connection status, what the desktop agent is doing, saved desktops,
 // and the phone's own preferences.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +15,7 @@ import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'connect_screen.dart';
 import 'nv_widgets.dart';
+import 'remote_background.dart' show BackgroundSection;
 
 class RemotePcScreen extends ConsumerWidget {
   const RemotePcScreen({super.key, this.onOpenChat});
@@ -51,7 +53,7 @@ class RemotePcScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(NV.rCtl),
                     border: Border.all(color: NV.darkRed),
                   ),
-                  child: Icon(Icons.desktop_windows_rounded, size: 24, color: NV.red),
+                  child: Icon(CupertinoIcons.desktopcomputer, size: 24, color: NV.red),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -133,12 +135,12 @@ class RemotePcScreen extends ConsumerWidget {
             NvList(children: [
               for (final a in r.active)
                 NvRow(
-                  icon: a.status == 'running' ? Icons.bolt_rounded : Icons.chat_bubble_outline_rounded,
+                  icon: a.status == 'running' ? CupertinoIcons.bolt_fill : CupertinoIcons.chat_bubble,
                   accent: a.status == 'running',
                   title: a.title.isNotEmpty ? a.title : a.id,
                   subtitle: '${a.status}${a.model.isNotEmpty ? ' · ${a.model}' : ''}',
                   mono: true,
-                  trailing: Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                  trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
                   onTap: () async {
                     await r.openActive(a);
                     onOpenChat?.call();
@@ -149,7 +151,7 @@ class RemotePcScreen extends ConsumerWidget {
           NvSection('pc tersimpan',
               trailing: TextButton.icon(
                 onPressed: () => open(const ConnectScreen()),
-                icon: const Icon(Icons.add_rounded, size: 18),
+                icon: const Icon(CupertinoIcons.add, size: 18),
                 label: const Text('Tambah'),
               )),
           if (r.desktops.items.isEmpty)
@@ -161,7 +163,7 @@ class RemotePcScreen extends ConsumerWidget {
             NvList(children: [
               for (final x in r.desktops.items)
                 NvRow(
-                  icon: x.id == d?.id ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  icon: x.id == d?.id ? CupertinoIcons.largecircle_fill_circle : CupertinoIcons.circle,
                   accent: x.id == d?.id,
                   title: x.name,
                   subtitle: '${x.url}${x.lastConnected != null ? ' · ${relTime(x.lastConnected!.toIso8601String())}' : ''}',
@@ -169,7 +171,7 @@ class RemotePcScreen extends ConsumerWidget {
                   onTap: x.id == d?.id ? null : () => r.connectTo(x),
                   trailing: NvIconButton(
                     tooltip: 'Lupakan',
-                    icon: Icons.delete_outline_rounded,
+                    icon: CupertinoIcons.trash,
                     size: 36,
                     onPressed: () async {
                       final yes = await confirmDialog(context,
@@ -187,24 +189,33 @@ class RemotePcScreen extends ConsumerWidget {
           const NvSection('hp ini'),
           NvList(children: [
             _SwitchRow(
-              icon: Icons.notifications_none_rounded,
+              icon: CupertinoIcons.bell,
               title: 'Notifikasi persetujuan',
               subtitle: 'Kabari saat agen di PC menunggu persetujuan',
               value: r.notifyApprovals,
               onChanged: r.setNotifyApprovals,
             ),
             _SwitchRow(
-              icon: Icons.psychology_outlined,
+              icon: CupertinoIcons.lightbulb,
               title: 'Tampilkan proses berpikir',
               subtitle: 'Blok penalaran agen di chat',
               value: s.showReasoning,
               onChanged: (v) => ref.read(settingsProvider).update((x) => x.showReasoning = v),
             ),
             NvRow(
-              icon: Icons.slideshow_outlined,
+              icon: CupertinoIcons.play_rectangle,
               title: 'Putar ulang intro',
-              trailing: Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+              trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
               onTap: () => open(const RemoteIntroScreen(replay: true)),
+            ),
+            NvRow(
+              key: const ValueKey('pc-licenses'),
+              icon: CupertinoIcons.doc_text,
+              title: 'Lisensi sumber terbuka',
+              subtitle: 'Font Inter (SIL OFL 1.1), Cupertino Icons (MIT), dan lainnya',
+              trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
+              onTap: () => showLicensePage(
+                  context: context, applicationName: 'Neovarch Remote', applicationVersion: SettingsController.appVersion),
             ),
           ]),
           const SizedBox(height: 24),
@@ -264,7 +275,12 @@ String routeLabel(String url) => switch (gatewayRoute(url)) {
 /// presets, a custom colour (flat hue strip or hex) and Gelap / Terang /
 /// Sistem. Every change applies live and cross-fades the whole app.
 class AppearancePanel extends ConsumerStatefulWidget {
-  const AppearancePanel({super.key});
+  const AppearancePanel({super.key, this.showFollowPc = true, this.showBackground = true, this.margin = const EdgeInsets.symmetric(horizontal: 16)});
+  /// Onboarding hides "Ikuti tema PC" (no PC yet); picking there is a local override.
+  final bool showFollowPc;
+  /// "Latar belakang" + "Kekuatan kaca" controls.
+  final bool showBackground;
+  final EdgeInsets margin;
   @override
   ConsumerState<AppearancePanel> createState() => _AppearancePanelState();
 }
@@ -294,21 +310,23 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
     final dur = reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 220);
     return NvPanel(
       key: const ValueKey('appearance-panel'),
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: widget.margin,
       padding: EdgeInsets.zero,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (widget.showFollowPc) ...[
         _SwitchRow(
-          icon: Icons.desktop_windows_outlined,
+          icon: CupertinoIcons.desktopcomputer,
           title: 'Ikuti tema PC',
           subtitle: look.followPc ? 'Warna ${hexOf(look.pcAccent)} · ${look.pcDark ? 'gelap' : 'terang'}' : 'Pakai tema khusus HP ini',
           value: look.followPc,
           onChanged: look.setFollowPc,
         ),
         Divider(height: 1, color: NV.border),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
           child: Row(children: [
-            Text('// WARNA AKSEN', style: NV.monoLabel(size: 10)),
+            Text('WARNA AKSEN', style: NV.monoLabel(size: 10)),
             const SizedBox(width: 10),
             Expanded(
               child: Text('${presetName ?? 'Kustom'} · ${hexOf(look.accent)}',
@@ -316,7 +334,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
                   textAlign: TextAlign.right,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: NV.monoLabel(size: 10, color: NV.text)),
+                  style: NV.code(size: 11, color: NV.text)),
             ),
           ]),
         ),
@@ -348,7 +366,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
                         child: AnimatedOpacity(
                           duration: dur,
                           opacity: current == c.toARGB32() ? 1 : 0,
-                          child: Icon(Icons.check_rounded, size: 18, color: NvPalette.from(c, Brightness.dark).onAccent),
+                          child: Icon(CupertinoIcons.checkmark, size: 18, color: NvPalette.from(c, Brightness.dark).onAccent),
                         ),
                       ),
                     ),
@@ -359,7 +377,7 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-          child: Text('// WARNA KUSTOM', style: NV.monoLabel(size: 10)),
+          child: Text('WARNA KUSTOM', style: NV.monoLabel(size: 10)),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
@@ -389,14 +407,15 @@ class _AppearancePanelState extends ConsumerState<AppearancePanel> {
           child: SegmentedButton<NvBrightnessMode>(
             key: const ValueKey('theme-mode'),
             segments: const [
-              ButtonSegment(value: NvBrightnessMode.dark, label: Text('Gelap'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
-              ButtonSegment(value: NvBrightnessMode.light, label: Text('Terang'), icon: Icon(Icons.light_mode_outlined, size: 18)),
-              ButtonSegment(value: NvBrightnessMode.system, label: Text('Sistem'), icon: Icon(Icons.brightness_auto_outlined, size: 18)),
+              ButtonSegment(value: NvBrightnessMode.dark, label: Text('Gelap'), icon: Icon(CupertinoIcons.moon, size: 18)),
+              ButtonSegment(value: NvBrightnessMode.light, label: Text('Terang'), icon: Icon(CupertinoIcons.sun_max, size: 18)),
+              ButtonSegment(value: NvBrightnessMode.system, label: Text('Sistem'), icon: Icon(CupertinoIcons.circle_lefthalf_fill, size: 18)),
             ],
             selected: {look.followPc ? (look.pcDark ? NvBrightnessMode.dark : NvBrightnessMode.light) : look.localMode},
             onSelectionChanged: (v) => look.setLocal(mode: v.first),
           ),
         ),
+        if (widget.showBackground) const BackgroundSection(),
       ]),
     );
   }

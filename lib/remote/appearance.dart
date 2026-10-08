@@ -42,6 +42,45 @@ String hexOf(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft
 /// PC look always carries its own dark/light).
 enum NvBrightnessMode { dark, light, system }
 
+/// Bundled background presets (existing art, tinted by the accent slider).
+const backgroundPresets = <(String, String)>[
+  ('Remote', 'assets/art/feat-remote.webp'),
+  ('Otomasi', 'assets/art/feat-automation.webp'),
+  ('Portal', 'assets/art/portal-banner.webp'),
+];
+
+/// App background behind the shell tabs, so the liquid glass has something
+/// to refract. [source] is '' (flat, the default), `asset:<path>` or
+/// `file:<path>` (a gallery image copied into the app documents dir).
+@immutable
+class NvBackground {
+  const NvBackground({this.source = '', this.blur = 6, this.dim = 0.4, this.tint = 0.15, this.saturation = 1.0, this.glass = NV.glassBlur});
+  final String source;
+  final double blur; // 0..30 sigma
+  final double dim; // 0..0.8 overlay of the theme background colour
+  final double tint; // 0..0.6 accent overlay
+  final double saturation; // 0..2
+  final double glass; // glass blur strength 0..40 ("Kekuatan kaca")
+  bool get active => source.isNotEmpty;
+  bool get isFile => source.startsWith('file:');
+  bool get isAsset => source.startsWith('asset:');
+  String get path => source.substring(source.indexOf(':') + 1);
+
+  NvBackground copyWith({String? source, double? blur, double? dim, double? tint, double? saturation, double? glass}) => NvBackground(
+      source: source ?? this.source,
+      blur: (blur ?? this.blur).clamp(0.0, 30.0),
+      dim: (dim ?? this.dim).clamp(0.0, 0.8),
+      tint: (tint ?? this.tint).clamp(0.0, 0.6),
+      saturation: (saturation ?? this.saturation).clamp(0.0, 2.0),
+      glass: (glass ?? this.glass).clamp(0.0, 40.0));
+
+  @override
+  bool operator ==(Object other) =>
+      other is NvBackground && other.source == source && other.blur == blur && other.dim == dim && other.tint == tint && other.saturation == saturation && other.glass == glass;
+  @override
+  int get hashCode => Object.hash(source, blur, dim, tint, saturation, glass);
+}
+
 class AppearanceController extends ChangeNotifier {
   AppearanceController(this._prefs, {Brightness? systemBrightness}) {
     _system = systemBrightness ?? _platformBrightness();
@@ -55,6 +94,12 @@ class AppearanceController extends ChangeNotifier {
   static const _kBase = 'nv.theme.base';
   static const _kPcAccent = 'nv.theme.pc.accent';
   static const _kPcBase = 'nv.theme.pc.base';
+  static const _kBgSource = 'nv.bg.source';
+  static const _kBgBlur = 'nv.bg.blur';
+  static const _kBgDim = 'nv.bg.dim';
+  static const _kBgTint = 'nv.bg.tint';
+  static const _kBgSat = 'nv.bg.saturation';
+  static const _kGlass = 'nv.glass.blur';
 
   /// Resolved boot colours, read natively by MainActivity (window background
   /// before Flutter draws) so a cold start opens straight in this look.
@@ -71,6 +116,9 @@ class AppearanceController extends ChangeNotifier {
   Color? pcOnAccent;
 
   Brightness _system = Brightness.dark;
+
+  /// Background image + glass strength (no palette change, no cross-fade).
+  NvBackground background = const NvBackground();
 
   /// Called right before the palette changes, while the old frame is still
   /// on screen (the app snapshots it to cross-fade into the new look).
@@ -107,7 +155,35 @@ class AppearanceController extends ChangeNotifier {
     };
     pcAccent = parseHexColor(_prefs.getString(_kPcAccent)) ?? NvPalette.defaultAccent;
     pcDark = (_prefs.getString(_kPcBase) ?? 'dark') != 'light';
+    const d = NvBackground();
+    background = d.copyWith(
+      source: _prefs.getString(_kBgSource) ?? '',
+      blur: _prefs.getDouble(_kBgBlur) ?? d.blur,
+      dim: _prefs.getDouble(_kBgDim) ?? d.dim,
+      tint: _prefs.getDouble(_kBgTint) ?? d.tint,
+      saturation: _prefs.getDouble(_kBgSat) ?? d.saturation,
+      glass: _prefs.getDouble(_kGlass) ?? d.glass,
+    );
+    NV.glassSigma.value = background.glass;
   }
+
+  /// Live background change (sliders, picker); persisted at once.
+  void setBackground(NvBackground b) {
+    if (b == background) return;
+    background = b;
+    NV.glassSigma.value = b.glass;
+    _prefs
+      ..setString(_kBgSource, b.source)
+      ..setDouble(_kBgBlur, b.blur)
+      ..setDouble(_kBgDim, b.dim)
+      ..setDouble(_kBgTint, b.tint)
+      ..setDouble(_kBgSat, b.saturation)
+      ..setDouble(_kGlass, b.glass);
+    notifyListeners();
+  }
+
+  /// "Reset": flat background, default sliders and glass strength.
+  void resetBackground() => setBackground(const NvBackground());
 
   bool _same(NvPalette p) => NV.palette.accent == p.accent && NV.palette.brightness == p.brightness && NV.palette.onAccent == p.onAccent;
 

@@ -2,6 +2,7 @@
 // tool, last activity) plus the live activity feed. Read-only on the phone and
 // fully push-driven: the first snapshot comes from `GET /api/office`, every
 // change after that arrives as the WebSocket event `office.update`.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -88,13 +89,13 @@ class RemoteOfficeScreen extends ConsumerWidget {
             NvList(children: [
               NvRow(
                 key: const ValueKey('office-vault'),
-                icon: Icons.hub_outlined,
+                icon: CupertinoIcons.circle_grid_hex,
                 title: 'Vault Obsidian',
                 subtitle: o.vaultConfigured
                     ? '${o.vault['note_count'] ?? 0} catatan · baca saja di HP'
                     : 'Belum dipilih di Pengaturan PC',
                 mono: true,
-                trailing: Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RemoteVaultScreen())),
               ),
             ]),
@@ -187,7 +188,7 @@ class AgentDesk extends StatelessWidget {
         if (a.tool != null) ...[
           const SizedBox(height: 8),
           Row(children: [
-            Icon(Icons.build_outlined, size: 14, color: NV.red),
+            Icon(CupertinoIcons.wrench, size: 14, color: NV.red),
             const SizedBox(width: 6),
             Expanded(
                 child: Text(a.tool!,
@@ -197,7 +198,7 @@ class AgentDesk extends StatelessWidget {
         if (a.waiting && a.pendingCommand != null) ...[
           const SizedBox(height: 10),
           NvNotice('Menunggu persetujuan: ${a.pendingCommand}',
-              icon: Icons.shield_outlined,
+              icon: CupertinoIcons.checkmark_shield,
               action: onApprove == null ? null : TextButton(onPressed: onApprove, child: const Text('Tinjau'))),
         ],
         if (a.lastActivityText != null || a.lastActivity != null) ...[
@@ -220,15 +221,15 @@ class ActivityRow extends StatelessWidget {
   final OfficeActivity item;
 
   static IconData iconFor(String kind) => switch (kind) {
-        'tool' => Icons.build_outlined,
-        'tool.done' => Icons.check_rounded,
-        'message' => Icons.chat_bubble_outline_rounded,
-        'message.user' => Icons.assignment_outlined,
-        'approval' => Icons.shield_outlined,
-        'approval.done' => Icons.verified_outlined,
-        'task' => Icons.view_week_outlined,
-        'error' => Icons.error_outline,
-        _ => Icons.circle_outlined,
+        'tool' => CupertinoIcons.wrench,
+        'tool.done' => CupertinoIcons.checkmark,
+        'message' => CupertinoIcons.chat_bubble,
+        'message.user' => CupertinoIcons.doc_checkmark,
+        'approval' => CupertinoIcons.checkmark_shield,
+        'approval.done' => CupertinoIcons.checkmark_seal,
+        'task' => CupertinoIcons.rectangle_grid_2x2,
+        'error' => CupertinoIcons.exclamationmark_circle,
+        _ => CupertinoIcons.circle,
       };
 
   @override

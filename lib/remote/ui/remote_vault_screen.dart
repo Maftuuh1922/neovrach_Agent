@@ -4,6 +4,7 @@
 // A `vault.changed` push (agent wrote a note) re-reads what is open.
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -111,7 +112,7 @@ class _RemoteVaultScreenState extends ConsumerState<RemoteVaultScreen> {
           actions: [
             NvIconButton(
               tooltip: 'Graf catatan',
-              icon: Icons.hub_outlined,
+              icon: CupertinoIcons.circle_grid_hex,
               onPressed: t?.configured == true
                   ? () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const VaultGraphScreen()))
                   : null,
@@ -128,12 +129,12 @@ class _RemoteVaultScreenState extends ConsumerState<RemoteVaultScreen> {
               onSubmitted: _search,
               decoration: InputDecoration(
                 hintText: 'Cari catatan…',
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                prefixIcon: const Icon(CupertinoIcons.search, size: 20),
                 suffixIcon: _hits == null
                     ? null
                     : IconButton(
                         tooltip: 'Hapus pencarian',
-                        icon: const Icon(Icons.close_rounded, size: 18),
+                        icon: const Icon(CupertinoIcons.xmark, size: 18),
                         onPressed: () {
                           _q.clear();
                           setState(() => _hits = null);
@@ -168,7 +169,7 @@ class _RemoteVaultScreenState extends ConsumerState<RemoteVaultScreen> {
         else
           NvList(children: [
             for (final h in hits)
-              NvRow(icon: Icons.description_outlined, title: h.title, subtitle: h.snippet.isNotEmpty ? h.snippet : h.path, onTap: () => _openNote(h.path)),
+              NvRow(icon: CupertinoIcons.doc_text, title: h.title, subtitle: h.snippet.isNotEmpty ? h.snippet : h.path, onTap: () => _openNote(h.path)),
           ]),
       ]);
     }
@@ -216,7 +217,7 @@ class _TreeRow extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.fromLTRB(14.0 + depth * 18, 11, 14, 11),
           child: Row(children: [
-            Icon(node.folder ? (open ? Icons.folder_open_outlined : Icons.folder_outlined) : Icons.description_outlined,
+            Icon(node.folder ? (open ? CupertinoIcons.folder_open : CupertinoIcons.folder) : CupertinoIcons.doc_text,
                 size: 18, color: node.folder ? NV.red : NV.muted),
             const SizedBox(width: 10),
             Expanded(child: Text(node.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14.5, color: NV.text))),
@@ -294,7 +295,7 @@ class _VaultNoteScreenState extends ConsumerState<VaultNoteScreen> {
                         child: FilledButton.icon(
                           key: const ValueKey('open-obsidian'),
                           onPressed: n.openUri == null ? null : () => openInObsidian(context, n.openUri),
-                          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                          icon: const Icon(CupertinoIcons.arrow_up_right_square, size: 18),
                           label: const Text('Buka di Obsidian'),
                         ),
                       ),
@@ -320,7 +321,7 @@ class _VaultNoteScreenState extends ConsumerState<VaultNoteScreen> {
                     NvList(children: [
                       for (final b in n.backlinks)
                         NvRow(
-                          icon: Icons.subdirectory_arrow_left_rounded,
+                          icon: CupertinoIcons.arrow_turn_down_left,
                           title: b.title,
                           subtitle: b.snippet.isNotEmpty ? b.snippet : b.path,
                           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultNoteScreen(path: b.path))),

@@ -1,6 +1,8 @@
-// First launch of the phone remote: three short slides on the Neovarch dark
-// red system (rounded art plates with the dithered red art, serif headlines,
-// mono kickers). Replayable from the PC tab. No gradients, no shadows.
+// First launch of the phone remote: three short slides plus a "Pilih tema"
+// step (accent presets / hue / hex, Gelap·Terang·Sistem, applied live).
+// Everything follows the current accent and brightness; the red slide art is
+// recoloured to the accent (unchanged in Merah). Replayable from the PC tab.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,9 @@ import '../../state/app_controller.dart' show settingsProvider;
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/brand.dart' show Wordmark;
 import '../../ui/widgets/motion.dart' show reduceMotion;
+import '../appearance.dart' show appearanceProvider;
+import 'remote_background.dart' show NvAccentArt;
+import 'remote_pc_screen.dart' show AppearancePanel;
 
 class _Slide {
   const _Slide(this.art, this.align, this.kicker, this.title, this.body, this.points);
@@ -32,6 +37,10 @@ const _slides = [
       ['Izinkan sekali', 'Tolak kapan saja']),
 ];
 
+/// Slides plus the theme step (last page).
+const introPageCount = 4;
+const introThemePage = 3;
+
 class RemoteIntroScreen extends ConsumerStatefulWidget {
   const RemoteIntroScreen({super.key, this.replay = false, this.initialPage = 0});
   final bool replay;
@@ -41,8 +50,8 @@ class RemoteIntroScreen extends ConsumerStatefulWidget {
 }
 
 class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
-  late final PageController _pc = PageController(initialPage: widget.initialPage.clamp(0, _slides.length - 1));
-  late int _index = widget.initialPage.clamp(0, _slides.length - 1);
+  late final PageController _pc = PageController(initialPage: widget.initialPage.clamp(0, introPageCount - 1));
+  late int _index = widget.initialPage.clamp(0, introPageCount - 1);
 
   @override
   void didChangeDependencies() {
@@ -65,7 +74,7 @@ class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
   }
 
   void _next() {
-    if (_index >= _slides.length - 1) return _done();
+    if (_index >= introPageCount - 1) return _done();
     if (reduceMotion(context)) {
       _pc.jumpToPage(_index + 1);
     } else {
@@ -76,9 +85,10 @@ class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
-    final last = _index == _slides.length - 1;
+    final last = _index == introPageCount - 1;
+    ref.watch(appearanceProvider); // repaint on theme changes (live preview)
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
+      value: (NV.palette.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: NV.bg,
         systemNavigationBarDividerColor: NV.bg,
@@ -94,7 +104,7 @@ class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
               child: Row(children: [
                 Wordmark(height: 22, color: NV.text, haloColor: NV.red),
                 const Spacer(),
-                Text('0${_index + 1} / 0${_slides.length}', style: NV.monoLabel(size: 10, color: NV.muted)),
+                Text('${_index + 1} / $introPageCount', style: NV.monoLabel(size: 10, color: NV.muted)),
                 const SizedBox(width: 4),
                 TextButton(
                   onPressed: _done,
@@ -106,16 +116,16 @@ class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _pc,
-                itemCount: _slides.length,
+                itemCount: introPageCount,
                 onPageChanged: (i) => setState(() => _index = i),
-                itemBuilder: (context, i) => _SlideView(slide: _slides[i], number: i + 1),
+                itemBuilder: (context, i) => i == introThemePage ? const _ThemeStep() : _SlideView(slide: _slides[i], number: i + 1),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: Row(children: [
-                // Progress: rounded segments, the current one red and long.
-                for (var i = 0; i < _slides.length; i++)
+                // Progress: rounded segments, the current one in the accent and long.
+                for (var i = 0; i < introPageCount; i++)
                   AnimatedContainer(
                     duration: reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 220),
                     margin: const EdgeInsets.only(right: 6),
@@ -128,12 +138,13 @@ class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
                   ),
                 const Spacer(),
                 FilledButton(
+                  key: const ValueKey('intro-next'),
                   onPressed: _next,
                   style: FilledButton.styleFrom(minimumSize: const Size(148, 50)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(last ? (widget.replay ? 'Selesai' : 'Hubungkan PC') : 'Lanjut'),
                     const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward_rounded, size: 18),
+                    const Icon(CupertinoIcons.arrow_right, size: 18),
                   ]),
                 ),
               ]),
@@ -167,7 +178,7 @@ class _SlideView extends StatelessWidget {
               child: Container(
                 foregroundDecoration: BoxDecoration(borderRadius: BorderRadius.circular(NV.rCard), border: Border.all(color: NV.border)),
                 child: Stack(fit: StackFit.expand, children: [
-                  Image.asset(slide.art, fit: BoxFit.cover, alignment: slide.align, filterQuality: FilterQuality.medium),
+                  NvAccentArt(slide.art, alignment: slide.align),
                   // Big outlined plate number, bottom-left, print style.
                   Positioned(
                     left: 14,
@@ -182,11 +193,11 @@ class _SlideView extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('// ${slide.kicker.toUpperCase()}', style: NV.monoLabel(color: NV.red)),
+              Text(slide.kicker.toUpperCase(), style: NV.monoLabel(color: NV.red)),
               const SizedBox(height: 10),
-              Text(slide.title, style: NV.display(size: 40)),
+              Text(slide.title, style: NV.display(size: 34)),
               const SizedBox(height: 12),
-              Text(slide.body, style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted)),
+              Text(slide.body, style: TextStyle(fontSize: 17, height: 1.4, letterSpacing: NV.tracking(17), color: NV.muted)),
               const SizedBox(height: 14),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final p in slide.points)
@@ -200,7 +211,7 @@ class _SlideView extends StatelessWidget {
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Container(width: 6, height: 6, decoration: BoxDecoration(color: NV.red, shape: BoxShape.circle)),
                       const SizedBox(width: 8),
-                      Text(p, style: TextStyle(fontSize: 12.5, color: NV.text)),
+                      Text(p, style: TextStyle(fontSize: 13, color: NV.text)),
                     ]),
                   ),
               ]),
@@ -209,5 +220,40 @@ class _SlideView extends StatelessWidget {
         ]),
       );
     });
+  }
+}
+
+/// "Pilih tema": the same picker as PC → Tampilan, without "Ikuti tema PC"
+/// (no PC yet). Any pick is a local override; untouched, the phone keeps
+/// following the PC's theme once paired.
+class _ThemeStep extends ConsumerWidget {
+  const _ThemeStep();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final look = ref.watch(appearanceProvider);
+    return ListView(
+      key: const ValueKey('intro-theme-step'),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('TAMPILAN · TEMA', style: NV.monoLabel(color: NV.red)),
+            const SizedBox(height: 10),
+            Text('Pilih temamu.', style: NV.display(size: 34)),
+            const SizedBox(height: 10),
+            Text(
+              look.followPc
+                  ? 'Pilih warna dan mode. Kalau dilewati, HP mengikuti tema PC setelah terhubung.'
+                  : 'Tema khusus HP ini dipakai, juga setelah terhubung. Ubah kapan saja di PC → Tampilan.',
+              key: const ValueKey('intro-theme-note'),
+              style: TextStyle(fontSize: 15, height: 1.4, letterSpacing: NV.tracking(15), color: NV.muted),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        const AppearancePanel(showFollowPc: false, showBackground: false, margin: EdgeInsets.zero),
+      ],
+    );
   }
 }

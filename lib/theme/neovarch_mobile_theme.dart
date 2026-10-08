@@ -4,8 +4,8 @@
 //   liquid glass gets a subtle specular rim, see NvGlass),
 //   one rounded system (16 cards & sheets · 12 controls · 20 dialogs ·
 //   14 chat blocks · full for avatars & badges), 1px borders,
-//   Instrument Serif for big titles, IBM Plex Sans for body,
-//   JetBrains Mono for labels and "// LABEL" section headers.
+//   iOS-like type (1.4.2): Inter Display for large titles, Inter for body,
+//   captions and section headers; JetBrains Mono only for code/tokens.
 // Every Material component theme is set explicitly so no stock purple/blue
 // (or Material You dynamic colour) can leak in.
 import 'dart:math' as math;
@@ -143,24 +143,46 @@ abstract final class NV {
   /// Clear lens on the active tab.
   static Color get lensFill => Color.lerp(const Color(0xFFFFFFFF), palette.accent, palette.dark ? 0.35 : 0.12)!.withValues(alpha: palette.dark ? 0.10 : 0.16);
   static const glassBlur = 22.0;
+  /// Live glass blur strength ("Kekuatan kaca"); [NvGlass] listens to it.
+  static final glassSigma = ValueNotifier<double>(glassBlur);
 
   static const rCard = 16.0;
   static const rCtl = 12.0;
   static const rDialog = 20.0;
   static const rMsg = 14.0;
 
-  static const serif = 'InstrumentSerif';
-  static const sans = 'IBMPlexSans';
+  // iOS-like type: Inter (OFL, closest open SF Pro look-alike) for UI text,
+  // Inter Display for large titles. Mono only for code, tokens, addresses.
+  // SF Pro itself is not bundled (Apple-platform-only licence).
+  static const display_ = 'InterDisplay';
+  static const serif = display_; // legacy name: headings
+  static const sans = 'Inter';
   static const mono = 'JetBrainsMono';
+
+  /// iOS tracking: tighter as text gets bigger (≈ SF Pro's optical tracking).
+  static double tracking(double size) => size >= 28
+      ? -0.022 * size
+      : size >= 20
+          ? -0.016 * size
+          : size >= 15
+              ? -0.008 * size
+              : 0.0;
 
   static BorderRadius get card => BorderRadius.circular(rCard);
   static BorderRadius get ctl => BorderRadius.circular(rCtl);
 
-  static TextStyle monoLabel({double size = 10.5, Color? color, FontWeight weight = FontWeight.w500}) =>
-      TextStyle(fontFamily: mono, fontSize: size, letterSpacing: 1.2, fontWeight: weight, color: color ?? muted, height: 1.3);
+  /// Kicker / section caption (iOS footnote-caps style, Inter semibold).
+  /// Callers pass the old mono sizes (9.5–11); mapped up to iOS caption 12–13.
+  static TextStyle monoLabel({double size = 10.5, Color? color, FontWeight weight = FontWeight.w500}) => TextStyle(
+      fontFamily: sans, fontSize: size + 2, letterSpacing: 0.1, fontWeight: FontWeight.w600, color: color ?? muted, height: 1.3);
 
-  static TextStyle display({double size = 34, Color? color}) =>
-      TextStyle(fontFamily: serif, fontSize: size, height: 1.0, letterSpacing: -0.3, color: color ?? text, fontWeight: FontWeight.w400);
+  /// Real code/tokens (hex, addresses, tokens) stay monospaced.
+  static TextStyle code({double size = 12, Color? color, FontWeight weight = FontWeight.w500}) =>
+      TextStyle(fontFamily: mono, fontSize: size, letterSpacing: 0, fontWeight: weight, color: color ?? muted, height: 1.3);
+
+  /// Large title / title (Inter Display bold, tight tracking).
+  static TextStyle display({double size = 34, Color? color}) => TextStyle(
+      fontFamily: display_, fontSize: size, height: 1.12, letterSpacing: tracking(size), color: color ?? text, fontWeight: FontWeight.w700);
 }
 
 ThemeData buildNeovarchMobileTheme() {
@@ -219,24 +241,26 @@ ThemeData buildNeovarchMobileTheme() {
         bodyColor: NV.text,
         displayColor: NV.text,
       );
-  TextStyle serif(TextStyle? t, double size) =>
-      (t ?? const TextStyle()).copyWith(fontFamily: NV.serif, fontSize: size, fontWeight: FontWeight.w400, height: 1.05, letterSpacing: -0.2, color: NV.text);
+  TextStyle serif(TextStyle? t, double size) => (t ?? const TextStyle())
+      .copyWith(fontFamily: NV.serif, fontSize: size, fontWeight: FontWeight.w700, height: 1.12, letterSpacing: NV.tracking(size), color: NV.text);
   final text = base.copyWith(
-    displayLarge: serif(base.displayLarge, 56),
-    displayMedium: serif(base.displayMedium, 46),
-    displaySmall: serif(base.displaySmall, 40),
-    headlineLarge: serif(base.headlineLarge, 36),
-    headlineMedium: serif(base.headlineMedium, 32),
-    headlineSmall: serif(base.headlineSmall, 28),
-    titleLarge: serif(base.titleLarge, 26),
-    titleMedium: base.titleMedium?.copyWith(fontSize: 15.5, fontWeight: FontWeight.w600, letterSpacing: -0.1),
-    titleSmall: base.titleSmall?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
-    bodyLarge: base.bodyLarge?.copyWith(fontSize: 15, height: 1.5),
-    bodyMedium: base.bodyMedium?.copyWith(fontSize: 14, height: 1.5),
-    bodySmall: base.bodySmall?.copyWith(fontSize: 12.5, height: 1.45, color: NV.muted),
-    labelLarge: base.labelLarge?.copyWith(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1),
-    labelMedium: base.labelMedium?.copyWith(fontFamily: NV.mono, fontSize: 11.5, letterSpacing: 0.8, color: NV.muted),
-    labelSmall: base.labelSmall?.copyWith(fontFamily: NV.mono, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w500, color: NV.muted),
+    // iOS scale: large title 34, title1 28, title2 22, title3 20, headline 17
+    // semibold, body 17, callout 16, subheadline 15, footnote 13, caption 12.
+    displayLarge: serif(base.displayLarge, 48),
+    displayMedium: serif(base.displayMedium, 40),
+    displaySmall: serif(base.displaySmall, 34),
+    headlineLarge: serif(base.headlineLarge, 34),
+    headlineMedium: serif(base.headlineMedium, 28),
+    headlineSmall: serif(base.headlineSmall, 22),
+    titleLarge: serif(base.titleLarge, 20),
+    titleMedium: base.titleMedium?.copyWith(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: NV.tracking(17)),
+    titleSmall: base.titleSmall?.copyWith(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: NV.tracking(15)),
+    bodyLarge: base.bodyLarge?.copyWith(fontSize: 17, height: 1.35, letterSpacing: NV.tracking(17)),
+    bodyMedium: base.bodyMedium?.copyWith(fontSize: 15, height: 1.4, letterSpacing: NV.tracking(15)),
+    bodySmall: base.bodySmall?.copyWith(fontSize: 13, height: 1.4, color: NV.muted),
+    labelLarge: base.labelLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: NV.tracking(16)),
+    labelMedium: base.labelMedium?.copyWith(fontSize: 13, fontWeight: FontWeight.w500, color: NV.muted),
+    labelSmall: base.labelSmall?.copyWith(fontSize: 12, fontWeight: FontWeight.w500, color: NV.muted),
   );
 
   final line = BorderSide(color: NV.border, width: 1);
@@ -244,7 +268,7 @@ ThemeData buildNeovarchMobileTheme() {
   final ctlShapeLined = RoundedRectangleBorder(borderRadius: NV.ctl, side: line);
   final cardShape = RoundedRectangleBorder(borderRadius: NV.card, side: line);
   const btnPad = EdgeInsets.symmetric(horizontal: 18, vertical: 14);
-  const btnText = TextStyle(fontFamily: NV.sans, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1);
+  const btnText = TextStyle(fontFamily: NV.sans, fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: -0.1);
   // Subdued press feedback: a faint warm wash, no sparkle, no coloured ripple.
   final press = NV.text.withValues(alpha: 0.08);
   WidgetStateProperty<Color?> overlay([Color? c]) =>
@@ -297,7 +321,7 @@ ThemeData buildNeovarchMobileTheme() {
       toolbarHeight: 60,
       iconTheme: IconThemeData(color: NV.text, size: 22),
       actionsIconTheme: IconThemeData(color: NV.muted, size: 22),
-      titleTextStyle: TextStyle(fontFamily: NV.serif, fontSize: 28, color: NV.text, height: 1.0),
+      titleTextStyle: TextStyle(fontFamily: NV.serif, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: NV.tracking(28), color: NV.text, height: 1.1),
     ),
     cardTheme: CardThemeData(
       color: NV.surface,
@@ -330,7 +354,7 @@ ThemeData buildNeovarchMobileTheme() {
       shadowColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rDialog), side: line),
-      titleTextStyle: TextStyle(fontFamily: NV.serif, fontSize: 26, color: NV.text, height: 1.1),
+      titleTextStyle: TextStyle(fontFamily: NV.serif, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: NV.tracking(22), color: NV.text, height: 1.15),
       contentTextStyle: TextStyle(fontFamily: NV.sans, fontSize: 14, color: NV.muted, height: 1.5),
       barrierColor: const Color(0xB3000000),
     ),
@@ -537,7 +561,7 @@ ThemeData buildNeovarchMobileTheme() {
     badgeTheme: BadgeThemeData(
       backgroundColor: NV.red,
       textColor: NV.onRed,
-      textStyle: TextStyle(fontFamily: NV.mono, fontSize: 10, fontWeight: FontWeight.w500),
+      textStyle: TextStyle(fontFamily: NV.sans, fontSize: 12, fontWeight: FontWeight.w500),
     ),
     tabBarTheme: TabBarThemeData(
       labelColor: NV.text,

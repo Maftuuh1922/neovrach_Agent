@@ -2,7 +2,8 @@
 // providers or keys here — every action goes to the desktop's gateway.
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, LicenseEntryWithLineBreaks, LicenseRegistry;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,8 +20,29 @@ import 'remote_intro_screen.dart';
 import 'remote_launch.dart';
 import 'remote_shell.dart';
 
+bool _licensesAdded = false;
+
+/// Bundled font licences shown on the licences page (Inter + the others).
+void registerFontLicenses() {
+  if (_licensesAdded) return;
+  _licensesAdded = true;
+  LicenseRegistry.addLicense(() async* {
+    for (final (pkg, file) in const [
+      ('Inter (font)', 'OFL-Inter.txt'),
+      ('JetBrains Mono (font)', 'OFL-JetBrainsMono.txt'),
+      ('Instrument Serif (font)', 'OFL-InstrumentSerif.txt'),
+      ('IBM Plex Sans (font)', 'OFL-IBMPlexSans.txt'),
+    ]) {
+      try {
+        yield LicenseEntryWithLineBreaks([pkg], await rootBundle.loadString('assets/fonts/$file'));
+      } catch (_) {}
+    }
+  });
+}
+
 Future<void> runRemoteApp(
     {required SharedPreferences prefs, required SettingsController settings, bool skipSplash = false, String? openSession}) async {
+  registerFontLicenses();
   final desktops = SavedDesktops(prefs)..load();
   final remote = RemoteController(desktops);
   final look = AppearanceController(prefs);

@@ -87,7 +87,7 @@ class _ScanScreenState extends State<ScanScreen> {
           child: NvPanel(
             color: NV.bg.withValues(alpha: 0.92),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_hint != null ? '// QR DITOLAK' : '// LANGKAH', style: NV.monoLabel(color: NV.red)),
+              Text(_hint != null ? 'QR DITOLAK' : 'LANGKAH', style: NV.monoLabel(color: NV.red)),
               const SizedBox(height: 6),
               Text(
                 _hint ?? 'Di PC: Neovarch Desktop → Remote / Perangkat → tampilkan QR pemasangan.',

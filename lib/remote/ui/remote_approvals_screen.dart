@@ -1,4 +1,5 @@
 // Every approval the PC's agent is waiting on (tool calls that need a yes).
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,7 +54,7 @@ class RemoteApprovalsScreen extends ConsumerWidget {
                         child: Padding(
                           padding: const EdgeInsets.only(right: 10),
                           child: TextButton.icon(
-                            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                            icon: const Icon(CupertinoIcons.chat_bubble, size: 16),
                             label: const Text('Lihat percakapan'),
                             onPressed: () async {
                               if (a.sessionId != r.runtimeId) {
