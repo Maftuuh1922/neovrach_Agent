@@ -407,8 +407,12 @@ class NvApprovalCard extends StatelessWidget {
         Row(children: [
           const Icon(Icons.shield_outlined, size: 16, color: NV.red),
           const SizedBox(width: 8),
-          Expanded(child: Text('// PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red))),
-          if (origin != null) Flexible(child: Text(origin!, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5))),
+          Text('// PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red)),
+          const Spacer(),
+          if (origin != null && origin!.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            Flexible(child: NvPill(origin!, color: NV.muted)),
+          ],
         ]),
         if (description.isNotEmpty) ...[
           const SizedBox(height: 10),

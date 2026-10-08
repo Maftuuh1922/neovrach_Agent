@@ -46,6 +46,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     }
   }
 
+  static const _barH = 64.0, _gap = 12.0;
+
   static const _dest = <(IconData, IconData, String)>[
     (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
     (Icons.view_week_outlined, Icons.view_week_rounded, 'Tugas'),
@@ -62,6 +64,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Agen di PC menunggu persetujuanmu'),
+          // Float above the nav bar instead of on top of it.
+          margin: EdgeInsets.fromLTRB(16, 0, 16, _barH + _gap + 8),
           action: SnackBarAction(label: 'Lihat', onPressed: () => setState(() => index = 2)),
         ));
       });
@@ -80,7 +84,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
 
     final mq = MediaQuery.of(context);
     final keyboard = mq.viewInsets.bottom > 0;
-    const barH = 64.0, gap = 12.0;
+    const barH = _barH, gap = _gap;
     final reserve = keyboard ? 0.0 : barH + gap;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -99,7 +103,12 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
               child: Column(children: [
                 if (!remote.connected) const _ConnectionStrip(),
                 Expanded(
-                  child: MediaQuery.removePadding(context: context, removeTop: !remote.connected, child: pages),
+                  // Builder: removePadding must read the MediaQuery above (the
+                  // one that reserves room for the floating nav bar), not the
+                  // shell's own context, or the composer slides under the bar.
+                  child: Builder(
+                    builder: (inner) => MediaQuery.removePadding(context: inner, removeTop: !remote.connected, child: pages),
+                  ),
                 ),
               ]),
             ),

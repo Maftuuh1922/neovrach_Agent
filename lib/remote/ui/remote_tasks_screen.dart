@@ -250,15 +250,12 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
             const NvSection('pindahkan ke', padding: EdgeInsets.fromLTRB(0, 18, 0, 10)),
             Wrap(spacing: 8, runSpacing: 6, children: [
               for (final m in moves)
-                m == 'done' || m == 'ready'
-                    ? FilledButton(
-                        onPressed: busy ? null : () => _run(() => r.moveTask(t.id, m), 'Dipindah ke ${laneLabel(m)}'),
-                        child: Text(laneLabel(m)),
-                      )
-                    : OutlinedButton(
-                        onPressed: busy ? null : () => _run(() => r.moveTask(t.id, m), 'Dipindah ke ${laneLabel(m)}'),
-                        child: Text(laneLabel(m)),
-                      ),
+                // Lane moves are secondary; the one red action on the sheet is
+                // "Kirim komentar".
+                OutlinedButton(
+                  onPressed: busy ? null : () => _run(() => r.moveTask(t.id, m), 'Dipindah ke ${laneLabel(m)}'),
+                  child: Text(laneLabel(m)),
+                ),
             ]),
           ],
           const NvSection('komentar / arahan', padding: EdgeInsets.fromLTRB(0, 18, 0, 10)),

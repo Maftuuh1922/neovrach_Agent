@@ -81,7 +81,7 @@ class RemotePcScreen extends ConsumerWidget {
               Row(children: [
                 _Stat(label: 'sesi aktif', value: '${r.active.length}'),
                 _Stat(label: 'persetujuan', value: '${r.approvals.length}', hot: r.approvals.isNotEmpty),
-                _Stat(label: 'hermes', value: version.isEmpty ? '—' : version, mono: true),
+                _Stat(label: 'versi', value: version.isEmpty ? '—' : version, mono: true),
               ]),
               const SizedBox(height: 12),
               NvKv('Status', r.statusLabel, valueColor: dot),
@@ -89,11 +89,10 @@ class RemotePcScreen extends ConsumerWidget {
               const SizedBox(height: 14),
               Row(children: [
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: d == null ? null : r.reconnect,
-                    icon: const Icon(Icons.sync_rounded, size: 18),
-                    label: Text(ok ? 'Sambung ulang' : 'Sambungkan'),
-                  ),
+                  // Red only when there is something to do (not connected).
+                  child: ok
+                      ? OutlinedButton(onPressed: r.reconnect, child: const Text('Sambung ulang', maxLines: 1))
+                      : FilledButton(onPressed: d == null ? null : r.reconnect, child: const Text('Sambungkan', maxLines: 1)),
                 ),
                 if (d != null) ...[
                   const SizedBox(width: 8),

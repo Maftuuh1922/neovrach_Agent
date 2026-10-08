@@ -24,6 +24,7 @@ import 'package:neovarch_agent/remote/ui/remote_shell.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
 import 'package:neovarch_agent/theme/neovarch_mobile_theme.dart';
+import 'package:neovarch_agent/ui/screens/intro_screen.dart';
 
 final _shotsDir = Platform.environment['NV_SHOTS_DIR'] ?? 'build/screenshots/remote';
 
@@ -147,7 +148,7 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _precache(WidgetTester tester) async {
   final ctx = tester.element(find.byType(MaterialApp));
   await tester.runAsync(() async {
-    for (final a in const ['assets/art/feat-remote.webp', 'assets/art/portal-banner.webp', 'assets/art/feat-automation.webp', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png']) {
+    for (final a in const ['assets/art/feat-remote.webp', 'assets/art/portal-banner.webp', 'assets/art/feat-automation.webp', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png', 'assets/brand/logo_card.png', 'assets/intro/eva_office.webp', 'assets/intro/eva_remote.webp', 'assets/intro/eva_pairing.webp']) {
       await precacheImage(AssetImage(a), ctx);
     }
   });
@@ -274,5 +275,13 @@ void main() {
     await run(tester, '10_dialog', () => const RemoteShell(), act: () async {
       await tester.tap(find.byTooltip('Lupakan').first);
     });
+  });
+
+  testWidgets('11 intro', (tester) async {
+    await run(tester, '11_intro', () => const IntroScreen(initialPage: 2), remote: _controller(prefs, demo: false));
+  });
+
+  testWidgets('12 intro start', (tester) async {
+    await run(tester, '12_intro_start', () => const IntroScreen(initialPage: 3), remote: _controller(prefs, demo: false));
   });
 }

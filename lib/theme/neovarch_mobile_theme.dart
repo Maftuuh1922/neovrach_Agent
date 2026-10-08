@@ -25,8 +25,9 @@ abstract final class NV {
   static const red = Color(0xFFEE1C1C);
   static const darkRed = Color(0xFF8F0A0A);
   static const redWash = Color(0xFF2A0B0B); // red-tinted surface (selection, user message)
-  static const ok = Color(0xFF6FCF97);
-  static const warn = Color(0xFFE9A23B);
+  // Status colours stay inside the palette: no stock green / amber.
+  static const ok = text; // connected / online
+  static const warn = muted; // connecting / waiting
 
   static const rCard = 16.0;
   static const rCtl = 12.0;
