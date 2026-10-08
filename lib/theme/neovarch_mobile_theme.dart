@@ -1,6 +1,7 @@
 // Neovarch Remote (Android/iOS) — the phone's own design system, shared with
 // Neovarch Desktop and the landing page:
-//   flat dark-red palette, no gradients / glows / elevation shadows,
+//   flat dark-red palette, no gradients / glows / elevation shadows (only
+//   liquid glass gets a subtle specular rim, see NvGlass),
 //   one rounded system (16 cards & sheets · 12 controls · 20 dialogs ·
 //   14 chat blocks · full for avatars & badges), 1px borders,
 //   Instrument Serif for big titles, IBM Plex Sans for body,
@@ -64,36 +65,38 @@ class NvPalette {
     Color t(int base, double f) => Color.lerp(Color(base), a, f)!;
     final on = onAccent ?? (_contrast(a, const Color(0xFFFFFFFF)) >= 4.0 ? const Color(0xFFFFFFFF) : const Color(0xFF000000));
     if (b == Brightness.dark) {
+      // Same tint strength as the original red set (bg/surface/border/wash
+      // visibly carry the hue), so a new accent recolours the whole UI.
       return NvPalette(
         brightness: b,
         accent: a,
         onAccent: on,
-        bg: t(0xFF0A0A0A, 0.035),
-        surface: t(0xFF111111, 0.05),
-        raised: t(0xFF181818, 0.06),
-        border: t(0xFF242424, 0.10),
-        borderStrong: t(0xFF343434, 0.14),
-        text: const Color(0xFFF4F2ED),
-        muted: const Color(0xFFB3ADA8),
-        faint: const Color(0xFF78716C),
+        bg: t(0xFF0A0A0A, 0.06),
+        surface: t(0xFF101010, 0.085),
+        raised: t(0xFF161616, 0.11),
+        border: t(0xFF222222, 0.17),
+        borderStrong: t(0xFF303030, 0.24),
+        text: Color.lerp(const Color(0xFFF4F2ED), a, 0.04)!,
+        muted: Color.lerp(const Color(0xFFB3ADA8), a, 0.10)!,
+        faint: Color.lerp(const Color(0xFF78716C), a, 0.12)!,
         darkAccent: Color.lerp(a, const Color(0xFF000000), 0.45)!,
-        wash: t(0xFF0D0D0D, 0.16),
+        wash: t(0xFF0D0D0D, 0.22),
       );
     }
     return NvPalette(
       brightness: b,
       accent: a,
       onAccent: on,
-      bg: t(0xFFF5F3EF, 0.03),
-      surface: t(0xFFFFFFFF, 0.02),
-      raised: t(0xFFEDEAE5, 0.04),
-      border: t(0xFFDDD8D1, 0.08),
-      borderStrong: t(0xFFC9C2B9, 0.12),
-      text: const Color(0xFF151111),
-      muted: const Color(0xFF5C5450),
-      faint: const Color(0xFF8A827C),
+      bg: t(0xFFF6F4F1, 0.06),
+      surface: t(0xFFFFFFFF, 0.035),
+      raised: t(0xFFEEEBE7, 0.08),
+      border: t(0xFFDDD8D1, 0.16),
+      borderStrong: t(0xFFC9C2B9, 0.22),
+      text: Color.lerp(const Color(0xFF151111), a, 0.05)!,
+      muted: Color.lerp(const Color(0xFF5C5450), a, 0.10)!,
+      faint: Color.lerp(const Color(0xFF8A827C), a, 0.12)!,
       darkAccent: Color.lerp(a, const Color(0xFF000000), 0.35)!,
-      wash: t(0xFFFFFFFF, 0.12),
+      wash: t(0xFFFFFFFF, 0.16),
     );
   }
 
@@ -129,10 +132,17 @@ abstract final class NV {
   static Color get ok => text; // connected / online
   static Color get warn => muted; // connecting / waiting
 
-  /// Liquid glass: flat translucent tint of the surface (no gradient).
-  static Color get glass => palette.surface.withValues(alpha: palette.dark ? 0.62 : 0.70);
+  /// Liquid glass: translucent, accent-tinted fill over a strong backdrop
+  /// blur; the bright rim / specular edge is painted by `NvGlass`.
+  static Color get glass => Color.lerp(palette.surface, palette.accent, palette.dark ? 0.10 : 0.06)!.withValues(alpha: palette.dark ? 0.55 : 0.62);
   static Color get glassBorder => palette.text.withValues(alpha: palette.dark ? 0.10 : 0.12);
-  static const glassBlur = 24.0;
+  /// Specular rim colour (top-left highlight of a glass edge).
+  static Color get glassRim => const Color(0xFFFFFFFF).withValues(alpha: palette.dark ? 0.32 : 0.85);
+  /// Tab bar glass: a touch more accent so the bar reads as tinted glass.
+  static Color get navGlass => Color.lerp(palette.surface, palette.accent, palette.dark ? 0.16 : 0.10)!.withValues(alpha: palette.dark ? 0.50 : 0.58);
+  /// Clear lens on the active tab.
+  static Color get lensFill => Color.lerp(const Color(0xFFFFFFFF), palette.accent, palette.dark ? 0.35 : 0.12)!.withValues(alpha: palette.dark ? 0.10 : 0.16);
+  static const glassBlur = 22.0;
 
   static const rCard = 16.0;
   static const rCtl = 12.0;
@@ -236,9 +246,9 @@ ThemeData buildNeovarchMobileTheme() {
   const btnPad = EdgeInsets.symmetric(horizontal: 18, vertical: 14);
   const btnText = TextStyle(fontFamily: NV.sans, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1);
   // Subdued press feedback: a faint warm wash, no sparkle, no coloured ripple.
-  const press = Color(0x14F4F2ED);
-  WidgetStateProperty<Color?> overlay([Color c = press]) =>
-      WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.pressed) || s.contains(WidgetState.focused) || s.contains(WidgetState.hovered) ? c : null);
+  final press = NV.text.withValues(alpha: 0.08);
+  WidgetStateProperty<Color?> overlay([Color? c]) =>
+      WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.pressed) || s.contains(WidgetState.focused) || s.contains(WidgetState.hovered) ? (c ?? press) : null);
   OutlineInputBorder inBorder(Color c, [double w = 1]) =>
       OutlineInputBorder(borderRadius: NV.ctl, borderSide: BorderSide(color: c, width: w));
 
@@ -370,14 +380,14 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: NV.red,
-      selectionColor: Color(0x668F0A0A),
+      selectionColor: NV.red.withValues(alpha: 0.35),
       selectionHandleColor: NV.red,
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? NV.raised : NV.red),
-        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? NV.faint : NV.text),
-        overlayColor: overlay(const Color(0x1F0D0606)),
+        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? NV.faint : NV.onRed),
+        overlayColor: overlay(NV.bg.withValues(alpha: 0.12)),
         elevation: const WidgetStatePropertyAll(0),
         shadowColor: const WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(ctlShape),
@@ -427,8 +437,8 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: NV.red,
-      foregroundColor: NV.text,
-      splashColor: const Color(0x1F0D0606),
+      foregroundColor: NV.onRed,
+      splashColor: NV.bg.withValues(alpha: 0.12),
       elevation: 0,
       focusElevation: 0,
       hoverElevation: 0,
@@ -474,7 +484,7 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? NV.red : Colors.transparent),
-      checkColor: WidgetStatePropertyAll(NV.text),
+      checkColor: WidgetStatePropertyAll(NV.onRed),
       side: BorderSide(color: NV.borderStrong, width: 1.2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
     ),
@@ -526,7 +536,7 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     badgeTheme: BadgeThemeData(
       backgroundColor: NV.red,
-      textColor: NV.text,
+      textColor: NV.onRed,
       textStyle: TextStyle(fontFamily: NV.mono, fontSize: 10, fontWeight: FontWeight.w500),
     ),
     tabBarTheme: TabBarThemeData(
@@ -609,7 +619,7 @@ ThemeData buildNeovarchMobileTheme() {
         sidebarBorder: NV.border,
         userBubble: NV.redWash,
         userBubbleBorder: NV.darkRed,
-        codeBg: Color(0xFF0A0404),
+        codeBg: Color.lerp(NV.bg, NV.palette.dark ? const Color(0xFF000000) : const Color(0xFFFFFFFF), 0.3)!,
         monoFamily: NV.mono,
         displayFamily: NV.serif,
         brand: false,

@@ -7,6 +7,9 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderProxyBox;
+import 'package:flutter/physics.dart' show SpringDescription, SpringSimulation;
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../../models/models.dart';
 import '../../theme/neovarch_mobile_theme.dart';
@@ -401,7 +404,9 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
 /// A tool call the agent wants to run: rounded panel, red rule, command in
 /// mono, choices as rounded buttons.
 class NvApprovalCard extends StatelessWidget {
-  const NvApprovalCard({super.key, required this.command, required this.description, required this.choices, required this.onChoice, this.origin, this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 10)});
+  const NvApprovalCard({super.key, required this.command, required this.description, required this.choices, required this.onChoice, this.origin, this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 10), this.color});
+  /// Panel fill; pass a solid colour when the card floats over content.
+  final Color? color;
   final String command;
   final String description;
   final List<String> choices;
@@ -423,6 +428,7 @@ class NvApprovalCard extends StatelessWidget {
     final deny = choices.contains('deny');
     return NvPanel(
       margin: margin,
+      color: color,
       borderColor: NV.darkRed,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -468,9 +474,11 @@ class NvApprovalCard extends StatelessWidget {
   }
 }
 
-/// Floating rounded tab bar: surface plate, 20px radius, each active tab is
-/// a red-wash rounded tile with a short red bar on its top edge.
-class NvNavBar extends StatelessWidget {
+/// iOS-style liquid glass tab bar: a floating translucent pill (strong
+/// backdrop blur + saturation, accent-tinted fill, bright specular rim) with
+/// a clear glass lens on the active tab that magnifies what is under it and
+/// springs between tabs, stretching a little while it moves.
+class NvNavBar extends StatefulWidget {
   const NvNavBar({super.key, required this.index, required this.onTap, required this.items, this.badges = const {}, this.dots = const {}});
   final int index;
   final ValueChanged<int> onTap;
@@ -479,75 +487,150 @@ class NvNavBar extends StatelessWidget {
   final Map<int, Color> dots;
 
   @override
+  State<NvNavBar> createState() => _NvNavBarState();
+}
+
+class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin {
+  late final AnimationController _pos = AnimationController.unbounded(vsync: this, value: widget.index.toDouble());
+  static const _spring = SpringDescription(mass: 1, stiffness: 420, damping: 29);
+
+  @override
+  void didUpdateWidget(NvNavBar old) {
+    super.didUpdateWidget(old);
+    if (old.index == widget.index) return;
+    if (reduceMotion(context)) {
+      _pos.value = widget.index.toDouble();
+    } else {
+      _pos.animateWith(SpringSimulation(_spring, _pos.value, widget.index.toDouble(), _pos.velocity));
+    }
+  }
+
+  @override
+  void dispose() {
+    _pos.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final dur = reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 240);
-    return NvGlass(
-      radius: 20,
-      padding: const EdgeInsets.all(6),
-      child: LayoutBuilder(builder: (context, c) {
-        final w = c.maxWidth / items.length;
-        return Stack(children: [
-          AnimatedPositioned(
-            duration: dur,
-            curve: Curves.easeOutCubic,
-            left: w * index,
-            top: 0,
-            bottom: 0,
-            width: w,
-            child: Container(
-              decoration: BoxDecoration(
-                color: NV.redWash,
-                borderRadius: BorderRadius.circular(NV.rCtl + 2),
-                border: Border.all(color: NV.darkRed.withValues(alpha: 0.8)),
-              ),
-              alignment: Alignment.topCenter,
-              child: Container(
-                width: 22,
-                height: 3,
-                decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.vertical(bottom: Radius.circular(3))),
-              ),
-            ),
-          ),
-          Row(children: [
-            for (var i = 0; i < items.length; i++)
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  selected: i == index,
-                  label: items[i].$3,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onTap(i),
-                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Stack(clipBehavior: Clip.none, children: [
-                        Icon(i == index ? items[i].$2 : items[i].$1, size: 21, color: i == index ? NV.red : NV.muted),
-                        if ((badges[i] ?? 0) > 0)
-                          Positioned(
-                            right: -10,
-                            top: -6,
-                            child: Container(
-                              constraints: const BoxConstraints(minWidth: 16),
-                              height: 16,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.surface, width: 1.5)),
-                              child: Text('${badges[i]}', style: TextStyle(fontFamily: NV.mono, fontSize: 9.5, color: NV.onRed, height: 1.1)),
-                            ),
-                          )
-                        else if (dots[i] != null)
-                          Positioned(right: -3, top: -2, child: NvDot(dots[i]!, size: 8)),
-                      ]),
-                      const SizedBox(height: 4),
-                      Text(items[i].$3.toUpperCase(), style: NV.monoLabel(size: 9.5, color: i == index ? NV.text : NV.muted)),
-                    ]),
+    final items = widget.items;
+    return LayoutBuilder(builder: (context, outer) {
+      final h = outer.maxHeight.isFinite ? outer.maxHeight : 64.0;
+      return NvGlass(
+        key: const ValueKey('nv-nav-bar'),
+        radius: h / 2,
+        tint: NV.navGlass,
+        padding: const EdgeInsets.all(4),
+        child: LayoutBuilder(builder: (context, c) {
+          final w = c.maxWidth / items.length;
+          return AnimatedBuilder(
+            animation: _pos,
+            builder: (context, _) {
+              final p = _pos.value.clamp(-0.3, items.length - 0.7);
+              // liquid stretch while moving, back to a round capsule at rest
+              final stretch = (_pos.velocity.abs() * 0.045).clamp(0.0, 0.32);
+              final lensW = w * (1 + stretch);
+              final lensH = c.maxHeight;
+              return Stack(clipBehavior: Clip.none, children: [
+                Row(children: [
+                  for (var i = 0; i < items.length; i++)
+                    Expanded(child: _tab(context, i, (1 - (p - i).abs()).clamp(0.0, 1.0))),
+                ]),
+                Positioned(
+                  left: w * p + (w - lensW) / 2,
+                  top: 0,
+                  width: lensW,
+                  height: lensH,
+                  child: IgnorePointer(
+                    child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH)),
                   ),
                 ),
-              ),
+              ]);
+            },
+          );
+        }),
+      );
+    });
+  }
+
+  Widget _tab(BuildContext context, int i, double on) {
+    final it = widget.items[i];
+    final sel = i == widget.index;
+    final iconColor = Color.lerp(NV.muted, NV.red, on)!;
+    final labelColor = Color.lerp(NV.muted, NV.text, on)!;
+    return Semantics(
+      button: true,
+      selected: sel,
+      label: it.$3,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onTap(i);
+        },
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Stack(clipBehavior: Clip.none, children: [
+            Icon(on > 0.5 ? it.$2 : it.$1, size: 21, color: iconColor),
+            if ((widget.badges[i] ?? 0) > 0)
+              Positioned(
+                right: -10,
+                top: -6,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 16),
+                  height: 16,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.surface, width: 1.5)),
+                  child: Text('${widget.badges[i]}', style: TextStyle(fontFamily: NV.mono, fontSize: 9.5, color: NV.onRed, height: 1.1)),
+                ),
+              )
+            else if (widget.dots[i] != null)
+              Positioned(right: -3, top: -2, child: NvDot(widget.dots[i]!, size: 8)),
           ]),
-        ]);
-      }),
+          const SizedBox(height: 4),
+          Text(it.$3.toUpperCase(), style: NV.monoLabel(size: 9.5, color: labelColor)),
+        ]),
+      ),
     );
   }
+}
+
+/// The clear glass capsule of the active tab: magnifies (refracts) what is
+/// under it, with a light accent tint, a bright rim and a faint chromatic
+/// edge. Used by [NvNavBar]; also usable for round glass buttons.
+class NvLens extends StatelessWidget {
+  const NvLens({super.key, required this.size, this.magnification = 1.14});
+  final Size size;
+  final double magnification;
+  @override
+  Widget build(BuildContext context) {
+    final r = size.shortestSide / 2;
+    final paint = CustomPaint(
+      size: size,
+      painter: _LensFillPainter(radius: r, fill: NV.lensFill),
+      foregroundPainter: NvGlassRimPainter(borderRadius: BorderRadius.circular(r), rim: NV.glassRim, chroma: true, strength: 1.25),
+    );
+    return RawMagnifier(
+      size: size,
+      magnificationScale: magnification,
+      decoration: MagnifierDecoration(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)), shadows: const []),
+      child: paint,
+    );
+  }
+}
+
+class _LensFillPainter extends CustomPainter {
+  _LensFillPainter({required this.radius, required this.fill});
+  final double radius;
+  final Color fill;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rr = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    canvas.drawRRect(rr, Paint()..color = fill);
+  }
+
+  @override
+  bool shouldRepaint(_LensFillPainter old) => old.radius != radius || old.fill != fill;
 }
 
 /// Rounded top sheet title: `// KICKER` + serif title.
@@ -570,10 +653,81 @@ class NvSheetTitle extends StatelessWidget {
 }
 
 
-/// Liquid glass surface (iOS-27-like, Neovarch rules): backdrop blur + ONE
-/// flat translucent tint + a 1px hairline. No gradient, no shadow, no glow.
+/// The specular edge of liquid glass: a 1px rim that is bright where light
+/// hits (top-left), fades along the sides and picks up again bottom-right,
+/// plus a soft inner top sheen. [chroma] adds a faint red/cyan split at the
+/// edge like a real lens. Glass only; the rest of the app stays flat.
+class NvGlassRimPainter extends CustomPainter {
+  NvGlassRimPainter({required this.borderRadius, required this.rim, this.chroma = false, this.strength = 1.0});
+  final BorderRadius borderRadius;
+  final Color rim;
+  final bool chroma;
+  final double strength;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rect = Offset.zero & size;
+    final a = (rim.a * strength).clamp(0.0, 1.0);
+    Color al(double f) => rim.withValues(alpha: (a * f).clamp(0.0, 1.0));
+    final outer = borderRadius.toRRect(rect.deflate(0.5));
+    if (chroma) {
+      final w = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2;
+      canvas.drawRRect(outer.shift(const Offset(-0.7, 0)), w..color = const Color(0xFF3FD0FF).withValues(alpha: 0.18 * strength));
+      canvas.drawRRect(outer.shift(const Offset(0.7, 0)), w..color = const Color(0xFFFF4F7A).withValues(alpha: 0.16 * strength));
+    }
+    canvas.drawRRect(
+      outer,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [al(1), al(0.28), al(0.08), al(0.55)],
+          stops: const [0, 0.32, 0.68, 1],
+        ).createShader(rect),
+    );
+    // inner sheen along the top edge
+    final inner = borderRadius.toRRect(rect.deflate(1.6));
+    canvas.drawRRect(
+      inner,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [al(0.45), al(0.0)],
+          stops: const [0, 0.45],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(NvGlassRimPainter old) =>
+      old.borderRadius != borderRadius || old.rim != rim || old.chroma != chroma || old.strength != strength;
+}
+
+/// Backdrop for liquid glass: strong blur plus a saturation lift so the
+/// colours behind the glass glow through (iOS 26 "Liquid Glass").
+ImageFilter nvGlassFilter(double sigma) => ImageFilter.compose(
+      outer: const ColorFilter.matrix(<double>[
+        // saturation 1.4 (Rec. 709 luma weights)
+        1.3150, -0.2861, -0.0289, 0, 0, //
+        -0.0850, 1.1139, -0.0289, 0, 0, //
+        -0.0850, -0.2861, 1.3711, 0, 0, //
+        0, 0, 0, 1, 0,
+      ]),
+      inner: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.mirror),
+    );
+
+/// Liquid glass surface: backdrop blur + saturation, a translucent
+/// accent-tinted fill, a hairline and a specular rim. No drop shadow.
 class NvGlass extends StatelessWidget {
-  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur = NV.glassBlur, this.tint, this.border = true, this.borderRadius});
+  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur = NV.glassBlur, this.tint, this.border = true, this.borderRadius, this.rim = true});
   final Widget child;
   final double radius;
   final BorderRadius? borderRadius;
@@ -581,23 +735,52 @@ class NvGlass extends StatelessWidget {
   final double blur;
   final Color? tint;
   final bool border;
+  final bool rim;
   @override
   Widget build(BuildContext context) {
     final br = borderRadius ?? BorderRadius.circular(radius);
     return ClipRRect(
       borderRadius: br,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: DecoratedBox(
-          key: const ValueKey('nv-glass'),
-          decoration: BoxDecoration(
-            color: tint ?? NV.glass,
-            borderRadius: br,
-            border: border ? Border.all(color: NV.glassBorder) : null,
+        filter: nvGlassFilter(blur),
+        child: CustomPaint(
+          foregroundPainter: rim ? NvGlassRimPainter(borderRadius: br, rim: NV.glassRim) : null,
+          child: DecoratedBox(
+            key: const ValueKey('nv-glass'),
+            decoration: BoxDecoration(
+              color: tint ?? NV.glass,
+              borderRadius: br,
+              border: border ? Border.all(color: NV.glassBorder) : null,
+            ),
+            child: Padding(padding: padding, child: child),
           ),
-          child: Padding(padding: padding, child: child),
         ),
       ),
     );
+  }
+}
+
+/// Reports its child's laid-out height after each layout that changes it
+/// (used to pad a list under a floating dock).
+class NvSizeReporter extends SingleChildRenderObjectWidget {
+  const NvSizeReporter({super.key, required this.onHeight, super.child});
+  final ValueChanged<double> onHeight;
+  @override
+  RenderObject createRenderObject(BuildContext context) => NvRenderSizeReporter(onHeight);
+  @override
+  void updateRenderObject(BuildContext context, NvRenderSizeReporter renderObject) => renderObject.onHeight = onHeight;
+}
+
+class NvRenderSizeReporter extends RenderProxyBox {
+  NvRenderSizeReporter(this.onHeight);
+  ValueChanged<double> onHeight;
+  double? _last;
+  @override
+  void performLayout() {
+    super.performLayout();
+    final h = size.height;
+    if (_last == h) return;
+    _last = h;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onHeight(h));
   }
 }

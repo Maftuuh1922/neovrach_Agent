@@ -28,6 +28,8 @@ import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
 import 'package:neovarch_agent/theme/neovarch_mobile_theme.dart';
 import 'package:neovarch_agent/remote/ui/remote_intro_screen.dart';
+import 'package:neovarch_agent/remote/ui/remote_launch.dart';
+import 'package:neovarch_agent/remote/ui/remote_pc_screen.dart' show AppearancePanel;
 import 'package:neovarch_agent/ui/screens/startup_splash.dart';
 
 final _shotsDir = Platform.environment['NV_SHOTS_DIR'] ?? 'build/screenshots/remote';
@@ -326,4 +328,61 @@ void main() {
         // lands mid-reveal (~0.56): halo down, wordmark mostly wiped in.
         remote: _controller(prefs, demo: false));
   });
+
+  // v1.4.1 screenshots: themed intro, glass nav over chat in other accents,
+  // theme picker.
+  Future<void> accent(String hex, String base) async {
+    await prefs.setBool('nv.theme.follow', false);
+    await prefs.setString('nv.theme.accent', hex);
+    await prefs.setString('nv.theme.base', base);
+  }
+
+  testWidgets('14 launch intro (saved theme)', (tester) async {
+    await accent('#7C3AED', 'dark');
+    await run(tester, '14_launch_intro', () => const NvLaunchIntro(debugFreezeAt: 0.5, child: ConnectScreen(onboarding: true)),
+        remote: _controller(prefs, demo: false));
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('15 chat glass nav · ungu', (tester) async {
+    await accent('#7C3AED', 'dark');
+    app.previewTab = 0;
+    await run(tester, '15_chat_glass_ungu', () => const RemoteShell());
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('16 chat glass nav · toska terang', (tester) async {
+    await accent('#0D9488', 'light');
+    app.previewTab = 0;
+    await run(tester, '16_chat_glass_toska_light', () => const RemoteShell());
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('17 chat glass nav · langit', (tester) async {
+    await accent('#0284C7', 'dark');
+    app.previewTab = 0;
+    await run(tester, '17_chat_glass_langit', () => const RemoteShell());
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('18 theme picker', (tester) async {
+    await accent('#E11D48', 'dark');
+    await run(tester, '18_theme_picker', () => Scaffold(
+          body: ListView(padding: const EdgeInsets.only(top: 60, bottom: 40), children: const [
+            NvSectionShim(),
+            AppearancePanel(),
+          ]),
+        ));
+    NV.palette = NvPalette.red;
+  });
+}
+
+/// "// TAMPILAN" header like on the PC tab.
+class NvSectionShim extends StatelessWidget {
+  const NvSectionShim({super.key});
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+        child: Text('// TAMPILAN', style: NV.monoLabel()),
+      );
 }

@@ -24,6 +24,8 @@ class RemoteChatScreen extends ConsumerStatefulWidget {
 class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  /// Height of the floating dock (approvals + composer) over the messages.
+  double _dockH = 0;
   bool _dictating = false;
 
   @override
@@ -131,14 +133,18 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
               action: TextButton(onPressed: widget.onOpenApprovals, child: const Text('Lihat')),
             ),
           ),
+        // Messages run under the composer and the glass nav bar (both are
+        // liquid glass), padded so the last message clears them at rest.
         Expanded(
-          child: r.opening
+          child: Stack(children: [
+            Positioned.fill(
+              child: r.opening
               ? const CenterLoader(label: 'membuka sesi di PC…')
               : msgs.isEmpty
                   ? _empty(context, r)
                   : ListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 12 + _dockH),
                       itemCount: msgs.length,
                       itemBuilder: (context, i) {
                         final m = msgs[i];
@@ -160,21 +166,39 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                         );
                       },
                     ),
-        ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: NvSizeReporter(
+                onHeight: (h) {
+                  if ((h - _dockH).abs() > 0.5) setState(() => _dockH = h);
+                },
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         for (final a in mine)
           NvApprovalCard(
             command: a.command,
             description: a.description,
             choices: a.choices,
             origin: a.toolName,
+            color: NV.surface,
             onChoice: (c) async {
               final err = await r.respond(a, c);
               if (err != null && context.mounted) toast(context, err);
             },
           ),
         if (r.transcript.error != null && !r.running)
-          Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: NvNotice(r.transcript.error!)),
-        _composer(context, r),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: DecoratedBox(decoration: BoxDecoration(color: NV.bg, borderRadius: NV.ctl), child: NvNotice(r.transcript.error!)),
+          ),
+                  _composer(context, r),
+                ]),
+              ),
+            ),
+          ]),
+        ),
       ]),
     );
   }
@@ -186,7 +210,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             constraints: BoxConstraints(minHeight: c.maxHeight),
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
+                padding: EdgeInsets.fromLTRB(28, 0, 28, _dockH),
                 child: Text(greetingFor(DateTime.now()),
                     key: const ValueKey('chat-greeting'), textAlign: TextAlign.center, style: NV.display(size: 40)),
               ),

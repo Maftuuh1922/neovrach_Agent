@@ -16,6 +16,9 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Bundle
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -43,6 +46,28 @@ class MainActivity : FlutterActivity() {
     private val permRequests = HashMap<Int, MethodChannel.Result>()
     private val docRequests = HashMap<Int, MethodChannel.Result>()
     private var nextCode = 4100
+
+    /**
+     * Cold start in the user's theme: the Dart side stores the resolved
+     * background (`nv.boot.bg`, `nv.boot.dark`) in the plugin's
+     * FlutterSharedPreferences; paint it as the window background before
+     * Flutter's first frame so the intro opens without a colour jump. On
+     * Android 13+ also pick the matching (neutral) system splash for next time.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        try {
+            val p = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val bg = p.getString("flutter.nv.boot.bg", null)
+            if (bg != null) window.setBackgroundDrawable(ColorDrawable(Color.parseColor(bg)))
+            if (Build.VERSION.SDK_INT >= 33) {
+                val light = p.getString("flutter.nv.boot.dark", "1") == "0"
+                splashScreen.setSplashScreenTheme(if (light) R.style.LaunchThemeLight else R.style.LaunchTheme)
+            }
+        } catch (e: Exception) {
+            // keep the neutral default
+        }
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

@@ -1,5 +1,5 @@
-// Remote shell: Chat · Kantor · Tugas · Setujui · PC on a floating liquid
-// glass bar, with a connection strip whenever the link to the PC is not up
+// Remote shell: Chat · Kantor · Tugas · Setujui · PC on a floating iOS-style
+// liquid glass bar (content scrolls under it), with a connection strip whenever the link to the PC is not up
 // and an "Update tersedia" strip when a newer phone app is released.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -97,8 +97,9 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (NV.palette.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: NV.bg,
-        systemNavigationBarDividerColor: NV.bg,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
@@ -122,16 +123,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
               ]),
             ),
           ),
-          // The bar is liquid glass: content scrolls under it, blurred. Only
-          // the system gesture inset gets a flat band.
-          if (!keyboard && mq.viewPadding.bottom > 0)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: mq.viewPadding.bottom,
-              child: IgnorePointer(child: ColoredBox(color: NV.bg)),
-            ),
+          // Liquid glass: every tab's content runs edge to edge and scrolls
+          // under the floating bar, so the blur/lens has something to show.
           if (!keyboard)
             Positioned(
               left: 16,
