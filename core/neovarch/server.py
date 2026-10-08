@@ -2,9 +2,8 @@
 
 Wire compatibility
 ------------------
-The Neovarch desktop is derived from Hermes Desktop and the phone remote was
-written against the same protocol, so this gateway speaks that wire format
-(designed by Hermes Agent, Nous Research), implemented from scratch here:
+The Neovarch desktop and the phone remote speak one wire format (see NOTICE
+for its origin); this gateway implements it from scratch:
 
 * readiness line on stdout: ``HERMES_BACKEND_READY port=<n>`` (the desktop
   waits for exactly this sentinel);
@@ -1408,7 +1407,7 @@ def serve(host: str, port: int, *, isolated: bool = False) -> int:
             raise SystemExit(98)
         sockets = getattr(site._server, "sockets", None) or []
         gw.port = sockets[0].getsockname()[1] if sockets else port
-        # The desktop waits for this exact sentinel (wire-compatible with Hermes Desktop).
+        # The desktop waits for this exact sentinel (legacy wire name, kept for compatibility).
         print(f"HERMES_BACKEND_READY port={gw.port}", flush=True)
         print(f"Neovarch gateway listening on {host}:{gw.port} (home {neovarch_home()})", flush=True)
         await asyncio.Event().wait()

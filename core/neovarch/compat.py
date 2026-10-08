@@ -1,6 +1,6 @@
 """Quiet answers for desktop REST routes the Neovarch core has no feature behind.
 
-The desktop renderer (derived from Hermes Desktop) calls many ``/api/*`` routes.
+The desktop renderer calls many ``/api/*`` routes.
 Each one here returns the empty / "not available" shape the renderer accepts,
 so no page shows "Failed to load" and no call ends in a 4xx/5xx. Routes with a
 real implementation live in server.py and win (they are registered first).

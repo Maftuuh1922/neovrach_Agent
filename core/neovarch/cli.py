@@ -19,7 +19,7 @@ INSTALLER = "https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/s
 
 
 def version_line() -> str:
-    return f"{PRODUCT} v{__version__} (Neovarch core; design inspired by Hermes Agent)"
+    return f"{PRODUCT} v{__version__} (Neovarch core)"
 
 
 # ------------------------------------------------------------------ chat -----

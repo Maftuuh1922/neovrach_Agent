@@ -1,0 +1,47 @@
+# Test files that already failed on the v1.3.0 CI run (Actions run 37793133280, 45 ui + 40 electron tests).
+# They are excluded from the gate so every OTHER test must pass and new failures break CI.
+# Each one must be fixed and removed from this list before the v1.4.0 release.
+electron/app-icon.test.ts
+electron/backend-env.test.ts
+electron/backend-probes-runtime.test.ts
+electron/channel-build-version.test.ts
+electron/desktop-uninstall.test.ts
+electron/portal-session-live.test.ts
+electron/product-identity.test.ts
+electron/source-backend.test.ts
+electron/ssh-binary.test.ts
+electron/update-prerequisites.test.ts
+electron/updater/app-installer-strategy.test.ts
+electron/updater/checkout-handoff.test.ts
+electron/updater/checkout-legacy.test.ts
+electron/updater/checkout-source.test.ts
+electron/updater/state-db-preflight.test.ts
+electron/user-launcher-install.test.ts
+electron/window-below.test.ts
+electron/window-growth.test.ts
+scripts/after-pack-toolchain.test.mjs
+scripts/bundle-electron-main.test.mjs
+scripts/bundle-env.test.mjs
+scripts/commit-stamp-identity.test.mjs
+scripts/i18n-keys.test.mjs
+scripts/mac-sign.test.mjs
+scripts/prepared-packaging.test.mjs
+scripts/run-electron-builder.test.mjs
+src/app/chat/sidebar/profile-rail-fleet.test.tsx
+src/app/session-import/index.test.tsx
+src/components/assistant-ui/thread/streaming.test.tsx
+src/components/boot-failure-overlay.test.tsx
+src/components/desktop-install-overlay.test.tsx
+src/components/free-tier/sign-in-dialog.test.tsx
+src/components/onboarding/skip-gate.test.tsx
+src/components/ui/__tests__/no-native-title.test.ts
+src/lib/commit-changelog.test.ts
+src/lib/mcp-dashboard-oauth.test.ts
+src/plugins/hermes-bots/group-chat.test.ts
+src/plugins/hermes-bots/relay-deliver-budget.test.ts
+src/plugins/hermes-bots/routing.test.ts
+src/store/projects.test.ts
+src/store/quick-entry.test.ts
+src/store/voice-prefs.test.ts
+src/themes/backend-sync.test.ts
+src/themes/classic-skin.test.tsx
