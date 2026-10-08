@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../data/chat_engine.dart';
 import '../../../data/device_tools.dart' show ensureCameraPermission;
+import '../../../data/platform_caps.dart';
 import '../../../models/models.dart';
 import '../../../state/app_controller.dart';
 import '../../../state/chat_controller.dart';
@@ -612,9 +613,9 @@ class _ComposerState extends ConsumerState<Composer> {
                               tooltip: 'Lampirkan gambar',
                               icon: Icon(Icons.add_photo_alternate_outlined, size: 21, color: context.hc.mutedForeground),
                               onSelected: _attach,
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(value: ImageSource.gallery, child: Text('Dari galeri')),
-                                PopupMenuItem(value: ImageSource.camera, child: Text('Ambil foto')),
+                              itemBuilder: (_) => [
+                                PopupMenuItem(value: ImageSource.gallery, child: Text(isDesktop ? 'Pilih berkas gambar' : 'Dari galeri')),
+                                if (canUseCamera) const PopupMenuItem(value: ImageSource.camera, child: Text('Ambil foto')),
                               ],
                             ),
                           if (local) const ThinkingButton(),
@@ -629,11 +630,13 @@ class _ComposerState extends ConsumerState<Composer> {
                                   )
                                 : const SizedBox.shrink(),
                           ),
+                          if (canDictate)
                           IconButton(
                             tooltip: listening ? 'Berhenti mendikte' : 'Dikte',
                             onPressed: _toggleMic,
                             icon: Icon(listening ? Icons.mic : Icons.mic_none, size: 21, color: listening ? context.hc.destructive : context.hc.mutedForeground),
                           ),
+                          if (canSpeak)
                           IconButton(
                             tooltip: settings.readAloud ? 'Matikan baca balasan' : 'Bacakan balasan',
                             onPressed: () => settings.update((s) => s.readAloud = !s.readAloud),

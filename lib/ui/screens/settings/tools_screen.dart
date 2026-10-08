@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/agent_runtime.dart';
 import '../../../data/device_tools.dart';
+import '../../../data/platform_caps.dart';
 import '../../../state/app_controller.dart';
 import '../../../theme/app_theme.dart';
 import '../../widgets/common.dart';
@@ -24,7 +25,7 @@ class ToolsScreen extends ConsumerWidget {
               '(atur di panel pengaturan chat → Mode persetujuan); alat perangkat meminta izin Android saat pertama dipakai.',
               style: context.tt.bodySmall),
         ),
-        for (final g in const [('app', 'Aplikasi — memori, berkas, papan, web'), ('office', 'Kantor — agen, tugas, rapat, cron'), ('device', 'Perangkat Android')]) ...[
+        for (final g in [('app', 'Aplikasi — memori, berkas, papan, web'), ('office', 'Kantor — agen, tugas, rapat, cron'), if (offersDeviceTools) ('device', 'Perangkat Android')]) ...[
           SectionLabel(g.$2),
           for (final t in allTools.where((t) => t.group == g.$1))
             SwitchListTile(

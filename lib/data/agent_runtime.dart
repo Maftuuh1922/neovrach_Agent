@@ -10,6 +10,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'platform_caps.dart';
+
 import '../models/chat_options.dart';
 import '../models/models.dart';
 import 'api_result.dart';
@@ -406,6 +408,7 @@ class AgentRuntime {
     final tools = toolsOn
         ? allTools
             .where((t) => enabledTools().contains(t.name) && opt.toolGroups.contains(t.group))
+            .where((t) => offersDeviceTools || t.group != 'device')
             .where((t) => opt.memory || !t.name.startsWith('memory'))
             .map((t) => t.toOpenAi())
             .toList()

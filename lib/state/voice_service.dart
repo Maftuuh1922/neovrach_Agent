@@ -1,9 +1,12 @@
 // Voice: dictation (speech_to_text) and read-back (flutter_tts), like
 // Desktop's mic + "Read replies aloud" toggle.
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+
+import '../data/platform_caps.dart';
 
 class VoiceService extends ChangeNotifier {
   VoiceService._();
@@ -18,6 +21,10 @@ class VoiceService extends ChangeNotifier {
 
   Future<bool> _initStt() async {
     if (_sttReady) return true;
+    if (!canDictate) {
+      error = 'dikte suara belum tersedia di platform ini';
+      return false;
+    }
     try {
       _sttReady = await _stt.initialize(
         onError: (e) {
@@ -48,7 +55,8 @@ class VoiceService extends ChangeNotifier {
     }
     listening = true;
     notifyListeners();
-    await _stt.listen(
+    try {
+      await _stt.listen(
       onResult: (SpeechRecognitionResult r) => onText(r.recognizedWords, r.finalResult),
       listenOptions: SpeechListenOptions(
         partialResults: true,
@@ -59,15 +67,23 @@ class VoiceService extends ChangeNotifier {
         listenFor: const Duration(minutes: 2),
       ),
     );
+    } catch (e) {
+      listening = false;
+      error = 'dikte gagal: $e';
+      notifyListeners();
+    }
   }
 
   Future<void> stopDictation() async {
-    await _stt.stop();
+    try {
+      await _stt.stop();
+    } catch (_) {}
     listening = false;
     notifyListeners();
   }
 
   Future<void> speak(String text, {String language = 'id-ID', double rate = 0.5}) async {
+    if (!canSpeak) return;
     try {
       _tts ??= FlutterTts();
       final t = _tts!;
@@ -88,7 +104,11 @@ class VoiceService extends ChangeNotifier {
   }
 
   Future<void> stopSpeaking() async {
-    await _tts?.stop();
+    try {
+      await _tts?.stop();
+    } on MissingPluginException {
+      // no TTS engine on this platform
+    }
     speaking = false;
     notifyListeners();
   }

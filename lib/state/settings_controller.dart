@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/agent_runtime.dart';
+import '../data/platform_caps.dart';
 import '../data/llm_client.dart';
 import '../models/chat_options.dart';
 import '../models/models.dart';
@@ -116,9 +117,9 @@ class SettingsController extends ChangeNotifier {
     lastSessionId = p.getString('lastSession') ?? '';
     updateRepo = p.getString('updateRepo') ?? '';
     try {
-      gatewayToken = await _secure.read(key: 'gateway.token') ?? '';
+      gatewayToken = await _secRead('gateway.token') ?? '';
       for (final pr in providers) {
-        final k = await _secure.read(key: 'key.${pr.id}');
+        final k = await _secRead('key.${pr.id}');
         if (k != null) _keys[pr.id] = k;
       }
     } catch (_) {
@@ -169,23 +170,57 @@ class SettingsController extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------- secrets --
+  // Desktop note: Linux needs a Secret Service keyring (GNOME Keyring /
+  // KWallet). When none is running, secrets fall back to app prefs on
+  // desktop only so keys survive a restart; mobile always uses the keystore.
+  static const _fallbackPrefix = 'secfallback.';
+
+  Future<String?> _secRead(String key) async {
+    try {
+      final v = await _secure.read(key: key);
+      if (v != null || !isDesktop) return v;
+    } catch (_) {
+      if (!isDesktop) rethrow;
+    }
+    return _prefs.getString('$_fallbackPrefix$key');
+  }
+
+  Future<void> _secWrite(String key, String value) async {
+    try {
+      await _secure.write(key: key, value: value);
+      if (isDesktop) await _prefs.remove('$_fallbackPrefix$key');
+    } catch (_) {
+      if (!isDesktop) rethrow;
+      await _prefs.setString('$_fallbackPrefix$key', value);
+    }
+  }
+
+  Future<void> _secDelete(String key) async {
+    try {
+      await _secure.delete(key: key);
+    } catch (_) {
+      if (!isDesktop) rethrow;
+    }
+    if (isDesktop) await _prefs.remove('$_fallbackPrefix$key');
+  }
+
   String keyFor(String providerId) => _keys[providerId] ?? '';
   bool hasKey(String providerId) => (_keys[providerId] ?? '').isNotEmpty;
 
   Future<void> setKey(String providerId, String key) async {
     if (key.isEmpty) {
       _keys.remove(providerId);
-      await _secure.delete(key: 'key.$providerId');
+      await _secDelete('key.$providerId');
     } else {
       _keys[providerId] = key;
-      await _secure.write(key: 'key.$providerId', value: key);
+      await _secWrite('key.$providerId', key);
     }
     notifyListeners();
   }
 
   Future<void> setGatewayToken(String t) async {
     gatewayToken = t;
-    await _secure.write(key: 'gateway.token', value: t);
+    await _secWrite('gateway.token', t);
     notifyListeners();
   }
 

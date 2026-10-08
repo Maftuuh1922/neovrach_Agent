@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../data/platform_caps.dart';
 import '../../../models/chat_options.dart';
 import '../../../state/app_controller.dart';
 import '../../../state/voice_service.dart';
@@ -74,6 +75,13 @@ class ChatVoiceScreen extends ConsumerWidget {
           onChanged: (v) => s.update((x) => x.resumeLastSession = v),
         ),
         const SectionLabel('Suara'),
+        if (!canSpeak && !canDictate)
+          ListTile(
+            leading: const Icon(Icons.volume_off_outlined),
+            title: const Text('Suara belum tersedia di platform ini'),
+            subtitle: Text('Dikte dan baca balasan tersedia di aplikasi Android, iOS, dan Windows.', style: context.tt.bodySmall),
+          )
+        else ...[
         SwitchListTile(
           title: const Text('Bacakan balasan'),
           subtitle: Text('Text-to-speech setelah agent selesai menjawab', style: context.tt.bodySmall),
@@ -106,6 +114,7 @@ class ChatVoiceScreen extends ConsumerWidget {
             label: const Text('Uji suara'),
           ),
         ),
+        ],
       ]),
     );
   }
