@@ -1,6 +1,6 @@
 {
   "name": "neovarch-agent",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Neovarch Agent desktop app launcher. Installs the Neovarch Agent desktop app (Electron; Linux x64, Windows x64) and adds the `neovarch` command.",
   "homepage": "https://github.com/Maftuuh1922/neovrach_Agent",
   "repository": {

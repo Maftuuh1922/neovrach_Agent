@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scr
 
 Memasang ke `~/.local/share/neovarch-agent`, membuat perintah `neovarch` di `~/.local/bin`, dan menambahkan
 entri menu aplikasi. Butuh GTK 3, NSS, ALSA dan libsecret (installer memberi tahu perintah `apt`/`dnf`/`pacman` bila belum ada).
-Pilih versi tertentu: `curl -fsSL …/install.sh | NEOVARCH_VERSION=v1.2.0 sh`.
+Pilih versi tertentu: `curl -fsSL …/install.sh | NEOVARCH_VERSION=v1.2.1 sh`.
 Hapus: `curl -fsSL …/install.sh | sh -s -- --uninstall`.
 
 **Windows (x64)** — PowerShell:

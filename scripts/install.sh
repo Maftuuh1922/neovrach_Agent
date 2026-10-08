@@ -7,7 +7,7 @@
 #   --uninstall        remove Neovarch Agent
 #   --help             show help
 # Environment:
-#   NEOVARCH_VERSION   release tag to install (e.g. v1.2.0). Default: latest.
+#   NEOVARCH_VERSION   release tag to install (e.g. v1.2.1). Default: latest.
 #
 # Installs to ~/.local/share/neovarch-agent, links ~/.local/bin/neovarch to the
 # app executable and adds a desktop menu entry. No root needed.
@@ -64,7 +64,7 @@ Options:
   -h, --help    Show this help
 
 Environment:
-  NEOVARCH_VERSION   Release tag to install, e.g. v1.2.0 (default: latest)
+  NEOVARCH_VERSION   Release tag to install, e.g. v1.2.1 (default: latest)
 EOF
 }
 

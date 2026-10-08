@@ -8,7 +8,7 @@
 #   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1))) -Portable
 #
 # Environment:
-#   NEOVARCH_VERSION    release tag to install (e.g. v1.2.0). Default: latest.
+#   NEOVARCH_VERSION    release tag to install (e.g. v1.2.1). Default: latest.
 #   NEOVARCH_PORTABLE=1 same as -Portable.   NEOVARCH_UNINSTALL=1 same as -Uninstall.
 #
 # Default mode runs the NSIS installer silently, per user (no admin):

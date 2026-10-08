@@ -14,7 +14,7 @@ permissions:
 
 env:
   FLUTTER_VERSION: '3.47.6'
-  APP_VERSION: '1.2.0'
+  APP_VERSION: '1.2.1'
 
 jobs:
   android:

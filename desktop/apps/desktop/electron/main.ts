@@ -5491,7 +5491,7 @@ async function ensureRuntime(
     rememberLog('[bootstrap] REFUSING installer on a bundled install; payload missing or damaged — reinstall the app')
 
     const bundledError: Error & { isBootstrapFailure?: boolean } = new Error(
-      'This app bundles its own Hermes runtime, but the runtime files are missing or damaged. Reinstall Hermes Desktop to restore it.'
+      'This app bundles its own Hermes runtime, but the runtime files are missing or damaged. Reinstall Neovarch Agent to restore it.'
     )
 
     bundledError.isBootstrapFailure = true
@@ -12861,7 +12861,7 @@ function reportPrimaryRecoveryCrashLoop(code: number | null, signal: string | nu
   }
 
   const message =
-    'Hermes backend keeps crashing right after it restarts; not restarting it again. Relaunch Hermes Desktop.'
+    'Hermes backend keeps crashing right after it restarts; not restarting it again. Relaunch Neovarch Agent.'
 
   rememberLog(`[supervisor] ${message}`)
   sendBackendExit({ code, signal, error: message })

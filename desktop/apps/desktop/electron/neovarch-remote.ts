@@ -152,6 +152,23 @@ function newSecret(): string {
   return crypto.randomBytes(32).toString('base64')
 }
 
+export const FALLBACK_DEVICE_NAME = 'PC Neovarch'
+
+/**
+ * The name the phone shows for this PC. Some Linux hosts (containers, minimal
+ * installs) report an empty hostname or the literal "(none)"; those fall back
+ * to a readable default instead of being shown to the user.
+ */
+export function resolveDeviceName(name: string | null | undefined = os.hostname()): string {
+  const trimmed = typeof name === 'string' ? name.trim() : ''
+
+  if (!trimmed || trimmed === '(none)') {
+    return FALLBACK_DEVICE_NAME
+  }
+
+  return trimmed.slice(0, 64)
+}
+
 function defaultSettings(): RemoteSettings {
   return {
     enabled: false,
@@ -159,7 +176,7 @@ function defaultSettings(): RemoteSettings {
     secret: newSecret(),
     issuedAt: Math.floor(Date.now() / 1000),
     preferredAddress: null,
-    deviceName: os.hostname() || 'PC Neovarch'
+    deviceName: resolveDeviceName()
   }
 }
 
@@ -183,7 +200,7 @@ export function createRemoteController(deps: RemoteControllerDeps) {
         secret: typeof parsed.secret === 'string' && decodeSecret(parsed.secret).length >= 32 ? parsed.secret : base.secret,
         issuedAt: Number.isInteger(parsed.issuedAt) && parsed.issuedAt > 0 ? parsed.issuedAt : base.issuedAt,
         preferredAddress: typeof parsed.preferredAddress === 'string' ? parsed.preferredAddress : null,
-        deviceName: typeof parsed.deviceName === 'string' && parsed.deviceName.trim() ? parsed.deviceName : base.deviceName
+        deviceName: typeof parsed.deviceName === 'string' ? resolveDeviceName(parsed.deviceName) : base.deviceName
       }
     } catch {
       return defaultSettings()

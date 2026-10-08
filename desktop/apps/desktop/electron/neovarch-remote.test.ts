@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildPairingUri, decodeSecret, lanAddresses, mintAccessToken, verifyAccessToken } from './neovarch-remote'
+import {
+  buildPairingUri,
+  decodeSecret,
+  FALLBACK_DEVICE_NAME,
+  lanAddresses,
+  mintAccessToken,
+  resolveDeviceName,
+  verifyAccessToken
+} from './neovarch-remote'
 
 // Vector produced by the Hermes core's own signer (plugins/dashboard_auth/basic `_sign`):
 // urlsafe_b64encode(json.dumps(payload, separators=(",", ":")) + hmac_sha256(secret, json)).
@@ -36,5 +44,13 @@ describe('neovarch remote token', () => {
       wlan0: [{ address: '192.168.1.5', family: 'IPv4', internal: false } as never]
     })
     expect(list.map(a => a.address)).toEqual(['192.168.1.5', '172.17.0.1'])
+  })
+
+  it('falls back to a readable PC name when the hostname is empty or "(none)"', () => {
+    expect(resolveDeviceName('')).toBe(FALLBACK_DEVICE_NAME)
+    expect(resolveDeviceName('  ')).toBe(FALLBACK_DEVICE_NAME)
+    expect(resolveDeviceName('(none)')).toBe(FALLBACK_DEVICE_NAME)
+    expect(resolveDeviceName(' workstation ')).toBe('workstation')
+    expect(FALLBACK_DEVICE_NAME).toBe('PC Neovarch')
   })
 })

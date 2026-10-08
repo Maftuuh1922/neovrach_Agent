@@ -16,7 +16,7 @@ Usage:
   neovarch --help       Show this help
 
 Environment:
-  NEOVARCH_VERSION      Release tag to use, e.g. v1.2.0 (default: v${app.PKG_VERSION})
+  NEOVARCH_VERSION      Release tag to use, e.g. v1.2.1 (default: v${app.PKG_VERSION})
 `;
 
 async function main(argv) {
