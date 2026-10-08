@@ -84,7 +84,16 @@ class RemotePcScreen extends ConsumerWidget {
                 _Stat(label: 'versi', value: version.isEmpty ? '—' : version, mono: true),
               ]),
               const SizedBox(height: 12),
-              NvKv('Status', r.statusLabel, valueColor: dot),
+              // status on the same column grid as the numbers above:
+              // label in column 1, value from column 2, one shared baseline
+              Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                Expanded(child: Text('STATUS', style: NV.monoLabel(size: 9.5))),
+                Expanded(
+                  flex: 2,
+                  child: Text(r.statusLabel,
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: dot, fontWeight: FontWeight.w500)),
+                ),
+              ]),
               if (r.error != null && !ok) ...[const SizedBox(height: 8), NvNotice(r.error!)],
               const SizedBox(height: 14),
               Row(children: [

@@ -95,47 +95,51 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             if (!widget.onboarding)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: NvHeader(kicker: 'perangkat · tambah', title: 'Tambah PC', onBack: () => Navigator.of(context).maybePop()),
+                child: NvHeader(kicker: 'perangkat · tambah', title: 'Tambah PC', inset: 0, onBack: () => Navigator.of(context).maybePop()),
               ),
-            // Dithered art plate with the wordmark.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(NV.rCard),
-              child: Container(
-                foregroundDecoration: BoxDecoration(borderRadius: BorderRadius.circular(NV.rCard), border: Border.all(color: NV.border)),
-                child: AspectRatio(
-                  aspectRatio: widget.onboarding ? 4 / 3 : 16 / 8,
-                  child: Stack(fit: StackFit.expand, children: [
-                    Image.asset('assets/art/feat-remote.webp', fit: BoxFit.cover, alignment: const Alignment(0.35, 0), filterQuality: FilterQuality.medium),
-                    Positioned(
-                      left: 14,
-                      top: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(color: NV.bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.border)),
-                        child: Text('HP = REMOTE · PC = OTAK', style: NV.monoLabel(size: 9.5, color: NV.text)),
+            // Art plate and intro copy on first run only; "Tambah PC" goes
+            // straight to the steps and the pairing actions.
+            if (widget.onboarding) ...[
+              // Dithered art plate with the wordmark.
+              ClipRRect(
+                borderRadius: BorderRadius.circular(NV.rCard),
+                child: Container(
+                  foregroundDecoration: BoxDecoration(borderRadius: BorderRadius.circular(NV.rCard), border: Border.all(color: NV.border)),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: Stack(fit: StackFit.expand, children: [
+                      Image.asset('assets/art/feat-remote.webp', fit: BoxFit.cover, alignment: const Alignment(0.35, 0), filterQuality: FilterQuality.medium),
+                      Positioned(
+                        left: 14,
+                        top: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(color: NV.bg, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.border)),
+                          child: Text('HP = REMOTE · PC = OTAK', style: NV.monoLabel(size: 9.5, color: NV.text)),
+                        ),
                       ),
-                    ),
-                    if (widget.onboarding)
                       const Positioned(left: 16, bottom: 14, child: Wordmark(height: 30, color: NV.text, haloColor: NV.red)),
-                  ]),
+                    ]),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 22),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('// REMOTE', style: NV.monoLabel(color: NV.red)),
-                const SizedBox(height: 8),
-                Text('Hubungkan ke PC', style: NV.display(size: 40)),
-                const SizedBox(height: 10),
-                const Text(
-                  'Agen Neovarch berjalan di aplikasi desktop. HP ini hanya remote: kirim perintah, pantau tugas, dan setujui aksi agen dari jaringan yang sama.',
-                  style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 18),
+              const SizedBox(height: 22),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('// REMOTE', style: NV.monoLabel(color: NV.red)),
+                  const SizedBox(height: 8),
+                  Text('Hubungkan ke PC', style: NV.display(size: 40)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Agen Neovarch berjalan di aplikasi desktop. HP ini hanya remote: kirim perintah, pantau tugas, dan setujui aksi agen dari jaringan yang sama.',
+                    style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 18),
+            ] else
+              const SizedBox(height: 6),
             NvPanel(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -45,7 +45,7 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
     }
     // decode the logo layers first so the reveal never plays on empty frames
     Future.wait([
-      for (final a in const ['assets/brand/monogram.png', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png'])
+      for (final a in const ['assets/brand/monogram_n.png', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png'])
         precacheImage(AssetImage(a), context),
     ]).timeout(const Duration(milliseconds: 900), onTimeout: () => const []).whenComplete(() {
       if (mounted && !_done) _c.forward().whenComplete(_finish);
@@ -101,9 +101,9 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
                               width: 96,
                               height: 110,
                               child: Stack(clipBehavior: Clip.none, alignment: Alignment.bottomCenter, children: [
-                                BrandBadge(height: 92, color: widget.foreground),
+                                BrandBadge(height: 92, color: widget.foreground, halo: false),
                                 Positioned(
-                                  top: -34 + 30 * haloIn,
+                                  top: -12 + 30 * haloIn,
                                   left: 14,
                                   width: 70,
                                   height: 18,

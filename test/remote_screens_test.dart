@@ -149,7 +149,7 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _precache(WidgetTester tester) async {
   final ctx = tester.element(find.byType(MaterialApp));
   await tester.runAsync(() async {
-    for (final a in const ['assets/art/feat-remote.webp', 'assets/art/portal-banner.webp', 'assets/art/feat-automation.webp', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png', 'assets/brand/monogram.png']) {
+    for (final a in const ['assets/art/feat-remote.webp', 'assets/art/portal-banner.webp', 'assets/art/feat-automation.webp', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png', 'assets/brand/monogram.png', 'assets/brand/monogram_n.png']) {
       await precacheImage(AssetImage(a), ctx);
     }
   });

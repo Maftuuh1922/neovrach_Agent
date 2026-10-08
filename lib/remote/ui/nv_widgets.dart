@@ -13,34 +13,52 @@ import '../../ui/widgets/common.dart' show clockOf, LogView, reduceMotion;
 /// Screen header: `// KICKER` in mono, a serif title, optional status line and
 /// actions on the right. Replaces the stock AppBar on every remote tab.
 class NvHeader extends StatelessWidget {
-  const NvHeader({super.key, required this.kicker, required this.title, this.status, this.actions = const [], this.onBack});
+  const NvHeader({super.key, required this.kicker, required this.title, this.status, this.actions = const [], this.onBack, this.inset});
   final String kicker;
   final String title;
   final Widget? status;
   final List<Widget> actions;
   final VoidCallback? onBack;
+  /// Horizontal inset; defaults to the screen-edge gutter. Pass 0 when the
+  /// header already sits inside padded content.
+  final double? inset;
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(onBack != null ? 8 : 20, top + 14, 12, 12),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        if (onBack != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 4, bottom: 2),
-            child: NvIconButton(icon: Icons.arrow_back, tooltip: 'Kembali', onPressed: onBack),
-          ),
+    final kick = Text('// ${kicker.toUpperCase()}', style: NV.monoLabel(color: NV.red));
+    final head = Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.display(size: 34));
+    final Widget body;
+    if (onBack != null) {
+      // Kicker on its own line, then the back button and the title on one
+      // row, centred on each other; the kicker starts where the title does.
+      body = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Padding(padding: const EdgeInsets.only(left: 52), child: kick),
+        const SizedBox(height: 6),
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          NvIconButton(icon: Icons.arrow_back, tooltip: 'Kembali', onPressed: onBack),
+          const SizedBox(width: 12),
+          Expanded(child: head),
+          for (final a in actions) Padding(padding: const EdgeInsets.only(left: 6), child: a),
+        ]),
+        if (status != null) ...[const SizedBox(height: 6), Padding(padding: const EdgeInsets.only(left: 52), child: status!)],
+      ]);
+    } else {
+      body = Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('// ${kicker.toUpperCase()}', style: NV.monoLabel(color: NV.red)),
+            kick,
             const SizedBox(height: 6),
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.display(size: 34)),
+            head,
             if (status != null) ...[const SizedBox(height: 6), status!],
           ]),
         ),
         for (final a in actions) Padding(padding: const EdgeInsets.only(left: 6, bottom: 2), child: a),
-      ]),
+      ]);
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(inset ?? (onBack != null ? 16 : 20), top + 14, inset ?? 12, 12),
+      child: body,
     );
   }
 }
