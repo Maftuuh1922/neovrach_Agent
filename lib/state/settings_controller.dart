@@ -111,7 +111,6 @@ class SettingsController extends ChangeNotifier {
     onboarded = p.getBool('onboarded') ?? false;
     introSeen = p.getBool('introSeen') ?? false;
     defaultProfile = p.getString('defaultProfile') ?? 'neovarch';
-    if (defaultProfile == 'hermes') defaultProfile = 'neovarch'; // v1.1 rename
     autoRunTasks = p.getBool('autoRunTasks') ?? true;
     resumeLastSession = p.getBool('resumeLast') ?? true;
     lastSessionId = p.getString('lastSession') ?? '';

@@ -67,7 +67,7 @@ class _PeekSheetState extends ConsumerState<PeekSheet> {
   Future<void> _pull() async {
     final id = _taskId;
     if (id == null) return;
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/tasks/${Uri.encodeComponent(id)}');
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/tasks/${Uri.encodeComponent(id)}');
     // A dropped packet leaves the last known log on screen.
     if (!mounted || !res.ok || res.data == null || id != _taskId) return;
     setState(() {

@@ -15,6 +15,7 @@ import 'office_models.dart';
 import 'pairing.dart';
 import 'remote_gateway.dart';
 import 'update_check.dart';
+import 'vault_models.dart';
 import 'remote_transcript.dart';
 import 'saved_desktops.dart';
 
@@ -41,6 +42,11 @@ class RemoteController extends ChangeNotifier {
 
   /// Bumped on `vault.changed` so an open vault screen re-reads its note.
   int vaultRevision = 0;
+
+  /// Widget-test harness only: vault data without a gateway.
+  @visibleForTesting
+  VaultApi? debugVault;
+  VaultApi? get vault => debugVault ?? gateway;
 
   // chat
   List<ChatSessionInfo> sessions = [];

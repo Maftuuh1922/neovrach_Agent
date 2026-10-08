@@ -154,8 +154,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     title: Text(m.label, style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(switch (m) {
                       ConnectionMode.local => 'Disarankan. Agent di perangkat + penyedia LLM pilihanmu.',
-                      ConnectionMode.gateway => 'Backend `hermes serve` milikmu di VPS / PC.',
-                      ConnectionMode.server => 'Server Hermes Virtual Office (Next.js).',
+                      ConnectionMode.gateway => 'Gateway Neovarch milikmu di VPS / PC.',
+                      ConnectionMode.server => 'Server kantor virtual (Next.js).',
                       ConnectionMode.demo => 'Coba-coba tanpa jaringan.',
                     }, style: context.tt.bodySmall),
                     onTap: () => ref.read(settingsProvider).update((x) => x.mode = m),
@@ -181,7 +181,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Pilih penyedia model', style: context.tt.titleLarge),
             const SizedBox(height: 6),
-            Text('Nous Portal dan OpenRouter menyediakan model Hermes. Kunci disimpan terenkripsi di perangkat.', style: context.tt.bodySmall),
+            Text('Nous Portal dan OpenRouter menyediakan banyak model. Kunci disimpan terenkripsi di perangkat.', style: context.tt.bodySmall),
           ]),
         ),
         Expanded(child: ProviderEditor(onSaved: () => _go(3))),

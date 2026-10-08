@@ -102,7 +102,7 @@ class AssistantMessage extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(children: [
-            const HermesLoader(size: 16),
+            const NvLoader(size: 16),
             const SizedBox(width: 10),
             const TypingDots(size: 5),
             const SizedBox(width: 8),

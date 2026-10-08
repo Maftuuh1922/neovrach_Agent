@@ -1,8 +1,8 @@
 // The office seam: every office surface (Kantor, Papan, Rapat, Cron, Agent,
-// per-agent chat in server mode) talks to `/api/hermes/*`-shaped routes.
+// per-agent chat in server mode) talks to `/api/neovarch/*`-shaped routes.
 //
 // Three implementations answer them:
-//   * ServerBackend — HTTP to the Next.js server (it shells out to hermes CLI)
+//   * ServerBackend — HTTP to the Next.js server (it shells out to the agent CLI)
 //   * LocalBackend  — the on-device runtime (Mandiri mode)
 //   * DemoBackend   — a port of src/lib/offline-mock.ts
 //

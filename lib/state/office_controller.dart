@@ -81,7 +81,7 @@ class OfficeController extends ChangeNotifier {
   Future<void> refresh() => _tick();
 
   Future<void> load() async {
-    final res = await backend.get('/api/hermes/tasks');
+    final res = await backend.get('/api/neovarch/tasks');
     if (!res.ok || res.data == null) {
       error = res.error ?? 'gagal memuat papan';
       loading = false;
@@ -107,7 +107,7 @@ class OfficeController extends ChangeNotifier {
 
   Future<void> refreshMeeting() async {
     // A blip must not clear the panel: keep the last known meeting quietly.
-    final res = await backend.get('/api/hermes/meeting');
+    final res = await backend.get('/api/neovarch/meeting');
     if (!res.ok || res.data == null) return;
     final live = res.list('live').map(Meeting.fromJson).toList();
     final active = live.where((m) => m.live).firstOrNull;
@@ -130,7 +130,7 @@ class OfficeController extends ChangeNotifier {
 
   // ----------------------------------------------------------- actions ---
   Future<String?> createTask({required String title, required String assignee, String body = '', int priority = 0}) async {
-    final res = await backend.post('/api/hermes/tasks', {
+    final res = await backend.post('/api/neovarch/tasks', {
       'title': title,
       'assignee': assignee.isEmpty ? (agents.firstOrNull?.name ?? '') : assignee,
       'body': body,
@@ -142,7 +142,7 @@ class OfficeController extends ChangeNotifier {
   }
 
   Future<String?> taskAction(String id, Map<String, dynamic> body) async {
-    final res = await backend.post('/api/hermes/tasks/${Uri.encodeComponent(id)}', body);
+    final res = await backend.post('/api/neovarch/tasks/${Uri.encodeComponent(id)}', body);
     if (!res.ok) return res.error ?? 'aksi gagal';
     unawaited(load());
     return null;

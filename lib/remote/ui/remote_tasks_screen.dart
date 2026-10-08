@@ -1,4 +1,4 @@
-// The PC's Kanban board (Hermes kanban plugin): read the lanes, move a card,
+// The PC's Kanban board (Neovarch core Kanban): read the lanes, move a card,
 // comment, add a task. Agents on the PC pick up ready tasks themselves.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +21,7 @@ const laneLabels = {
   'archived': 'Arsip',
 };
 
-/// Manual moves the default Hermes workflow allows (kanban_workflow.py).
+/// Manual moves the Kanban workflow allows.
 const laneMoves = {
   'triage': ['todo', 'ready'],
   'todo': ['triage', 'ready'],

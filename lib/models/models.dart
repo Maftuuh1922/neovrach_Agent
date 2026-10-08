@@ -1,9 +1,9 @@
 // Domain models for Neovarch Agent.
 //
 // The office shapes (Task, Agent, Meeting, CronJob, ...) mirror
-// `src/types/hermes.ts` of the Next.js web app one-to-one, so every backend
+// the shared types of the Next.js web app one-to-one, so every backend
 // (on-device, Next.js server, demo) speaks the same JSON. The chat shapes
-// (ChatSessionInfo, ChatMsg, ToolActivity) mirror Hermes Desktop's
+// (ChatSessionInfo, ChatMsg, ToolActivity) mirror the desktop app's
 // transcript: streaming text, reasoning, and tool rows with summaries.
 
 String? _str(dynamic v) => v?.toString();
@@ -905,11 +905,8 @@ class ProviderPreset {
 
 const providerPresets = <ProviderPreset>[
   ProviderPreset('openrouter', 'OpenRouter', 'https://openrouter.ai/api/v1',
-      'nousresearch/hermes-4-70b',
+      'qwen/qwen3-coder',
       hint: 'Satu kunci untuk ratusan model. openrouter.ai/keys'),
-  ProviderPreset('nous', 'Nous Portal',
-      'https://inference-api.nousresearch.com/v1', 'Hermes-4-70B',
-      hint: 'Model Hermes langsung dari Nous Research. portal.nousresearch.com'),
   ProviderPreset('openai', 'OpenAI', 'https://api.openai.com/v1', 'gpt-4o-mini',
       hint: 'platform.openai.com/api-keys'),
   ProviderPreset('ollama', 'Ollama (lokal)', 'http://10.0.2.2:11434/v1',

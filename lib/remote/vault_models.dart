@@ -146,3 +146,11 @@ class VaultHit {
   factory VaultHit.fromJson(Map<String, dynamic> j) =>
       VaultHit(path: '${j['path'] ?? ''}', title: '${j['title'] ?? ''}', snippet: '${j['snippet'] ?? ''}');
 }
+
+/// What the vault screens read (the live gateway, or a fake in tests).
+abstract interface class VaultApi {
+  Future<VaultTree> vaultTree();
+  Future<VaultNote> vaultNote(String path);
+  Future<VaultGraph> vaultGraph();
+  Future<List<VaultHit>> vaultSearch(String q);
+}

@@ -1,9 +1,9 @@
-// Chat engines: one UI (ChatScreen) over three ways of talking to Hermes.
+// Chat engines: one UI (ChatScreen) over three ways of talking to an agent.
 //
 //   LocalChatEngine   — the on-device runtime (streaming + tools), sessions
 //                       and transcripts persisted on the phone.
-//   GatewayChatEngine — a remote `hermes serve` over JSON-RPC/WebSocket.
-//   OfficeChatEngine  — `/api/hermes/chat` of the Next.js office server (or
+//   GatewayChatEngine — a remote Neovarch core gateway over JSON-RPC/WebSocket.
+//   OfficeChatEngine  — `/api/neovarch/chat` of the Next.js office server (or
 //                       the demo): one thread per agent, no streaming.
 import 'dart:async';
 
@@ -321,7 +321,7 @@ class OfficeChatEngine extends ChatEngine {
 
   @override
   Future<List<ChatSessionInfo>> listSessions() async {
-    final r = await backend.get('/api/hermes/chat');
+    final r = await backend.get('/api/neovarch/chat');
     if (!r.ok) throw Exception(r.error ?? 'gagal memuat daftar percakapan');
     final sessions = r.list('sessions');
     final byAgent = {for (final s in sessions) '${s['agent']}': s};
@@ -346,7 +346,7 @@ class OfficeChatEngine extends ChatEngine {
 
   @override
   Future<List<ChatMsg>> history(ChatSessionInfo s) async {
-    final r = await backend.get('/api/hermes/chat', {'agent': s.profile});
+    final r = await backend.get('/api/neovarch/chat', {'agent': s.profile});
     if (!r.ok) throw Exception(r.error ?? 'gagal memuat percakapan');
     var i = 0;
     return r
@@ -360,7 +360,7 @@ class OfficeChatEngine extends ChatEngine {
   Stream<ChatEvent> send(ChatSessionInfo s, List<ChatMsg> history, ChatMsg user) async* {
     yield const NewAssistantEvent();
     // A reply can take minutes because the agent may run tools.
-    final r = await backend.post('/api/hermes/chat', {'agent': s.profile, 'message': user.content},
+    final r = await backend.post('/api/neovarch/chat', {'agent': s.profile, 'message': user.content},
         timeout: const Duration(seconds: 300));
     if (!r.ok) {
       yield ErrorEvent(r.error ?? 'agent tidak menjawab');
@@ -375,7 +375,7 @@ class OfficeChatEngine extends ChatEngine {
 
   @override
   Future<void> delete(ChatSessionInfo s) async {
-    final r = await backend.delete('/api/hermes/chat', {'agent': s.profile});
+    final r = await backend.delete('/api/neovarch/chat', {'agent': s.profile});
     if (!r.ok) throw Exception(r.error ?? 'gagal menghapus thread');
   }
 

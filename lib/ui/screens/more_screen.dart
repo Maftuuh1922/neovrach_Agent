@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/models.dart';
 import '../../state/app_controller.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/hermes_themes.dart';
+import '../../theme/nv_themes.dart';
 import 'chat/chat_extras.dart';
 import '../widgets/common.dart';
 import 'agents_screen.dart';

@@ -53,7 +53,7 @@ class _RemoteVaultScreenState extends ConsumerState<RemoteVaultScreen> {
   }
 
   Future<void> _load() async {
-    final g = ref.read(remoteProvider).gateway;
+    final g = ref.read(remoteProvider).vault;
     if (g == null) {
       setState(() {
         _loading = false;
@@ -79,7 +79,7 @@ class _RemoteVaultScreenState extends ConsumerState<RemoteVaultScreen> {
   }
 
   Future<void> _search(String q) async {
-    final g = ref.read(remoteProvider).gateway;
+    final g = ref.read(remoteProvider).vault;
     if (q.trim().isEmpty || g == null) {
       setState(() => _hits = null);
       return;
@@ -239,7 +239,7 @@ class _VaultNoteScreenState extends ConsumerState<VaultNoteScreen> {
   int _rev = -1;
 
   Future<void> _load() async {
-    final g = ref.read(remoteProvider).gateway;
+    final g = ref.read(remoteProvider).vault;
     if (g == null) return;
     try {
       final n = await g.vaultNote(widget.path);
@@ -405,7 +405,7 @@ class _VaultGraphScreenState extends ConsumerState<VaultGraphScreen> {
   int _rev = -1;
 
   Future<void> _load() async {
-    final gw = ref.read(remoteProvider).gateway;
+    final gw = ref.read(remoteProvider).vault;
     if (gw == null) return;
     try {
       var g = await gw.vaultGraph();

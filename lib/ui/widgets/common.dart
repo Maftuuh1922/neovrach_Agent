@@ -1,4 +1,4 @@
-// Shared primitives — one per concern, as Hermes Desktop's DESIGN.md asks:
+// Shared primitives — one per concern, as the design guide asks:
 // Loader (animated curve, never the literal "Loading…"), EmptyState,
 // ErrorBanner, ConfirmDialog, LogView, Avatar, SectionLabel, Collapsible,
 // Skeleton, StatusPill, BrandMark.
@@ -14,15 +14,15 @@ export 'brand.dart';
 export 'motion.dart';
 
 /// Lemniscate-bloom loader — the Desktop Loader's long-operation curve.
-class HermesLoader extends StatefulWidget {
-  const HermesLoader({super.key, this.size = 28, this.label});
+class NvLoader extends StatefulWidget {
+  const NvLoader({super.key, this.size = 28, this.label});
   final double size;
   final String? label;
   @override
-  State<HermesLoader> createState() => _HermesLoaderState();
+  State<NvLoader> createState() => _NvLoaderState();
 }
 
-class _HermesLoaderState extends State<HermesLoader> with SingleTickerProviderStateMixin {
+class _NvLoaderState extends State<NvLoader> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat();
   @override
   void dispose() {
@@ -93,7 +93,7 @@ class CenterLoader extends StatelessWidget {
   const CenterLoader({super.key, this.label});
   final String? label;
   @override
-  Widget build(BuildContext context) => Center(child: HermesLoader(size: 30, label: label));
+  Widget build(BuildContext context) => Center(child: NvLoader(size: 30, label: label));
 }
 
 class EmptyState extends StatelessWidget {

@@ -131,29 +131,8 @@ class LocalStore extends ChangeNotifier {
       writeFile('README.md',
           '# Workspace Neovarch Agent\n\nBerkas yang ditulis agent (lewat alat `file_write`) muncul di sini.\nKamu juga bisa membuat berkas sendiri dari tab **Berkas**.\n');
     }
-    _migrateNeovarch();
   }
 
-  /// v1.1 rename: the default orchestrator "hermes" becomes "neovarch"
-  /// (tasks, sessions, memory and cron follow). Runs once; no-op on new installs.
-  void _migrateNeovarch() {
-    final old = profiles.indexWhere((p) => p.name == 'hermes');
-    if (old < 0 || profiles.any((p) => p.name == 'neovarch')) return;
-    String r(Object? v) => v == 'hermes' ? 'neovarch' : '${v ?? ''}';
-    final pj = profiles[old].toJson()
-      ..['name'] = 'neovarch'
-      ..['systemPrompt'] = profiles[old].systemPrompt.replaceAll('Kamu Hermes', 'Kamu Neovarch');
-    profiles[old] = Profile.fromJson(pj);
-    tasks = tasks.map((t) => t.assignee == 'hermes' ? Task.fromJson(t.toJson()..['assignee'] = 'neovarch') : t).toList();
-    sessions = sessions.map((x) => x.profile == 'hermes' ? ChatSessionInfo.fromJson(x.toJson()..['profile'] = 'neovarch') : x).toList();
-    memory = memory.map((m) => m.scope == 'hermes' ? MemoryNote.fromJson(m.toJson()..['scope'] = r(m.scope)) : m).toList();
-    jobs = jobs.map((j) => j.agent == 'hermes' ? CronJob.fromJson(j.toJson()..['agent'] = 'neovarch') : j).toList();
-    _saveProfiles();
-    _saveSessions();
-    _saveMemory();
-    saveTasks();
-    saveJobs();
-  }
 
   // ------------------------------------------------------------ profiles --
   void _saveProfiles() => kv.put('profiles', profiles.map((p) => p.toJson()).toList());

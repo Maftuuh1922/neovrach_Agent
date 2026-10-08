@@ -137,7 +137,7 @@ class ActiveSession {
   const ActiveSession({required this.id, required this.title, required this.status, required this.model, required this.preview});
 }
 
-class RemoteGateway {
+class RemoteGateway implements VaultApi {
   RemoteGateway({
     required this.baseUrl,
     required this.token,
@@ -195,6 +195,8 @@ class RemoteGateway {
   // realtime cursor (core v1.4: every event carries `seq`; ping returns boot_id)
   int lastSeq = 0;
   String? bootId;
+  final _seen = <int>{}; // LinkedHashSet: oldest first
+  bool _rebooted = false;
 
   /// Runtime session ids this phone attached to (re-attached on reconnect).
   final Set<String> attached = {};
@@ -238,6 +240,9 @@ class RemoteGateway {
   Future<void> connect() async {
     _closed = false;
     _retry?.cancel();
+    // Replay cursor fixed before the socket opens: live events that arrive
+    // before the replay answer must not move it past the gap.
+    final since = lastSeq;
     _setStatus(_attempt == 0 && !_everConnected ? RemoteStatus.connecting : RemoteStatus.reconnecting);
     try {
       Object? firstError;
@@ -263,7 +268,7 @@ class RemoteGateway {
       }
       if (!ok) throw firstError ?? const RpcError(0, 'tidak ada alamat PC yang menjawab');
       await client.call('client.capabilities', {'server_requests': true}, const Duration(seconds: 15));
-      await _replayMissed();
+      await _replayMissed(since);
       _attempt = 0;
       lastError = null;
       _everConnected = true;
@@ -284,16 +289,22 @@ class RemoteGateway {
   /// After a reconnect: ask the core for the events this phone missed
   /// (`events.replay`, which also re-attaches the open sessions). Cores
   /// without it, or a gap it no longer holds, set [resyncNeeded].
-  Future<void> _replayMissed() async {
+  Future<void> _replayMissed(int since) async {
     resyncNeeded = false;
     if (!_everConnected) return;
-    if (bootId == null || lastSeq <= 0) {
+    if (_rebooted) {
+      _rebooted = false;
+      resyncNeeded = true;
+      _emit(const GatewayEventFrame('resync.required', null, {'reason': 'restart'}));
+      return;
+    }
+    if (bootId == null || since <= 0) {
       resyncNeeded = true;
       return;
     }
     try {
       final r = await client.call('events.replay',
-          {..._p, 'since': lastSeq, 'boot_id': bootId, 'session_ids': attached.toList()}, const Duration(seconds: 10));
+          {..._p, 'since': since, 'boot_id': bootId, 'session_ids': attached.toList()}, const Duration(seconds: 10));
       if (r is! Map || r['resync'] == true) {
         resyncNeeded = true;
         if (r is Map && r['boot_id'] != null) bootId = '${r['boot_id']}';
@@ -339,6 +350,7 @@ class RemoteGateway {
         if (b != null) {
           if (bootId != null && bootId != '$b') {
             lastSeq = 0;
+            _seen.clear();
             resyncNeeded = true;
             bootId = '$b';
             _emit(const GatewayEventFrame('resync.required', null, {'reason': 'restart'}));
@@ -402,11 +414,19 @@ class RemoteGateway {
   void _onFrame(GatewayEventFrame f) {
     final seq = f.seq;
     if (seq != null) {
-      if (f.replayed && seq <= lastSeq) return; // already seen
+      if (_seen.contains(seq)) return; // replayed and also received live
+      _seen.add(seq);
+      if (_seen.length > 1024) _seen.remove(_seen.first);
       if (seq > lastSeq) lastSeq = seq;
     }
     if (f.payload['boot_id'] != null && (f.type == 'gateway.ready' || f.type == 'hello')) {
-      bootId = '${f.payload['boot_id']}';
+      final nb = '${f.payload['boot_id']}';
+      if (bootId != null && bootId != nb) {
+        _rebooted = true; // PC restarted while we were away: nothing to replay
+        lastSeq = 0;
+        _seen.clear();
+      }
+      bootId = nb;
       if (f.payload['seq'] is num && lastSeq == 0) lastSeq = (f.payload['seq'] as num).toInt();
     }
     switch (f.type) {
@@ -640,13 +660,17 @@ class RemoteGateway {
   }
 
   // Obsidian vault (read-only on the phone).
+  @override
   Future<VaultTree> vaultTree() async => VaultTree.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/obsidian/tree') as Map));
 
+  @override
   Future<VaultNote> vaultNote(String path) async =>
       VaultNote.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/obsidian/note', query: {'path': path}) as Map));
 
+  @override
   Future<VaultGraph> vaultGraph() async => VaultGraph.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/obsidian/graph') as Map));
 
+  @override
   Future<List<VaultHit>> vaultSearch(String q) async {
     final j = await _json('GET', '/api/obsidian/search', query: {'q': q});
     return [for (final h in ((j is Map ? j['results'] : null) as List? ?? const []).whereType<Map>()) VaultHit.fromJson(Map<String, dynamic>.from(h))];

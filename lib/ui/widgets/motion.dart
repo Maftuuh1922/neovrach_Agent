@@ -1,4 +1,4 @@
-// Motion primitives modelled on Hermes Desktop's UI timings: short
+// Motion primitives modelled on the desktop app's UI timings: short
 // (160–280 ms) ease-out-cubic entrances, a shimmering "thinking" label, a
 // blinking stream caret, bouncing typing dots. Everything checks the system
 // "remove animations" setting and renders still frames when it is on.
@@ -213,8 +213,8 @@ class _TabFadeState extends State<TabFade> with SingleTickerProviderStateMixin {
 
 /// Route transition: fade through with a short horizontal glide (Desktop
 /// panel slide). Instant when animations are disabled.
-class HermesPageTransitionsBuilder extends PageTransitionsBuilder {
-  const HermesPageTransitionsBuilder();
+class NvPageTransitionsBuilder extends PageTransitionsBuilder {
+  const NvPageTransitionsBuilder();
   @override
   Widget buildTransitions<T>(PageRoute<T> route, BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
     if (reduceMotion(context)) return child;

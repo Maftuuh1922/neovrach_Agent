@@ -15,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/main.dart' as app;
 import 'package:neovarch_agent/models/models.dart';
+import 'package:neovarch_agent/remote/appearance.dart';
+import 'package:neovarch_agent/remote/office_models.dart';
 import 'package:neovarch_agent/remote/remote_controller.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart';
 import 'package:neovarch_agent/remote/remote_transcript.dart';
@@ -101,6 +103,33 @@ RemoteController _controller(SharedPreferences prefs, {bool connected = true, bo
     ),
     ChatMsg(id: 'u2', role: 'user', content: 'Oke. Hapus duplikatnya yang lebih lama.', ts: ts - 60000),
   ]);
+  final sec = _now.millisecondsSinceEpoch / 1000;
+  r.office = OfficeSnapshot.fromJson({
+    'host': 'pc-kantor',
+    'core_version': '1.4.0',
+    'agents': [
+      {
+        'id': 'session:s1', 'kind': 'session', 'session_id': 's1', 'name': 'Raka', 'role': 'Agen remote · HP', 'status': 'working',
+        'current_task': 'Rapikan folder Unduhan per jenis berkas', 'current_tool': 'move_files: ~/Downloads → per jenis',
+        'last_activity': sec - 20, 'last_activity_text': 'menjalankan move_files', 'message_count': 12,
+      },
+      {
+        'id': 'session:s2', 'kind': 'session', 'session_id': 's2', 'name': 'Sari', 'role': 'Agen utama · desktop', 'status': 'waiting-approval',
+        'current_task': 'Hapus duplikat lama', 'last_activity': sec - 60,
+        'pending_approval': {'request_id': 'req1', 'command': 'rm laporan_q3 (1).pdf'},
+      },
+      {'id': 'kanban:writer', 'kind': 'kanban', 'name': 'writer', 'role': 'Pelaksana tugas Kanban', 'status': 'idle', 'current_task': 'Draf laporan mingguan', 'last_activity': sec - 3600},
+    ],
+    'counts': {'total': 3, 'working': 1, 'waiting-approval': 1, 'idle': 1},
+    'kanban': {'todo': 1, 'ready': 1, 'running': 2, 'blocked': 0, 'done': 2},
+    'feed': [
+      {'id': 9, 'ts': sec - 20, 'kind': 'tool', 'agent': 'Raka', 'session_id': 's1', 'text': 'menjalankan move_files: ~/Downloads'},
+      {'id': 8, 'ts': sec - 60, 'kind': 'approval', 'agent': 'Sari', 'session_id': 's2', 'text': 'menunggu persetujuan: rm laporan_q3 (1).pdf'},
+      {'id': 7, 'ts': sec - 300, 'kind': 'task', 'agent': 'writer', 'text': 'memindahkan “Draf laporan mingguan”: ready → review'},
+      {'id': 6, 'ts': sec - 900, 'kind': 'message', 'agent': 'Raka', 'session_id': 's1', 'text': 'membalas: Selesai, 211 berkas dipindah.'},
+    ],
+    'vault': {'configured': true, 'connected': true, 'note_count': 42},
+  });
   r.debugApprovals = [
     RemoteApproval(
       sessionId: 'rt1',
@@ -126,10 +155,11 @@ Future<void> _shot(WidgetTester tester, String name) async {
   await expectLater(find.byKey(const ValueKey('shot')), matchesGoldenFile('$dir/$name.png'));
 }
 
-Widget _host(SettingsController settings, RemoteController remote, Widget home) => ProviderScope(
+Widget _host(SettingsController settings, RemoteController remote, Widget home, AppearanceController look) => ProviderScope(
       overrides: [
         settingsProvider.overrideWith((ref) => settings),
         remoteProvider.overrideWith((ref) => remote),
+        appearanceProvider.overrideWith((ref) => look),
       ],
       child: RepaintBoundary(
         key: const ValueKey('shot'),
@@ -137,7 +167,7 @@ Widget _host(SettingsController settings, RemoteController remote, Widget home) 
           debugShowCheckedModeBanner: false,
           theme: neovarchMobileTheme,
           darkTheme: neovarchMobileTheme,
-          themeMode: ThemeMode.dark,
+          themeMode: NV.palette.dark ? ThemeMode.dark : ThemeMode.light,
           home: home,
         ),
       ),
@@ -186,7 +216,7 @@ void main() {
     tester.view.padding = const FakeViewPadding(top: 141, bottom: 102);
     tester.view.viewPadding = const FakeViewPadding(top: 141, bottom: 102);
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(_host(settings, remote ?? _controller(prefs), home()));
+    await tester.pumpWidget(_host(settings, remote ?? _controller(prefs), home(), AppearanceController(prefs)));
     debugPrint('[$name] pumped');
     await _precache(tester);
     debugPrint('[$name] precached');
@@ -243,24 +273,24 @@ void main() {
   });
 
   testWidgets('05 tasks', (tester) async {
-    app.previewTab = 1;
+    app.previewTab = 2;
     await run(tester, '05_tasks', () => const RemoteShell());
   });
 
   testWidgets('06 task sheet', (tester) async {
-    app.previewTab = 1;
+    app.previewTab = 2;
     await run(tester, '06_task_sheet', () => const RemoteShell(), act: () async {
       await tester.tap(find.text('Rapikan folder unduhan').first);
     });
   });
 
   testWidgets('07 approvals', (tester) async {
-    app.previewTab = 2;
+    app.previewTab = 3;
     await run(tester, '07_approvals', () => const RemoteShell());
   });
 
   testWidgets('08 pc', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 4;
     await run(tester, '08_pc', () => const RemoteShell());
   });
 
@@ -275,7 +305,7 @@ void main() {
   });
 
   testWidgets('10 confirm dialog', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 4;
     await run(tester, '10_dialog', () => const RemoteShell(), act: () async {
       await tester.tap(find.byTooltip('Lupakan').first);
     });

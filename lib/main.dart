@@ -10,7 +10,7 @@ import 'models/models.dart';
 import 'state/app_controller.dart';
 import 'state/settings_controller.dart';
 import 'theme/app_theme.dart';
-import 'theme/hermes_themes.dart';
+import 'theme/nv_themes.dart';
 import 'ui/app_shell.dart';
 import 'ui/screens/intro_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
@@ -80,7 +80,7 @@ void _applyPreviewParams(SettingsController s) {
   previewTab = int.tryParse(q['tab'] ?? '') ?? 0;
   final llm = q['llm'];
   if (llm != null && llm.startsWith('http')) {
-    final p = ProviderConfig(id: 'preview', label: 'Pratinjau lokal', baseUrl: llm, model: q['model'] ?? 'hermes-4-mock');
+    final p = ProviderConfig(id: 'preview', label: 'Pratinjau lokal', baseUrl: llm, model: q['model'] ?? 'neovarch-mock');
     s.providers = [p, ...s.providers.where((x) => x.id != 'preview')];
     s.activeProviderId = 'preview';
   }

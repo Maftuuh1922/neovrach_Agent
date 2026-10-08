@@ -1,4 +1,4 @@
-// LocalBackend — the Mandiri (on-device) answer to every `/api/hermes/*`
+// LocalBackend — the Mandiri (on-device) answer to every `/api/neovarch/*`
 // route, so the office UI is identical whichever backend is connected.
 //
 // Behaviour mirrors the server where it matters:
@@ -114,7 +114,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
     );
     store.tasks.insert(0, t);
     store.saveTasks();
-    store.log(t.id, '\$ hermes kanban create "${t.title}"${t.assignee != null ? ' --assignee ${t.assignee}' : ''}');
+    store.log(t.id, '\$ neovarch kanban create "${t.title}"${t.assignee != null ? ' --assignee ${t.assignee}' : ''}');
     Future.microtask(_pump);
     return t.toJson();
   }
@@ -512,7 +512,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
     final q = query ?? const <String, String>{};
     method = method.toUpperCase();
 
-    if (path == '/api/hermes/tasks') {
+    if (path == '/api/neovarch/tasks') {
       if (method == 'GET') {
         return ApiResult.success({'tasks': store.tasks.map((t) => t.toJson()).toList(), 'agents': agents().map((a) => a.toJson()).toList()});
       }
@@ -551,7 +551,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       return ApiResult.success({'success': true, 'task': r}, 201);
     }
 
-    final taskHit = RegExp(r'^/api/hermes/tasks/([^/]+)$').firstMatch(path);
+    final taskHit = RegExp(r'^/api/neovarch/tasks/([^/]+)$').firstMatch(path);
     if (taskHit != null) {
       final id = Uri.decodeComponent(taskHit.group(1)!);
       final t = store.task(id);
@@ -596,7 +596,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       return ApiResult.fail(400, 'aksi tidak dikenal');
     }
 
-    if (path == '/api/hermes/agents') {
+    if (path == '/api/neovarch/agents') {
       if (method == 'GET') {
         return ApiResult.success({
           'available': store.profiles
@@ -650,7 +650,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       return ApiResult.fail(400, 'aksi tidak dikenal');
     }
 
-    if (path == '/api/hermes/cron') {
+    if (path == '/api/neovarch/cron') {
       if (method == 'GET') {
         final id = q['id'];
         if (id != null) {
@@ -705,7 +705,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       return ApiResult.success({'success': true, 'action': action, 'id': id, 'job': store.jobs.where((x) => x.id == id).firstOrNull?.toJson()});
     }
 
-    if (path == '/api/hermes/cron/actions') {
+    if (path == '/api/neovarch/cron/actions') {
       final j = store.jobs.where((x) => x.id == q['from']).firstOrNull;
       if (j == null) return ApiResult.fail(404, 'job tidak ditemukan');
       return ApiResult.success({
@@ -723,7 +723,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       });
     }
 
-    if (path == '/api/hermes/meeting') {
+    if (path == '/api/neovarch/meeting') {
       if (method == 'POST') {
         final topic = '${b['topic'] ?? ''}'.trim();
         if (topic.isEmpty) return ApiResult.fail(400, 'topik wajib diisi');
@@ -760,7 +760,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       });
     }
 
-    if (path == '/api/hermes/meeting/actions') {
+    if (path == '/api/neovarch/meeting/actions') {
       final from = q['from'] ?? '';
       final live = _live.where((m) => m.id == from).firstOrNull;
       String? minutes = live?.minutes;
@@ -777,7 +777,7 @@ class LocalBackend extends OfficeBackend implements BoardHooks, OfficeHooks {
       });
     }
 
-    if (path == '/api/hermes/chat') {
+    if (path == '/api/neovarch/chat') {
       // Mandiri mode chats through sessions (ChatScreen); this keeps the
       // route answering so nothing that calls it breaks.
       final names = store.profiles.map((p) => p.name).toList();

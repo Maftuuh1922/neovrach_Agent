@@ -47,7 +47,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   }
 
   Future<void> _load() async {
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/tasks/${Uri.encodeComponent(widget.taskId)}');
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/tasks/${Uri.encodeComponent(widget.taskId)}');
     if (!mounted) return;
     setState(() {
       loading = false;
@@ -167,7 +167,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           ),
         ],
         SectionLabel('Riwayat run (${runs.length})', padding: const EdgeInsets.fromLTRB(0, 18, 0, 6)),
-        if (loading) const Padding(padding: EdgeInsets.all(8), child: HermesLoader(size: 18)),
+        if (loading) const Padding(padding: EdgeInsets.all(8), child: NvLoader(size: 18)),
         if (err != null) ErrorBanner(err!, onRetry: _load, dense: true),
         if (!loading && runs.isEmpty) Text('belum ada run', style: context.tt.bodySmall),
         for (final r in runs.reversed) RunTile(run: r),

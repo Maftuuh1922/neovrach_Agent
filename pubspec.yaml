@@ -75,8 +75,7 @@ flutter:
     - assets/intro/
     - assets/art/
 
-  # Bundled OFL look-alikes of the Hermes Agent site fonts (the site's own
-  # Rules Gothic / Aeonik Fono are commercial and are NOT shipped).
+  # Bundled OFL fonts (licences next to the files).
   fonts:
     # Neovarch Remote design system (OFL, licences next to the files).
     - family: InstrumentSerif

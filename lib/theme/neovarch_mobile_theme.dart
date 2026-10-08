@@ -244,7 +244,7 @@ ThemeData buildNeovarchMobileTheme() {
 
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: NV.palette.brightness,
     colorScheme: scheme,
     fontFamily: NV.sans,
     textTheme: text,
@@ -267,12 +267,12 @@ ThemeData buildNeovarchMobileTheme() {
     iconTheme: IconThemeData(color: NV.text, size: 22),
     primaryIconTheme: IconThemeData(color: NV.text),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
-      TargetPlatform.android: HermesPageTransitionsBuilder(),
-      TargetPlatform.iOS: HermesPageTransitionsBuilder(),
-      TargetPlatform.linux: HermesPageTransitionsBuilder(),
-      TargetPlatform.macOS: HermesPageTransitionsBuilder(),
-      TargetPlatform.windows: HermesPageTransitionsBuilder(),
-      TargetPlatform.fuchsia: HermesPageTransitionsBuilder(),
+      TargetPlatform.android: NvPageTransitionsBuilder(),
+      TargetPlatform.iOS: NvPageTransitionsBuilder(),
+      TargetPlatform.linux: NvPageTransitionsBuilder(),
+      TargetPlatform.macOS: NvPageTransitionsBuilder(),
+      TargetPlatform.windows: NvPageTransitionsBuilder(),
+      TargetPlatform.fuchsia: NvPageTransitionsBuilder(),
     }),
     dividerTheme: DividerThemeData(color: NV.border, thickness: 1, space: 1),
     appBarTheme: AppBarTheme(
@@ -593,7 +593,7 @@ ThemeData buildNeovarchMobileTheme() {
       shape: WidgetStatePropertyAll(ctlShapeLined),
     ),
     extensions: [
-      HermesColors(
+      NvColors(
         card: NV.surface,
         muted: NV.raised,
         mutedForeground: NV.muted,

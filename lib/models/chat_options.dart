@@ -145,7 +145,7 @@ bool modelSupportsReasoning(String model) {
   final m = model.toLowerCase();
   if (m.isEmpty) return false;
   const hints = [
-    'o1', 'o3', 'o4', 'gpt-5', 'gpt-oss', 'r1', 'reason', 'think', 'hermes-4', 'hermes4', 'qwen3', 'qwq',
+    'o1', 'o3', 'o4', 'gpt-5', 'gpt-oss', 'r1', 'reason', 'think', 'qwen3', 'qwq',
     'claude-3.7', 'claude-3-7', 'sonnet-4', 'opus-4', 'claude-4', 'gemini-2.5', 'gemini-3', 'grok-3-mini', 'grok-4',
     'deepseek', 'magistral', 'glm-4.5', 'glm-4.6', 'kimi-k2', 'minimax-m', 'phi-4-reasoning', 'mock',
   ];
@@ -181,16 +181,10 @@ Map<String, dynamic> reasoningBody(ReasoningWire wire, String effort, int? budge
       // is the native switch (ignored where unknown).
       return on ? {'reasoning_effort': e, 'think': true} : {'think': false};
     case ReasoningWire.nous:
-      // Hermes 4 thinking is toggled through the system prompt (see runtime);
-      // the Portal is OpenAI-compatible, so pass the generic field too.
+      // The Portal is OpenAI-compatible: pass the generic field.
       return on ? {'reasoning_effort': e} : {};
     case ReasoningWire.generic:
       return on ? {'reasoning_effort': e} : {};
   }
 }
 
-/// Hermes 4's documented "deep thinking" system prompt switch.
-const hermesThinkingPrompt =
-    'You are a deep thinking AI, you may use extremely long chains of thought to deeply consider the problem and deliberate '
-    'with yourself via systematic reasoning processes to help come to a correct solution prior to answering. You should '
-    'enclose your thoughts and internal monologue inside <think> </think> tags, and then provide your solution or response to the problem.';
