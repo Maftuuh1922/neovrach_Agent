@@ -4,14 +4,14 @@
 // pairing QR; it can also be typed by hand. Pure Dart.
 //
 // Accepted forms (see docs/remote-protocol.md):
-//   neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9119&token=…&name=…&profile=…
-//   {"url":"http://192.168.1.5:9119","token":"…","name":"PC Kantor"}
-//   http://192.168.1.5:9119/?token=…        (a dashboard URL with ?token=)
-//   ws://192.168.1.5:9119/api/ws?token=…    (the WebSocket URL itself)
-//   192.168.1.5:9119                        (manual: token typed separately)
+//   neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9319&token=…&name=…&profile=…
+//   {"url":"http://192.168.1.5:9319","token":"…","name":"PC Kantor"}
+//   http://192.168.1.5:9319/?token=…        (a dashboard URL with ?token=)
+//   ws://192.168.1.5:9319/api/ws?token=…    (the WebSocket URL itself)
+//   192.168.1.5:9319                        (manual: token typed separately)
 import 'dart:convert';
 
-const int defaultGatewayPort = 9119;
+const int defaultGatewayPort = 9319;
 
 class GatewayPairing {
   final String url; // normalized http(s)://host:port[/base]
@@ -74,7 +74,7 @@ class GatewayPairing {
   }
 }
 
-/// `192.168.1.5` → `http://192.168.1.5:9119`; `ws(s)://…/api/ws?token=x` →
+/// `192.168.1.5` → `http://192.168.1.5:9319`; `ws(s)://…/api/ws?token=x` →
 /// `http(s)://…`; keeps a base path (reverse proxies), drops query/fragment.
 String? normalizeGatewayUrl(String input) {
   var s = input.trim();

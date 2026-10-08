@@ -46,6 +46,9 @@ import { hiddenWindowsChildOptions } from './windows-child-options'
 
 const IS_WINDOWS = process.platform === 'win32'
 
+/** GitHub repo whose scripts/install.{sh,ps1} installs the Neovarch core. */
+export const NEOVARCH_INSTALLER_REPO = 'Maftuuh1922/neovrach_Agent'
+
 const STAMP_COMMIT_RE = /^[0-9a-f]{7,40}$/i
 const FALLBACK_COMMIT_RE = /^0{7,40}$/
 const FALLBACK_BRANCH = 'main'
@@ -99,7 +102,7 @@ function readExistingPinnedCommit(activeRoot: string | null | undefined): string
   }
 
   try {
-    const raw = fs.readFileSync(path.join(activeRoot, '.hermes-bootstrap-complete'), 'utf8')
+    const raw = fs.readFileSync(path.join(activeRoot, '.neovarch-bootstrap-complete'), 'utf8')
     const parsed = JSON.parse(raw)
 
     return parsed && isPinnedCommit(parsed.pinnedCommit) ? parsed.pinnedCommit : null
@@ -229,7 +232,8 @@ function downloadInstallScript(ref, destPath) {
   // install, the branch for an existing checkout or a non-git fallback stamp
   // (never the all-zero placeholder, which is not a real GitHub commit).
   const scriptName = installScriptName()
-  const url = `https://raw.githubusercontent.com/NousResearch/hermes-agent/${ref}/scripts/${scriptName}`
+  // Neovarch: the core installer lives in this repo (scripts/), never Hermes Agent's.
+  const url = `https://raw.githubusercontent.com/${NEOVARCH_INSTALLER_REPO}/${ref}/scripts/${scriptName}`
 
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true })
@@ -430,7 +434,8 @@ function cleanInstallerLogLine(raw: string): string {
 // when it is new enough), so store dirs already on PATH stay ahead of the
 // login-shell entries shell-path.ts merged in front of them.
 function installerEnv(hermesHome) {
-  const env = { ...process.env, HERMES_HOME: hermesHome || process.env.HERMES_HOME || '' }
+  const home = hermesHome || process.env.NEOVARCH_HOME || ''
+  const env = { ...process.env, HERMES_HOME: home, NEOVARCH_HOME: home }
   const key = pathEnvKey(env)
 
   env[key] = storeFirstPath(env[key] || '', { currentEnv: env })
@@ -659,7 +664,7 @@ function buildPinArgs(installStamp, { pinCommit = true } = {}) {
 }
 
 function buildPosixPinArgs({ installStamp, activeRoot, hermesHome, pinCommit = true }) {
-  const args = ['--dir', activeRoot, '--hermes-home', hermesHome]
+  const args = ['--dir', activeRoot, '--neovarch-home', hermesHome]
 
   if (installStamp && installStamp.branch) {
     args.push('--branch', installStamp.branch)

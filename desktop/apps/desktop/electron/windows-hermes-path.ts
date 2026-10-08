@@ -142,7 +142,7 @@ export async function resolveVenvHermesCommand(
 
   const resolved = resolvePath(String(command))
 
-  if (!/^hermes(?:\.exe)?$/i.test(basename(resolved))) {
+  if (!/^neovarch(?:\.exe)?$/i.test(basename(resolved))) {
     return null
   }
 

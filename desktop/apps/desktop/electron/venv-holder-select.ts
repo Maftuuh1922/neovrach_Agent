@@ -65,7 +65,7 @@ export function isExternalVenvHolder(
 
   const exeName = exePath.slice(exePath.lastIndexOf('\\') + 1).toLowerCase()
 
-  if (exeName === 'hermes.exe') {
+  if (exeName === 'neovarch.exe') {
     return true
   }
 

@@ -20,7 +20,7 @@ class SettingsController extends ChangeNotifier {
   // connection
   ConnectionMode mode = ConnectionMode.local;
   String serverUrl = 'http://10.0.2.2:3000';
-  String gatewayUrl = 'http://10.0.2.2:9119';
+  String gatewayUrl = 'http://10.0.2.2:9319';
   String gatewayToken = '';
   Map<String, String> gatewayHeaders = {};
   String gatewayProfile = '';

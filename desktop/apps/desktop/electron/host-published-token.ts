@@ -54,7 +54,7 @@ export function hostRendezvousDirectory(env: HostRendezvousEnv): string {
   const stateHome =
     stateHomeEnv && path.isAbsolute(stateHomeEnv) ? stateHomeEnv : path.join(env.home, '.local', 'state')
 
-  return path.join(stateHome, 'hermes', 'gateway-locks')
+  return path.join(stateHome, 'neovarch', 'gateway-locks')
 }
 
 function tokenFingerprint(token: string): string {

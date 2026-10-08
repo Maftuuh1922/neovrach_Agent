@@ -27,12 +27,12 @@ import { hiddenWindowsChildOptions } from './windows-child-options'
 export function resolveInstallationLauncher(
   updateRoot: string,
   isWindows: boolean = process.platform === 'win32',
-  hermesHome: string = process.env.HERMES_HOME ?? ''
+  hermesHome: string = process.env.NEOVARCH_HOME ?? ''
 ): string | null {
-  const names: string[] = isWindows ? ['hermes.exe', 'hermes.cmd'] : ['hermes']
+  const names: string[] = isWindows ? ['neovarch.exe', 'neovarch.cmd'] : ['neovarch']
 
   for (const name of names) {
-    const candidate: string = path.join(updateRoot, '.hermes', 'bin', name)
+    const candidate: string = path.join(updateRoot, '.neovarch', 'bin', name)
 
     if (stagedFileExists(candidate)) {
       return candidate
@@ -69,7 +69,7 @@ const CMD_UNSAFE_PATH: RegExp = /["%&|<>^\r\n]/
 
 /** Published user-bin launchers, at fixed locations: a GUI launch's PATH may omit them. */
 function userBinLaunchers(isWindows: boolean, hermesHome: string, extraDirs: string[] = []): string[] {
-  const names: string[] = isWindows ? ['hermes.exe', 'hermes.cmd'] : ['hermes']
+  const names: string[] = isWindows ? ['neovarch.exe', 'neovarch.cmd'] : ['neovarch']
   const defaultHome: string = platformDefaultHermesHome(os.homedir(), process.env, isWindows ? 'win32' : 'linux')
 
   const dirs: string[] = isWindows
@@ -89,7 +89,7 @@ function userBinLaunchers(isWindows: boolean, hermesHome: string, extraDirs: str
  */
 export function userLauncherInstallRoot(
   isWindows: boolean = process.platform === 'win32',
-  hermesHome: string = process.env.HERMES_HOME ?? ''
+  hermesHome: string = process.env.NEOVARCH_HOME ?? ''
 ): { launcher: string; root: string } | null {
   for (const launcher of userBinLaunchers(isWindows, hermesHome)) {
     const root: string | null = launcherInstallDirectory(launcher)

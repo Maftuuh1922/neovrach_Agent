@@ -730,9 +730,9 @@ import { readWslWindowsClipboardImage } from './wsl-clipboard-image'
 import { resolvePickerDefaultPath, setActiveGatewayProfile, setWslBridgeProfileState } from './wsl-path-bridge'
 
 const IDENTITY_APP_NAME: string | null = applyDesktopIdentity(app)
-const USER_DATA_OVERRIDE: string | undefined = process.env.HERMES_DESKTOP_USER_DATA_DIR
+const USER_DATA_OVERRIDE: string | undefined = process.env.NEOVARCH_DESKTOP_USER_DATA_DIR
 
-if (USER_DATA_OVERRIDE || process.env.HERMES_DATA_DIR_SUFFIX) {
+if (USER_DATA_OVERRIDE || process.env.NEOVARCH_DATA_DIR_SUFFIX) {
   const resolvedUserData: string = resolveDesktopUserData(app.getPath('userData'))
   fs.mkdirSync(resolvedUserData, { recursive: true })
   app.setPath('userData', resolvedUserData)
@@ -1236,7 +1236,10 @@ ipcMain.handle('hermes:embed-host:origin', () => embedHostOrigin())
 // once the work settles.
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 
-const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
+// Neovarch: the repository root holds scripts/install.{sh,ps1}; the core
+// (the vendored Python agent, `hermes_cli` package) lives in core/.
+const NEOVARCH_REPO_ROOT = path.resolve(APP_ROOT, '../../..')
+const SOURCE_REPO_ROOT = path.join(NEOVARCH_REPO_ROOT, 'core')
 
 // Runtime identity comes only from the baked artifact stamp. Dev runs have none.
 if (INSTALL_STAMP) {
@@ -1292,8 +1295,12 @@ if (process.env.HERMES_DESKTOP_TMPDIR) {
 const HERMES_HOME: string = resolveDesktopHermesHome({
   home: app.getPath('home'),
   directoryExists,
-  readWindowsHome: (): string | null => readWindowsUserEnvVar('HERMES_HOME')
+  readWindowsHome: (): string | null => readWindowsUserEnvVar('NEOVARCH_HOME')
 })
+// Children read HERMES_HOME internally; it is always the Neovarch home (entry.ts
+// pinned it already; repeat so a user-data override resolves identically).
+process.env.HERMES_HOME = HERMES_HOME
+process.env.NEOVARCH_HOME = HERMES_HOME
 
 // #77311: `desktop.electron_flags` and the renderer heap ceiling
 // (`desktop.renderer_max_old_space_mb`) used to reach Chromium only through
@@ -1342,7 +1349,7 @@ let desktopSshPathOverride = ''
 // ACTIVE_HERMES_ROOT — the canonical mutable Hermes install. Same path
 // install.ps1 / install.sh use, so a desktop-only user and a CLI-only user end
 // up with identical layouts and can share one install.
-const ACTIVE_HERMES_ROOT = path.join(HERMES_HOME, 'hermes-agent')
+const ACTIVE_HERMES_ROOT = path.join(HERMES_HOME, 'neovarch-agent')
 setNoConsoleGitRoots([!IS_PACKAGED ? SOURCE_REPO_ROOT : null, ACTIVE_HERMES_ROOT])
 // VENV_ROOT — venv lives inside the repo, exactly like install.ps1 does it.
 const VENV_ROOT = path.join(ACTIVE_HERMES_ROOT, 'venv')
@@ -1357,7 +1364,7 @@ const VENV_ROOT = path.join(ACTIVE_HERMES_ROOT, 'venv')
 // We deliberately put the marker INSIDE ACTIVE_HERMES_ROOT (not alongside)
 // so that deleting the checkout to start fresh also deletes the marker --
 // avoids the confusing "marker exists but checkout is gone" state.
-const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_HERMES_ROOT, '.hermes-bootstrap-complete')
+const BOOTSTRAP_COMPLETE_MARKER = path.join(ACTIVE_HERMES_ROOT, '.neovarch-bootstrap-complete')
 const BOOTSTRAP_MARKER_SCHEMA_VERSION = 1
 
 const DESKTOP_CONNECTION_CONFIG_PATH = path.join(app.getPath('userData'), 'connection.json')
@@ -4080,7 +4087,7 @@ function resolveUpdaterBinary() {
 function venvHermesShimPath(updateRoot) {
   const venvDir = resolveVenvDir(updateRoot)
 
-  return IS_WINDOWS ? path.join(venvDir, 'Scripts', 'hermes.exe') : path.join(venvDir, 'bin', 'hermes')
+  return IS_WINDOWS ? path.join(venvDir, 'Scripts', 'neovarch.exe') : path.join(venvDir, 'bin', 'neovarch')
 }
 
 // Best-effort lock probe mirroring the Rust updater's is_locked(): a running
@@ -5540,7 +5547,7 @@ async function ensureRuntime(
     const bootstrapResult = await runBootstrap({
       installStamp: backend.installStamp,
       activeRoot: backend.activeRoot,
-      sourceRepoRoot: SOURCE_REPO_ROOT,
+      sourceRepoRoot: IS_PACKAGED ? null : NEOVARCH_REPO_ROOT,
       hermesHome: HERMES_HOME,
       logRoot: path.join(HERMES_HOME, 'logs'),
       abortSignal: bootstrapAbortController.signal,
@@ -9240,7 +9247,7 @@ function isHermesProcess(pid) {
   try {
     const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8')
 
-    return cmdline.includes('hermes')
+    return cmdline.includes('neovarch')
   } catch {
     // /proc not available (macOS) — fall back to ps. Use -o args= to inspect
     // the full command line, not just the process name.  -o comm= would return
@@ -9249,7 +9256,7 @@ function isHermesProcess(pid) {
       const { execSync } = require('child_process')
       const out = execSync(`ps -p ${pid} -o args=`, { encoding: 'utf8', timeout: 2000 })
 
-      return out.includes('hermes')
+      return out.includes('neovarch')
     } catch {
       return false
     }
@@ -19190,9 +19197,9 @@ ipcMain.handle('hermes:vscode-theme:search', async (_event, query) => searchMark
 // running app. Three delivery paths: macOS 'open-url',
 // Win/Linux running-app 'second-instance' (argv), Win/Linux cold-start argv.
 // ---------------------------------------------------------------------------
-const HERMES_PROTOCOL = DEV_SERVER ? 'hermes-dev' : 'hermes'
+const HERMES_PROTOCOL = DEV_SERVER ? 'neovarch-dev' : 'neovarch'
 /** Schemes accepted when parsing inbound URLs (dev accepts both). */
-const DEEPLINK_SCHEMES = DEV_SERVER ? ['hermes-dev', 'hermes'] : ['hermes']
+const DEEPLINK_SCHEMES = DEV_SERVER ? ['neovarch-dev', 'neovarch'] : ['neovarch']
 let _pendingDeepLink = null
 let _rendererReadyForDeepLink = false
 // Set by sendOpenUpdatesRequested() when the renderer cannot hear it yet.

@@ -12,8 +12,21 @@ const REPO = 'Maftuuh1922/neovrach_Agent';
 const RELEASES_URL = `https://github.com/${REPO}/releases`;
 const PKG_VERSION = require('../package.json').version;
 
-const HOME_DIR = path.join(os.homedir(), '.neovarch');
+// Neovarch's own data home (same rule as the core and the desktop): NEOVARCH_HOME,
+// else ~/.neovarch (%LOCALAPPDATA%\neovarch on Windows). Never ~/.hermes.
+function neovarchHome() {
+  if (process.env.NEOVARCH_HOME) return path.resolve(process.env.NEOVARCH_HOME);
+  if (process.platform === 'win32') {
+    return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'neovarch');
+  }
+  return path.join(os.homedir(), '.neovarch');
+}
+const HOME_DIR = neovarchHome();
 const APP_DIR = path.join(HOME_DIR, 'app');
+const CORE_DIR = path.join(HOME_DIR, 'neovarch-agent');
+const CORE_CLI = process.platform === 'win32'
+  ? path.join(CORE_DIR, 'venv', 'Scripts', 'neovarch.exe')
+  : path.join(CORE_DIR, 'venv', 'bin', 'neovarch');
 const VERSION_FILE = path.join(APP_DIR, '.neovarch-version');
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
@@ -176,17 +189,71 @@ async function installApp(target, { force = false } = {}) {
   return true;
 }
 
-function uninstallApp() {
-  if (fs.existsSync(APP_DIR)) {
-    fs.rmSync(APP_DIR, { recursive: true, force: true });
-    log.ok(`removed ${APP_DIR}`);
-  } else {
-    console.log('Neovarch Agent app files are not installed.');
+// ---- core ------------------------------------------------------------------
+
+function coreInstalled() {
+  return fs.existsSync(CORE_CLI);
+}
+
+/** Run scripts/install.sh --core-only (install.ps1 -CoreOnly on Windows) from this repo. */
+async function installCore() {
+  const win = process.platform === 'win32';
+  const script = win ? 'install.ps1' : 'install.sh';
+  const refs = [...new Set([process.env.NEOVARCH_REF, wantedTag(), 'main'].filter(Boolean))];
+  fs.mkdirSync(HOME_DIR, { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(HOME_DIR, '.tmp-'));
+  try {
+    const dest = path.join(tmp, script);
+    let ref = null;
+    for (const candidate of refs) {
+      try {
+        await download(`https://raw.githubusercontent.com/${REPO}/${candidate}/scripts/${script}`, dest);
+        ref = candidate;
+        break;
+      } catch {
+        // this tag has no core installer yet; try the next ref
+      }
+    }
+    if (!ref) throw new Error(`could not download scripts/${script}`);
+    log.step(`Installing the Neovarch core (${ref}) into ${CORE_DIR}`);
+    // The core installer ignores HERMES_* by itself; drop them here too.
+    const env = { ...process.env, NEOVARCH_REF: ref, NEOVARCH_HOME: HOME_DIR };
+    for (const k of Object.keys(env)) if (k.startsWith('HERMES_')) delete env[k];
+    const r = win
+      ? spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', dest, '-CoreOnly'], { stdio: 'inherit', env, windowsHide: true })
+      : spawnSync('sh', [dest, '--core-only'], { stdio: 'inherit', env });
+    if (r.status !== 0) throw new Error(`core installer exited with ${r.status}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+/** Remove everything Neovarch owns: the data home and the `neovarch` shim that points into it. */
+function uninstallAll() {
+  const shim = path.join(os.homedir(), '.local', 'bin', 'neovarch');
+  try {
+    const target = fs.readlinkSync(shim);
+    if (path.resolve(path.dirname(shim), target).startsWith(HOME_DIR + path.sep)) {
+      fs.unlinkSync(shim);
+      log.ok(`removed ${shim}`);
+    }
+  } catch {
+    // no shim, or not ours
+  }
+  if (path.basename(HOME_DIR).toLowerCase().includes('hermes') || HOME_DIR === os.homedir()) {
+    throw new Error(`refusing to remove ${HOME_DIR}`);
+  }
+  if (fs.existsSync(HOME_DIR)) {
+    fs.rmSync(HOME_DIR, { recursive: true, force: true });
+    log.ok(`removed ${HOME_DIR}`);
+  } else {
+    console.log('Neovarch Agent is not installed.');
+  }
+  console.log('A Hermes Agent install, if any, was not touched.');
   console.log('To remove the command too: npm uninstall -g neovarch-agent');
 }
 
 module.exports = {
-  APP_DIR, RELEASES_URL, PKG_VERSION,
-  detectTarget, installApp, uninstallApp, isInstalled, installedTag, wantedTag, printUnsupported, needsNoSandbox, log,
+  APP_DIR, HOME_DIR, CORE_DIR, CORE_CLI, RELEASES_URL, PKG_VERSION,
+  detectTarget, installApp, uninstallAll, installCore, coreInstalled, isInstalled, installedTag, wantedTag, printUnsupported, needsNoSandbox, log,
 };

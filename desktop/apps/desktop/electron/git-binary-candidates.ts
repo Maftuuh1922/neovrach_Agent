@@ -61,8 +61,8 @@ export function windowsGitCandidates(env: WindowsGitEnv, fs: GitCandidateFs): st
   const candidates: string[] = []
 
   if (env.localAppData) {
-    candidates.push(path.join(env.localAppData, 'hermes', 'git', 'cmd', 'git.exe'))
-    candidates.push(path.join(env.localAppData, 'hermes', 'git', 'bin', 'git.exe'))
+    candidates.push(path.join(env.localAppData, 'neovarch', 'git', 'cmd', 'git.exe'))
+    candidates.push(path.join(env.localAppData, 'neovarch', 'git', 'bin', 'git.exe'))
     candidates.push(...ugitGitBinaries(env.localAppData, fs))
   }
 

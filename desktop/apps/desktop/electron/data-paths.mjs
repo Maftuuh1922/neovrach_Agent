@@ -23,44 +23,40 @@ function normalizeHermesHomeRoot(hermesHome, pathModule) {
   return resolved
 }
 
+// Neovarch: the data home is ~/.neovarch (%LOCALAPPDATA%\\neovarch on Windows),
+// overridable with NEOVARCH_HOME. A co-installed Hermes Agent keeps ~/.hermes;
+// nothing here ever reads HERMES_HOME or falls back to ~/.hermes.
 export function platformDefaultHermesHome(home, env = process.env, platform = process.platform) {
-  const suffix = env.HERMES_DATA_DIR_SUFFIX || ''
+  const suffix = env.NEOVARCH_DATA_DIR_SUFFIX || ''
   if (platform === 'win32') {
     const base = (env.LOCALAPPDATA || '').trim() || path.win32.join(home, 'AppData', 'Local')
-    return path.win32.join(base, 'hermes') + suffix
+    return path.win32.join(base, 'neovarch') + suffix
   }
-  return path.posix.join(home, '.hermes') + suffix
+  return path.posix.join(home, '.neovarch') + suffix
 }
 
 export function resolveDesktopUserData(defaultPath, env = process.env) {
-  return env.HERMES_DESKTOP_USER_DATA_DIR
-    ? path.resolve(env.HERMES_DESKTOP_USER_DATA_DIR)
-    : defaultPath + (env.HERMES_DATA_DIR_SUFFIX || '')
+  return env.NEOVARCH_DESKTOP_USER_DATA_DIR
+    ? path.resolve(env.NEOVARCH_DESKTOP_USER_DATA_DIR)
+    : defaultPath + (env.NEOVARCH_DATA_DIR_SUFFIX || '')
 }
 
 export function resolveDesktopHermesHome({ home, env = process.env, platform = process.platform, directoryExists = () => false, readWindowsHome = () => null }) {
+  void directoryExists
   const paths = platform === 'win32' ? path.win32 : path.posix
-  if (env.HERMES_HOME) {
-    return normalizeHermesHomeRoot(env.HERMES_HOME, paths)
+  if (env.NEOVARCH_HOME) {
+    return normalizeHermesHomeRoot(env.NEOVARCH_HOME, paths)
   }
-  // Fresh-install rehearsals must not touch the real Hermes home.
-  if (env.HERMES_DESKTOP_USER_DATA_DIR) {
-    return paths.join(paths.resolve(env.HERMES_DESKTOP_USER_DATA_DIR), 'hermes-home')
+  // Fresh-install rehearsals must not touch the real Neovarch home.
+  if (env.NEOVARCH_DESKTOP_USER_DATA_DIR) {
+    return paths.join(paths.resolve(env.NEOVARCH_DESKTOP_USER_DATA_DIR), 'neovarch-home')
   }
-  if (platform === 'win32' && env.HERMES_HOME === undefined) {
+  if (platform === 'win32' && env.NEOVARCH_HOME === undefined) {
     // Explorer can miss setx changes. An explicit empty value opts out of that fallback.
     const registryHome = readWindowsHome()
     if (registryHome) {
       return normalizeHermesHomeRoot(registryHome, paths)
     }
   }
-  const defaultHome = platformDefaultHermesHome(home, env, platform)
-  // Keep the legacy migration for ordinary installs, not isolated suffix runs.
-  if (platform === 'win32' && !env.HERMES_DATA_DIR_SUFFIX) {
-    const legacy = paths.join(home, '.hermes')
-    if (!directoryExists(defaultHome) && directoryExists(legacy)) {
-      return legacy
-    }
-  }
-  return defaultHome
+  return platformDefaultHermesHome(home, env, platform)
 }
