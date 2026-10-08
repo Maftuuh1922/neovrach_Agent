@@ -291,7 +291,7 @@ void main() {
 
   testWidgets('13 startup splash', (tester) async {
     await run(tester, '13_splash',
-        () => const StartupSplash(background: NV.bg, foreground: NV.text, accent: NV.red, child: ConnectScreen(onboarding: true)),
+        () => StartupSplash(background: NV.bg, foreground: NV.text, accent: NV.red, child: ConnectScreen(onboarding: true)),
         // monogram is precached, so the reveal starts at once and the shot
         // lands mid-reveal (~0.56): halo down, wordmark mostly wiped in.
         remote: _controller(prefs, demo: false));

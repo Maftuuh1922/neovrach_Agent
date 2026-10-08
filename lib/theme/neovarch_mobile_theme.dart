@@ -7,27 +7,132 @@
 //   JetBrains Mono for labels and "// LABEL" section headers.
 // Every Material component theme is set explicitly so no stock purple/blue
 // (or Material You dynamic colour) can leak in.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../ui/widgets/motion.dart';
 import 'app_theme.dart';
 
-/// Design tokens.
+/// One resolved colour set. The phone follows the PC's appearance (accent +
+/// dark/light, `GET /api/appearance` / `appearance.changed`) unless the user
+/// set a local override; see `state/appearance.dart`.
+class NvPalette {
+  const NvPalette({
+    required this.brightness,
+    required this.accent,
+    required this.onAccent,
+    required this.bg,
+    required this.surface,
+    required this.raised,
+    required this.border,
+    required this.borderStrong,
+    required this.text,
+    required this.muted,
+    required this.faint,
+    required this.darkAccent,
+    required this.wash,
+  });
+  final Brightness brightness;
+  final Color accent, onAccent, bg, surface, raised, border, borderStrong, text, muted, faint, darkAccent, wash;
+  bool get dark => brightness == Brightness.dark;
+
+  static const defaultAccent = Color(0xFFEE1C1C);
+
+  /// The original Neovarch dark red set (exactly the v1.3 tokens).
+  static const red = NvPalette(
+    brightness: Brightness.dark,
+    accent: Color(0xFFEE1C1C),
+    onAccent: Color(0xFFF4F2ED),
+    bg: Color(0xFF0D0606),
+    surface: Color(0xFF140808),
+    raised: Color(0xFF1B0C0C),
+    border: Color(0xFF2A1212),
+    borderStrong: Color(0xFF3D1B1B),
+    text: Color(0xFFF4F2ED),
+    muted: Color(0xFFB8ADA6),
+    faint: Color(0xFF7D706A),
+    darkAccent: Color(0xFF8F0A0A),
+    wash: Color(0xFF2A0B0B),
+  );
+
+  /// Flat colours only: every token is the base neutral lightly tinted by the
+  /// accent (Color.lerp), never a gradient.
+  factory NvPalette.from(Color accent, Brightness b, {Color? onAccent}) {
+    final a = accent.withAlpha(255);
+    if (b == Brightness.dark && a.toARGB32() == defaultAccent.toARGB32()) return red;
+    Color t(int base, double f) => Color.lerp(Color(base), a, f)!;
+    final on = onAccent ?? (_contrast(a, const Color(0xFFFFFFFF)) >= 4.0 ? const Color(0xFFFFFFFF) : const Color(0xFF000000));
+    if (b == Brightness.dark) {
+      return NvPalette(
+        brightness: b,
+        accent: a,
+        onAccent: on,
+        bg: t(0xFF0A0A0A, 0.035),
+        surface: t(0xFF111111, 0.05),
+        raised: t(0xFF181818, 0.06),
+        border: t(0xFF242424, 0.10),
+        borderStrong: t(0xFF343434, 0.14),
+        text: const Color(0xFFF4F2ED),
+        muted: const Color(0xFFB3ADA8),
+        faint: const Color(0xFF78716C),
+        darkAccent: Color.lerp(a, const Color(0xFF000000), 0.45)!,
+        wash: t(0xFF0D0D0D, 0.16),
+      );
+    }
+    return NvPalette(
+      brightness: b,
+      accent: a,
+      onAccent: on,
+      bg: t(0xFFF5F3EF, 0.03),
+      surface: t(0xFFFFFFFF, 0.02),
+      raised: t(0xFFEDEAE5, 0.04),
+      border: t(0xFFDDD8D1, 0.08),
+      borderStrong: t(0xFFC9C2B9, 0.12),
+      text: const Color(0xFF151111),
+      muted: const Color(0xFF5C5450),
+      faint: const Color(0xFF8A827C),
+      darkAccent: Color.lerp(a, const Color(0xFF000000), 0.35)!,
+      wash: t(0xFFFFFFFF, 0.12),
+    );
+  }
+
+  static double _lum(Color c) {
+    double ch(double v) => v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  }
+
+  static double _contrast(Color a, Color b) {
+    final la = _lum(a), lb = _lum(b);
+    return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+  }
+}
+
+/// Design tokens. Colours read the current [NvPalette] (set by the app from
+/// the PC appearance or the local override); radii and fonts are fixed.
 abstract final class NV {
-  static const bg = Color(0xFF0D0606);
-  static const surface = Color(0xFF140808);
-  static const raised = Color(0xFF1B0C0C);
-  static const border = Color(0xFF2A1212);
-  static const borderStrong = Color(0xFF3D1B1B);
-  static const text = Color(0xFFF4F2ED);
-  static const muted = Color(0xFFB8ADA6);
-  static const faint = Color(0xFF7D706A);
-  static const red = Color(0xFFEE1C1C);
-  static const darkRed = Color(0xFF8F0A0A);
-  static const redWash = Color(0xFF2A0B0B); // red-tinted surface (selection, user message)
+  static NvPalette palette = NvPalette.red;
+
+  static Color get bg => palette.bg;
+  static Color get surface => palette.surface;
+  static Color get raised => palette.raised;
+  static Color get border => palette.border;
+  static Color get borderStrong => palette.borderStrong;
+  static Color get text => palette.text;
+  static Color get muted => palette.muted;
+  static Color get faint => palette.faint;
+  static Color get red => palette.accent; // the accent (red by default)
+  static Color get onRed => palette.onAccent;
+  static Color get darkRed => palette.darkAccent;
+  static Color get redWash => palette.wash; // accent-tinted surface (selection, user message)
   // Status colours stay inside the palette: no stock green / amber.
-  static const ok = text; // connected / online
-  static const warn = muted; // connecting / waiting
+  static Color get ok => text; // connected / online
+  static Color get warn => muted; // connecting / waiting
+
+  /// Liquid glass: flat translucent tint of the surface (no gradient).
+  static Color get glass => palette.surface.withValues(alpha: palette.dark ? 0.62 : 0.70);
+  static Color get glassBorder => palette.text.withValues(alpha: palette.dark ? 0.10 : 0.12);
+  static const glassBlur = 24.0;
 
   static const rCard = 16.0;
   static const rCtl = 12.0;
@@ -41,18 +146,18 @@ abstract final class NV {
   static BorderRadius get card => BorderRadius.circular(rCard);
   static BorderRadius get ctl => BorderRadius.circular(rCtl);
 
-  static TextStyle monoLabel({double size = 10.5, Color color = muted, FontWeight weight = FontWeight.w500}) =>
-      TextStyle(fontFamily: mono, fontSize: size, letterSpacing: 1.2, fontWeight: weight, color: color, height: 1.3);
+  static TextStyle monoLabel({double size = 10.5, Color? color, FontWeight weight = FontWeight.w500}) =>
+      TextStyle(fontFamily: mono, fontSize: size, letterSpacing: 1.2, fontWeight: weight, color: color ?? muted, height: 1.3);
 
-  static TextStyle display({double size = 34, Color color = text}) =>
-      TextStyle(fontFamily: serif, fontSize: size, height: 1.0, letterSpacing: -0.3, color: color, fontWeight: FontWeight.w400);
+  static TextStyle display({double size = 34, Color? color}) =>
+      TextStyle(fontFamily: serif, fontSize: size, height: 1.0, letterSpacing: -0.3, color: color ?? text, fontWeight: FontWeight.w400);
 }
 
 ThemeData buildNeovarchMobileTheme() {
-  const scheme = ColorScheme(
-    brightness: Brightness.dark,
+  final scheme = ColorScheme(
+    brightness: NV.palette.brightness,
     primary: NV.red,
-    onPrimary: NV.text,
+    onPrimary: NV.onRed,
     primaryContainer: NV.redWash,
     onPrimaryContainer: NV.text,
     primaryFixed: NV.red,
@@ -92,14 +197,14 @@ ThemeData buildNeovarchMobileTheme() {
     outline: NV.border,
     outlineVariant: NV.border,
     shadow: Colors.transparent,
-    scrim: Color(0xB3000000),
+    scrim: const Color(0xB3000000),
     inverseSurface: NV.text,
     onInverseSurface: NV.bg,
     inversePrimary: NV.darkRed,
     surfaceTint: Colors.transparent,
   );
 
-  final base = ThemeData.dark(useMaterial3: true).textTheme.apply(
+  final base = (NV.palette.dark ? ThemeData.dark(useMaterial3: true) : ThemeData.light(useMaterial3: true)).textTheme.apply(
         fontFamily: NV.sans,
         bodyColor: NV.text,
         displayColor: NV.text,
@@ -124,7 +229,7 @@ ThemeData buildNeovarchMobileTheme() {
     labelSmall: base.labelSmall?.copyWith(fontFamily: NV.mono, fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w500, color: NV.muted),
   );
 
-  const line = BorderSide(color: NV.border, width: 1);
+  final line = BorderSide(color: NV.border, width: 1);
   final ctlShape = RoundedRectangleBorder(borderRadius: NV.ctl);
   final ctlShapeLined = RoundedRectangleBorder(borderRadius: NV.ctl, side: line);
   final cardShape = RoundedRectangleBorder(borderRadius: NV.card, side: line);
@@ -159,8 +264,8 @@ ThemeData buildNeovarchMobileTheme() {
     applyElevationOverlayColor: false,
     materialTapTargetSize: MaterialTapTargetSize.padded,
     visualDensity: VisualDensity.standard,
-    iconTheme: const IconThemeData(color: NV.text, size: 22),
-    primaryIconTheme: const IconThemeData(color: NV.text),
+    iconTheme: IconThemeData(color: NV.text, size: 22),
+    primaryIconTheme: IconThemeData(color: NV.text),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
       TargetPlatform.android: HermesPageTransitionsBuilder(),
       TargetPlatform.iOS: HermesPageTransitionsBuilder(),
@@ -169,8 +274,8 @@ ThemeData buildNeovarchMobileTheme() {
       TargetPlatform.windows: HermesPageTransitionsBuilder(),
       TargetPlatform.fuchsia: HermesPageTransitionsBuilder(),
     }),
-    dividerTheme: const DividerThemeData(color: NV.border, thickness: 1, space: 1),
-    appBarTheme: const AppBarTheme(
+    dividerTheme: DividerThemeData(color: NV.border, thickness: 1, space: 1),
+    appBarTheme: AppBarTheme(
       backgroundColor: NV.bg,
       foregroundColor: NV.text,
       surfaceTintColor: Colors.transparent,
@@ -193,7 +298,7 @@ ThemeData buildNeovarchMobileTheme() {
       clipBehavior: Clip.antiAlias,
       shape: cardShape,
     ),
-    bottomSheetTheme: const BottomSheetThemeData(
+    bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: NV.surface,
       modalBackgroundColor: NV.surface,
       surfaceTintColor: Colors.transparent,
@@ -215,8 +320,8 @@ ThemeData buildNeovarchMobileTheme() {
       shadowColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rDialog), side: line),
-      titleTextStyle: const TextStyle(fontFamily: NV.serif, fontSize: 26, color: NV.text, height: 1.1),
-      contentTextStyle: const TextStyle(fontFamily: NV.sans, fontSize: 14, color: NV.muted, height: 1.5),
+      titleTextStyle: TextStyle(fontFamily: NV.serif, fontSize: 26, color: NV.text, height: 1.1),
+      contentTextStyle: TextStyle(fontFamily: NV.sans, fontSize: 14, color: NV.muted, height: 1.5),
       barrierColor: const Color(0xB3000000),
     ),
     popupMenuTheme: PopupMenuThemeData(
@@ -225,11 +330,11 @@ ThemeData buildNeovarchMobileTheme() {
       shadowColor: Colors.transparent,
       elevation: 0,
       shape: cardShape,
-      textStyle: const TextStyle(fontFamily: NV.sans, fontSize: 14, color: NV.text),
+      textStyle: TextStyle(fontFamily: NV.sans, fontSize: 14, color: NV.text),
     ),
     menuTheme: MenuThemeData(
       style: MenuStyle(
-        backgroundColor: const WidgetStatePropertyAll(NV.raised),
+        backgroundColor: WidgetStatePropertyAll(NV.raised),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         shadowColor: const WidgetStatePropertyAll(Colors.transparent),
         elevation: const WidgetStatePropertyAll(0),
@@ -238,7 +343,7 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     dropdownMenuTheme: DropdownMenuThemeData(
       menuStyle: MenuStyle(
-        backgroundColor: const WidgetStatePropertyAll(NV.raised),
+        backgroundColor: WidgetStatePropertyAll(NV.raised),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         elevation: const WidgetStatePropertyAll(0),
         shape: WidgetStatePropertyAll(cardShape),
@@ -249,11 +354,11 @@ ThemeData buildNeovarchMobileTheme() {
       fillColor: NV.surface,
       isDense: false,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-      hintStyle: const TextStyle(color: NV.faint, fontFamily: NV.sans),
-      labelStyle: const TextStyle(color: NV.muted, fontFamily: NV.sans),
-      floatingLabelStyle: const TextStyle(color: NV.text, fontFamily: NV.sans),
-      helperStyle: const TextStyle(color: NV.faint, fontSize: 12, fontFamily: NV.sans),
-      errorStyle: const TextStyle(color: NV.red, fontSize: 12),
+      hintStyle: TextStyle(color: NV.faint, fontFamily: NV.sans),
+      labelStyle: TextStyle(color: NV.muted, fontFamily: NV.sans),
+      floatingLabelStyle: TextStyle(color: NV.text, fontFamily: NV.sans),
+      helperStyle: TextStyle(color: NV.faint, fontSize: 12, fontFamily: NV.sans),
+      errorStyle: TextStyle(color: NV.red, fontSize: 12),
       prefixIconColor: NV.muted,
       suffixIconColor: NV.muted,
       border: inBorder(NV.border),
@@ -263,7 +368,7 @@ ThemeData buildNeovarchMobileTheme() {
       errorBorder: inBorder(NV.darkRed),
       focusedErrorBorder: inBorder(NV.red),
     ),
-    textSelectionTheme: const TextSelectionThemeData(
+    textSelectionTheme: TextSelectionThemeData(
       cursorColor: NV.red,
       selectionColor: Color(0x668F0A0A),
       selectionHandleColor: NV.red,
@@ -283,8 +388,8 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ButtonStyle(
-        backgroundColor: const WidgetStatePropertyAll(NV.raised),
-        foregroundColor: const WidgetStatePropertyAll(NV.text),
+        backgroundColor: WidgetStatePropertyAll(NV.raised),
+        foregroundColor: WidgetStatePropertyAll(NV.text),
         overlayColor: overlay(),
         elevation: const WidgetStatePropertyAll(0),
         shadowColor: const WidgetStatePropertyAll(Colors.transparent),
@@ -346,8 +451,8 @@ ThemeData buildNeovarchMobileTheme() {
       pressElevation: 0,
       side: WidgetStateBorderSide.resolveWith(
           (s) => BorderSide(color: s.contains(WidgetState.selected) ? NV.red : NV.border)),
-      labelStyle: const TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 13),
-      secondaryLabelStyle: const TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 13),
+      labelStyle: TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 13),
+      secondaryLabelStyle: TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 13),
       shape: ctlShape,
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -355,8 +460,8 @@ ThemeData buildNeovarchMobileTheme() {
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? NV.redWash : NV.surface),
-        foregroundColor: const WidgetStatePropertyAll(NV.text),
-        side: const WidgetStatePropertyAll(line),
+        foregroundColor: WidgetStatePropertyAll(NV.text),
+        side: WidgetStatePropertyAll(line),
         shape: WidgetStatePropertyAll(ctlShape),
         overlayColor: overlay(),
       ),
@@ -369,14 +474,14 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? NV.red : Colors.transparent),
-      checkColor: const WidgetStatePropertyAll(NV.text),
-      side: const BorderSide(color: NV.borderStrong, width: 1.2),
+      checkColor: WidgetStatePropertyAll(NV.text),
+      side: BorderSide(color: NV.borderStrong, width: 1.2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
     ),
     radioTheme: RadioThemeData(
       fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? NV.red : NV.muted),
     ),
-    sliderTheme: const SliderThemeData(
+    sliderTheme: SliderThemeData(
       activeTrackColor: NV.red,
       inactiveTrackColor: NV.border,
       thumbColor: NV.text,
@@ -391,8 +496,8 @@ ThemeData buildNeovarchMobileTheme() {
       tileColor: Colors.transparent,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       shape: ctlShape,
-      titleTextStyle: const TextStyle(fontFamily: NV.sans, fontSize: 15, color: NV.text, fontWeight: FontWeight.w500),
-      subtitleTextStyle: const TextStyle(fontFamily: NV.sans, fontSize: 12.5, color: NV.muted),
+      titleTextStyle: TextStyle(fontFamily: NV.sans, fontSize: 15, color: NV.text, fontWeight: FontWeight.w500),
+      subtitleTextStyle: TextStyle(fontFamily: NV.sans, fontSize: 12.5, color: NV.muted),
     ),
     expansionTileTheme: ExpansionTileThemeData(
       iconColor: NV.muted,
@@ -406,12 +511,12 @@ ThemeData buildNeovarchMobileTheme() {
       behavior: SnackBarBehavior.floating,
       backgroundColor: NV.raised,
       elevation: 0,
-      contentTextStyle: const TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 14),
+      contentTextStyle: TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 14),
       actionTextColor: NV.red,
       closeIconColor: NV.muted,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rCard), side: const BorderSide(color: NV.borderStrong)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rCard), side: BorderSide(color: NV.borderStrong)),
     ),
-    bannerTheme: const MaterialBannerThemeData(
+    bannerTheme: MaterialBannerThemeData(
       backgroundColor: NV.surface,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
@@ -419,12 +524,12 @@ ThemeData buildNeovarchMobileTheme() {
       elevation: 0,
       contentTextStyle: TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 13.5),
     ),
-    badgeTheme: const BadgeThemeData(
+    badgeTheme: BadgeThemeData(
       backgroundColor: NV.red,
       textColor: NV.text,
       textStyle: TextStyle(fontFamily: NV.mono, fontSize: 10, fontWeight: FontWeight.w500),
     ),
-    tabBarTheme: const TabBarThemeData(
+    tabBarTheme: TabBarThemeData(
       labelColor: NV.text,
       unselectedLabelColor: NV.muted,
       indicatorColor: NV.red,
@@ -441,19 +546,19 @@ ThemeData buildNeovarchMobileTheme() {
       labelTextStyle: WidgetStateProperty.resolveWith((s) => NV.monoLabel(color: s.contains(WidgetState.selected) ? NV.text : NV.muted)),
       iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(color: s.contains(WidgetState.selected) ? NV.red : NV.muted)),
     ),
-    navigationRailTheme: const NavigationRailThemeData(
+    navigationRailTheme: NavigationRailThemeData(
       backgroundColor: NV.surface,
       indicatorColor: NV.redWash,
       selectedIconTheme: IconThemeData(color: NV.red),
       unselectedIconTheme: IconThemeData(color: NV.muted),
     ),
-    drawerTheme: const DrawerThemeData(
+    drawerTheme: DrawerThemeData(
       backgroundColor: NV.surface,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       elevation: 0,
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
+    progressIndicatorTheme: ProgressIndicatorThemeData(
       color: NV.red,
       linearTrackColor: NV.border,
       circularTrackColor: Colors.transparent,
@@ -461,7 +566,7 @@ ThemeData buildNeovarchMobileTheme() {
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: NV.raised, borderRadius: BorderRadius.circular(8), border: Border.all(color: NV.borderStrong)),
-      textStyle: const TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 12),
+      textStyle: TextStyle(fontFamily: NV.sans, color: NV.text, fontSize: 12),
       waitDuration: const Duration(milliseconds: 300),
     ),
     scrollbarTheme: ScrollbarThemeData(
@@ -481,13 +586,13 @@ ThemeData buildNeovarchMobileTheme() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rDialog), side: line),
     ),
     searchBarTheme: SearchBarThemeData(
-      backgroundColor: const WidgetStatePropertyAll(NV.surface),
+      backgroundColor: WidgetStatePropertyAll(NV.surface),
       surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
       shadowColor: const WidgetStatePropertyAll(Colors.transparent),
       elevation: const WidgetStatePropertyAll(0),
       shape: WidgetStatePropertyAll(ctlShapeLined),
     ),
-    extensions: const [
+    extensions: [
       HermesColors(
         card: NV.surface,
         muted: NV.raised,

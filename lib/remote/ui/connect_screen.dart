@@ -118,7 +118,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                           child: Text('HP = REMOTE · PC = OTAK', style: NV.monoLabel(size: 9.5, color: NV.text)),
                         ),
                       ),
-                      const Positioned(left: 16, bottom: 14, child: Wordmark(height: 30, color: NV.text, haloColor: NV.red)),
+                      Positioned(left: 16, bottom: 14, child: Wordmark(height: 30, color: NV.text, haloColor: NV.red)),
                     ]),
                   ),
                 ),
@@ -131,7 +131,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   const SizedBox(height: 8),
                   Text('Hubungkan ke PC', style: NV.display(size: 40)),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Agen Neovarch berjalan di aplikasi desktop. HP ini hanya remote: kirim perintah, pantau tugas, dan setujui aksi agen dari jaringan yang sama.',
                     style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted),
                   ),
@@ -148,17 +148,17 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   'Masuk ke Pengaturan → Remote / Perangkat, aktifkan akses remote.',
                   'Pindai QR yang muncul, atau ketik alamat dan token-nya di bawah.',
                 ].indexed) ...[
-                  if (i > 0) const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: NV.border)),
+                  if (i > 0) Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: NV.border)),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Container(
                       width: 26,
                       height: 26,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(color: NV.redWash, shape: BoxShape.circle, border: Border.all(color: NV.darkRed)),
-                      child: Text('${i + 1}', style: const TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.red)),
+                      child: Text('${i + 1}', style: TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.red)),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(t, style: const TextStyle(fontSize: 14, height: 1.45, color: NV.text)))),
+                    Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(t, style: TextStyle(fontSize: 14, height: 1.45, color: NV.text)))),
                   ]),
                 ],
               ]),
@@ -226,7 +226,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     title: d.name,
                     subtitle: d.url,
                     mono: true,
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                    trailing: Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
                     onTap: () async {
                       await ref.read(remoteProvider).connectTo(d);
                       if (context.mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
@@ -235,7 +235,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ]),
             ],
             const SizedBox(height: 22),
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 'HP dan PC harus di jaringan yang sama (Wi-Fi rumah/kantor) atau terhubung lewat Tailscale/VPN. Token disimpan terenkripsi di HP.',

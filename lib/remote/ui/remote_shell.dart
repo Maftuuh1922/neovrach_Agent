@@ -1,5 +1,6 @@
-// Remote shell: Chat · Tugas · Setujui · PC, with a connection strip that
-// appears whenever the link to the desktop is not up.
+// Remote shell: Chat · Kantor · Tugas · Setujui · PC on a floating liquid
+// glass bar, with a connection strip whenever the link to the PC is not up
+// and an "Update tersedia" strip when a newer phone app is released.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import '../../ui/widgets/motion.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'remote_approvals_screen.dart';
+import 'remote_office_screen.dart';
 import 'remote_chat_screen.dart';
 import 'remote_pc_screen.dart';
 import 'nv_widgets.dart';
@@ -23,7 +25,9 @@ class RemoteShell extends ConsumerStatefulWidget {
 }
 
 class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingObserver {
-  int index = previewTab.clamp(0, 3);
+  int index = previewTab.clamp(0, 4);
+
+  static const tabChat = 0, tabApprovals = 3, tabPc = 4; // 1 Kantor, 2 Tugas
   int _lastApprovals = 0;
 
   @override
@@ -51,6 +55,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
 
   static const _dest = <(IconData, IconData, String)>[
     (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
+    (Icons.apartment_outlined, Icons.apartment_rounded, 'Kantor'),
     (Icons.view_week_outlined, Icons.view_week_rounded, 'Tugas'),
     (Icons.shield_outlined, Icons.shield_rounded, 'Setujui'),
     (Icons.desktop_windows_outlined, Icons.desktop_windows_rounded, 'PC'),
@@ -60,14 +65,14 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
     final pending = remote.approvals.length;
-    if (pending > _lastApprovals && index != 2 && index != 0) {
+    if (pending > _lastApprovals && index != tabApprovals && index != tabChat) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Agen di PC menunggu persetujuanmu'),
           // Float above the nav bar instead of on top of it.
           margin: EdgeInsets.fromLTRB(16, 0, 16, _barH + _gap + 8),
-          action: SnackBarAction(label: 'Lihat', onPressed: () => setState(() => index = 2)),
+          action: SnackBarAction(label: 'Lihat', onPressed: () => setState(() => index = tabApprovals)),
         ));
       });
     }
@@ -75,10 +80,12 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
 
     final pages = IndexedStack(index: index, children: [
       for (final (i, w) in <Widget>[
-        RemoteChatScreen(onOpenApprovals: () => setState(() => index = 2)),
+        RemoteChatScreen(onOpenApprovals: () => setState(() => index = tabApprovals)),
+        RemoteOfficeScreen(
+            onOpenChat: () => setState(() => index = tabChat), onOpenApprovals: () => setState(() => index = tabApprovals)),
         const RemoteTasksScreen(),
-        RemoteApprovalsScreen(onOpenChat: () => setState(() => index = 0)),
-        RemotePcScreen(onOpenChat: () => setState(() => index = 0)),
+        RemoteApprovalsScreen(onOpenChat: () => setState(() => index = tabChat)),
+        RemotePcScreen(onOpenChat: () => setState(() => index = tabChat)),
       ].indexed)
         TabFade(active: index == i, child: w),
     ]);
@@ -88,7 +95,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     const barH = _barH, gap = _gap;
     final reserve = keyboard ? 0.0 : barH + gap;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
+      value: (NV.palette.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: NV.bg,
         systemNavigationBarDividerColor: NV.bg,
@@ -115,15 +122,15 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
               ]),
             ),
           ),
-          // Solid band behind the lower half of the floating bar so scrolled
-          // content never shows through under it or in the system nav inset.
-          if (!keyboard)
+          // The bar is liquid glass: content scrolls under it, blurred. Only
+          // the system gesture inset gets a flat band.
+          if (!keyboard && mq.viewPadding.bottom > 0)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              height: mq.viewPadding.bottom + gap + barH / 2,
-              child: const IgnorePointer(child: ColoredBox(color: NV.bg)),
+              height: mq.viewPadding.bottom,
+              child: IgnorePointer(child: ColoredBox(color: NV.bg)),
             ),
           if (!keyboard)
             Positioned(
@@ -135,8 +142,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
                 index: index,
                 onTap: (i) => setState(() => index = i),
                 items: _dest,
-                badges: {2: pending},
-                dots: {if (!remote.connected) 3: NV.warn},
+                badges: {tabApprovals: pending},
+                dots: {if (!remote.connected) tabPc: NV.warn},
               ),
             ),
         ]),
@@ -154,13 +161,10 @@ class _ConnectionStrip extends ConsumerWidget {
     final c = busy ? NV.warn : NV.red;
     return Padding(
       padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + 8, 12, 0),
-      child: Container(
+      child: NvGlass(
+        key: const ValueKey('nv-connection-strip'),
+        radius: NV.rCtl,
         padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-        decoration: BoxDecoration(
-          color: c.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(NV.rCtl),
-          border: Border.all(color: c.withValues(alpha: 0.45)),
-        ),
         child: Row(children: [
           Icon(busy ? Icons.sync : Icons.link_off, size: 17, color: c),
           const SizedBox(width: 10),
@@ -169,7 +173,7 @@ class _ConnectionStrip extends ConsumerWidget {
               Text(r.desktop == null ? '// BELUM ADA PC' : '// ${r.desktop!.name.toUpperCase()} · ${r.statusLabel.toUpperCase()}',
                   maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5, color: c)),
               if (r.error != null && !busy)
-                Text(r.error!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
+                Text(r.error!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
             ]),
           ),
           TextButton(onPressed: busy ? null : r.reconnect, child: const Text('Sambungkan')),
@@ -190,21 +194,18 @@ class _UpdateStrip extends ConsumerWidget {
     final url = '${u['download_url'] ?? u['url'] ?? ''}';
     return SafeArea(
       bottom: false,
-      child: Container(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: NvGlass(
         key: const ValueKey('nv-update-strip'),
-        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        radius: 14,
         padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-        decoration: BoxDecoration(
-          color: NV.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NV.border),
-        ),
         child: Row(children: [
-          Container(width: 8, height: 8, decoration: const BoxDecoration(color: NV.red, shape: BoxShape.circle)),
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: NV.red, shape: BoxShape.circle)),
           const SizedBox(width: 10),
           Expanded(
             child: Text('Update tersedia v${u['latest']}',
-                style: const TextStyle(color: NV.text, fontWeight: FontWeight.w600, fontSize: 13)),
+                style: TextStyle(color: NV.text, fontWeight: FontWeight.w600, fontSize: 13)),
           ),
           if (url.isNotEmpty)
             TextButton(
@@ -213,10 +214,11 @@ class _UpdateStrip extends ConsumerWidget {
             ),
           IconButton(
             tooltip: 'Tutup',
-            icon: const Icon(Icons.close_rounded, size: 18, color: NV.muted),
+            icon: Icon(Icons.close_rounded, size: 18, color: NV.muted),
             onPressed: r.dismissUpdate,
           ),
         ]),
+      ),
       ),
     );
   }

@@ -8,6 +8,8 @@ import '../../state/settings_controller.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import 'remote_intro_screen.dart';
 import '../../ui/widgets/common.dart';
+import '../appearance.dart';
+import '../pairing.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'connect_screen.dart';
@@ -49,7 +51,7 @@ class RemotePcScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(NV.rCtl),
                     border: Border.all(color: NV.darkRed),
                   ),
-                  child: const Icon(Icons.desktop_windows_rounded, size: 24, color: NV.red),
+                  child: Icon(Icons.desktop_windows_rounded, size: 24, color: NV.red),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -57,7 +59,7 @@ class RemotePcScreen extends ConsumerWidget {
                     Text(d?.name ?? 'Belum ada PC', maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.display(size: 28)),
                     const SizedBox(height: 4),
                     if (d != null)
-                      Text(d.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.muted)),
+                      Text(d.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.muted)),
                   ]),
                 ),
                 Container(
@@ -75,7 +77,7 @@ class RemotePcScreen extends ConsumerWidget {
                 ),
               ]),
               const SizedBox(height: 14),
-              const Divider(height: 1, color: NV.border),
+              Divider(height: 1, color: NV.border),
               const SizedBox(height: 14),
               // three numbers in a row
               Row(children: [
@@ -94,6 +96,22 @@ class RemotePcScreen extends ConsumerWidget {
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: dot, fontWeight: FontWeight.w500)),
                 ),
               ]),
+              if (ok && r.gateway != null) ...[
+                const SizedBox(height: 8),
+                Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                  Expanded(child: Text('JALUR', style: NV.monoLabel(size: 9.5))),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      key: const ValueKey('pc-route'),
+                      '${routeLabel(r.gateway!.activeUrl)}${r.gateway!.lastRtt != null ? ' · ${r.gateway!.lastRtt!.inMilliseconds} ms' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, color: NV.text, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ]),
+              ],
               if (r.error != null && !ok) ...[const SizedBox(height: 8), NvNotice(r.error!)],
               const SizedBox(height: 14),
               Row(children: [
@@ -120,7 +138,7 @@ class RemotePcScreen extends ConsumerWidget {
                   title: a.title.isNotEmpty ? a.title : a.id,
                   subtitle: '${a.status}${a.model.isNotEmpty ? ' · ${a.model}' : ''}',
                   mono: true,
-                  trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                  trailing: Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
                   onTap: () async {
                     await r.openActive(a);
                     onOpenChat?.call();
@@ -135,7 +153,7 @@ class RemotePcScreen extends ConsumerWidget {
                 label: const Text('Tambah'),
               )),
           if (r.desktops.items.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text('Belum ada PC tersimpan.', style: TextStyle(color: NV.muted, fontSize: 13.5)),
             )
@@ -164,6 +182,8 @@ class RemotePcScreen extends ConsumerWidget {
                   ),
                 ),
             ]),
+          const NvSection('tampilan'),
+          const AppearancePanel(),
           const NvSection('hp ini'),
           NvList(children: [
             _SwitchRow(
@@ -183,7 +203,7 @@ class RemotePcScreen extends ConsumerWidget {
             NvRow(
               icon: Icons.slideshow_outlined,
               title: 'Putar ulang intro',
-              trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+              trailing: Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
               onTap: () => open(const RemoteIntroScreen(replay: true)),
             ),
           ]),
@@ -210,7 +230,7 @@ class _Stat extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: mono
-                  ? const TextStyle(fontFamily: NV.mono, fontSize: 15, color: NV.text, height: 1.6)
+                  ? TextStyle(fontFamily: NV.mono, fontSize: 15, color: NV.text, height: 1.6)
                   : NV.display(size: 30, color: hot ? NV.red : NV.text)),
         ]),
       );
@@ -231,4 +251,85 @@ class _SwitchRow extends StatelessWidget {
         onTap: () => onChanged(!value),
         trailing: Switch(value: value, onChanged: onChanged),
       );
+}
+
+/// "LAN" / "Tailscale" / "Internet" for the address the socket uses.
+String routeLabel(String url) => switch (gatewayRoute(url)) {
+      'lan' => 'LAN · ${Uri.tryParse(url)?.host ?? url}',
+      'tailscale' => 'Tailscale · ${Uri.tryParse(url)?.host ?? url}',
+      _ => Uri.tryParse(url)?.host ?? url,
+    };
+
+/// Theme: follow the PC (default) or a local accent + dark/light override.
+class AppearancePanel extends ConsumerWidget {
+  const AppearancePanel({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final look = ref.watch(appearanceProvider);
+    final hex = TextEditingController(text: hexOf(look.localAccent));
+    return NvPanel(
+      key: const ValueKey('appearance-panel'),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.zero,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        _SwitchRow(
+          icon: Icons.desktop_windows_outlined,
+          title: 'Ikuti tema PC',
+          subtitle: look.followPc ? 'Warna ${hexOf(look.pcAccent)} · ${look.pcDark ? 'gelap' : 'terang'}' : 'Pakai tema khusus HP ini',
+          value: look.followPc,
+          onChanged: look.setFollowPc,
+        ),
+        if (!look.followPc) ...[
+          Divider(height: 1, color: NV.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+            child: Wrap(spacing: 10, runSpacing: 10, children: [
+              for (final (name, c) in accentPresets)
+                Semantics(
+                  button: true,
+                  selected: look.localAccent.toARGB32() == c.toARGB32(),
+                  label: name,
+                  child: GestureDetector(
+                    key: ValueKey('accent-$name'),
+                    onTap: () => look.setLocal(accent: c),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: look.localAccent.toARGB32() == c.toARGB32() ? NV.text : NV.border, width: 2),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+            child: TextField(
+              key: const ValueKey('accent-hex'),
+              controller: hex,
+              decoration: const InputDecoration(labelText: 'Warna kustom (hex)', hintText: '#FF0066'),
+              onSubmitted: (v) {
+                final c = parseHexColor(v);
+                if (c != null) look.setLocal(accent: c);
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('Gelap'), icon: Icon(Icons.dark_mode_outlined, size: 18)),
+                ButtonSegment(value: false, label: Text('Terang'), icon: Icon(Icons.light_mode_outlined, size: 18)),
+              ],
+              selected: {look.localDark},
+              onSelectionChanged: (v) => look.setLocal(dark: v.first),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
 }

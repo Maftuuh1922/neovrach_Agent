@@ -92,7 +92,7 @@ class _RemoteIntroScreenState extends ConsumerState<RemoteIntroScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 8, 6),
               child: Row(children: [
-                const Wordmark(height: 22, color: NV.text, haloColor: NV.red),
+                Wordmark(height: 22, color: NV.text, haloColor: NV.red),
                 const Spacer(),
                 Text('0${_index + 1} / 0${_slides.length}', style: NV.monoLabel(size: 10, color: NV.muted)),
                 const SizedBox(width: 4),
@@ -186,7 +186,7 @@ class _SlideView extends StatelessWidget {
               const SizedBox(height: 10),
               Text(slide.title, style: NV.display(size: 40)),
               const SizedBox(height: 12),
-              Text(slide.body, style: const TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted)),
+              Text(slide.body, style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted)),
               const SizedBox(height: 14),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final p in slide.points)
@@ -198,9 +198,9 @@ class _SlideView extends StatelessWidget {
                       border: Border.all(color: NV.border),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: NV.red, shape: BoxShape.circle)),
+                      Container(width: 6, height: 6, decoration: BoxDecoration(color: NV.red, shape: BoxShape.circle)),
                       const SizedBox(width: 8),
-                      Text(p, style: const TextStyle(fontSize: 12.5, color: NV.text)),
+                      Text(p, style: TextStyle(fontSize: 12.5, color: NV.text)),
                     ]),
                   ),
               ]),

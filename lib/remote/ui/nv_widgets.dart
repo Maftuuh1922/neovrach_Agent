@@ -4,6 +4,8 @@
 // with a red top indicator. Flat colours only.
 import 'dart:math' as math;
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
@@ -75,10 +77,10 @@ class NvIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final btn = Material(
-      color: accent && enabled ? NV.red : NV.surface,
+      color: accent && enabled ? NV.red : NV.glass,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(NV.rCtl),
-        side: BorderSide(color: accent && enabled ? NV.red : NV.border),
+        side: BorderSide(color: accent && enabled ? NV.red : NV.glassBorder),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -86,7 +88,7 @@ class NvIconButton extends StatelessWidget {
         child: SizedBox(
           width: size,
           height: size,
-          child: Icon(icon, size: size * 0.48, color: !enabled ? NV.faint : (accent ? NV.text : NV.text)),
+          child: Icon(icon, size: size * 0.48, color: !enabled ? NV.faint : (accent ? NV.onRed : NV.text)),
         ),
       ),
     );
@@ -108,7 +110,7 @@ class NvSection extends StatelessWidget {
           Text('// ${label.toUpperCase()}', style: NV.monoLabel()),
           if (count != null) ...[const SizedBox(width: 8), NvPill('$count')],
           const SizedBox(width: 10),
-          const Expanded(child: Divider(color: NV.border, height: 1)),
+          Expanded(child: Divider(color: NV.border, height: 1)),
           if (trailing != null) ...[const SizedBox(width: 8), trailing!],
         ]),
       );
@@ -116,19 +118,19 @@ class NvSection extends StatelessWidget {
 
 /// Rounded 16px surface with a 1px border.
 class NvPanel extends StatelessWidget {
-  const NvPanel({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.margin = EdgeInsets.zero, this.color = NV.surface, this.borderColor = NV.border, this.onTap});
+  const NvPanel({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.margin = EdgeInsets.zero, this.color, this.borderColor, this.onTap});
   final Widget child;
   final EdgeInsets padding;
   final EdgeInsets margin;
-  final Color color;
-  final Color borderColor;
+  final Color? color;
+  final Color? borderColor;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) => Padding(
         padding: margin,
         child: Material(
-          color: color,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rCard), side: BorderSide(color: borderColor)),
+          color: color ?? NV.glass,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(NV.rCard), side: BorderSide(color: borderColor ?? NV.glassBorder)),
           clipBehavior: Clip.antiAlias,
           child: onTap == null ? Padding(padding: padding, child: child) : InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
         ),
@@ -137,9 +139,10 @@ class NvPanel extends StatelessWidget {
 
 /// Full-radius small badge (counts, priorities, states).
 class NvPill extends StatelessWidget {
-  const NvPill(this.label, {super.key, this.color = NV.muted, this.filled = false});
+  const NvPill(this.label, {super.key, Color? color, this.filled = false}) : _color = color; // ignore: prefer_initializing_formals
   final String label;
-  final Color color;
+  final Color? _color;
+  Color get color => _color ?? NV.muted;
   final bool filled;
   @override
   Widget build(BuildContext context) => Container(
@@ -149,7 +152,7 @@ class NvPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: filled ? color : color.withValues(alpha: 0.35)),
         ),
-        child: Text(label, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10, color: filled ? NV.text : color)),
+        child: Text(label, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10, color: filled ? NV.onRed : color)),
       );
 }
 
@@ -191,13 +194,13 @@ class NvRow extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: NV.text)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: NV.text)),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(subtitle!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: mono ? NV.monoLabel(size: 11, color: NV.muted).copyWith(letterSpacing: 0.2) : const TextStyle(fontSize: 12.5, color: NV.muted)),
+                      style: mono ? NV.monoLabel(size: 11, color: NV.muted).copyWith(letterSpacing: 0.2) : TextStyle(fontSize: 12.5, color: NV.muted)),
                 ],
               ]),
             ),
@@ -218,7 +221,7 @@ class NvList extends StatelessWidget {
         padding: EdgeInsets.zero,
         child: Column(children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const Divider(indent: 64, height: 1, color: NV.border),
+            if (i > 0) Divider(indent: 64, height: 1, color: NV.border),
             children[i],
           ],
         ]),
@@ -272,7 +275,7 @@ class NvEmpty extends StatelessWidget {
           Text(title, style: NV.display(size: 28)),
           if (body != null) ...[
             const SizedBox(height: 8),
-            Text(body!, style: const TextStyle(fontSize: 14, height: 1.5, color: NV.muted)),
+            Text(body!, style: TextStyle(fontSize: 14, height: 1.5, color: NV.muted)),
           ],
           if (action != null) ...[const SizedBox(height: 16), action!],
         ]),
@@ -281,9 +284,10 @@ class NvEmpty extends StatelessWidget {
 
 /// Error / warning strip: rounded 12px, tinted, left rule kept inside.
 class NvNotice extends StatelessWidget {
-  const NvNotice(this.message, {super.key, this.color = NV.red, this.icon = Icons.error_outline, this.action});
+  const NvNotice(this.message, {super.key, Color? color, this.icon = Icons.error_outline, this.action}) : _color = color; // ignore: prefer_initializing_formals
   final String message;
-  final Color color;
+  final Color? _color;
+  Color get color => _color ?? NV.red;
   final IconData icon;
   final Widget? action;
   @override
@@ -298,7 +302,7 @@ class NvNotice extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 18, color: color)),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: const TextStyle(fontSize: 13.5, height: 1.45, color: NV.text))),
+          Expanded(child: Text(message, style: TextStyle(fontSize: 13.5, height: 1.45, color: NV.text))),
           ?action,
         ]),
       );
@@ -360,8 +364,8 @@ class NvAgentLabel extends StatelessWidget {
             width: 18,
             height: 18,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(color: NV.red, shape: BoxShape.circle),
-            child: const Text('N', style: TextStyle(fontFamily: NV.serif, fontSize: 13, height: 1.1, color: NV.text)),
+            decoration: BoxDecoration(color: NV.red, shape: BoxShape.circle),
+            child: Text('N', style: TextStyle(fontFamily: NV.serif, fontSize: 13, height: 1.1, color: NV.text)),
           ),
           const SizedBox(width: 8),
           Flexible(child: Text('// ${label.toUpperCase()}', maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5))),
@@ -391,7 +395,7 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
   }
 
   @override
-  Widget build(BuildContext context) => FadeTransition(opacity: Tween(begin: 0.3, end: 1.0).animate(_c), child: const NvDot(NV.red, size: 6));
+  Widget build(BuildContext context) => FadeTransition(opacity: Tween(begin: 0.3, end: 1.0).animate(_c), child: NvDot(NV.red, size: 6));
 }
 
 /// A tool call the agent wants to run: rounded panel, red rule, command in
@@ -423,7 +427,7 @@ class NvApprovalCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Icon(Icons.shield_outlined, size: 16, color: NV.red),
+          Icon(Icons.shield_outlined, size: 16, color: NV.red),
           const SizedBox(width: 8),
           Text('// PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red)),
           const SizedBox(width: 10),
@@ -435,7 +439,7 @@ class NvApprovalCard extends StatelessWidget {
         ]),
         if (description.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Text(description, style: const TextStyle(fontSize: 14, height: 1.45, color: NV.text)),
+          Text(description, style: TextStyle(fontSize: 14, height: 1.45, color: NV.text)),
         ],
         const SizedBox(height: 10),
         ClipRRect(borderRadius: BorderRadius.circular(NV.rCtl), child: LogView(command, maxHeight: 120)),
@@ -477,12 +481,8 @@ class NvNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dur = reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 240);
-    return Container(
-      decoration: BoxDecoration(
-        color: NV.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NV.borderStrong),
-      ),
+    return NvGlass(
+      radius: 20,
       padding: const EdgeInsets.all(6),
       child: LayoutBuilder(builder: (context, c) {
         final w = c.maxWidth / items.length;
@@ -504,7 +504,7 @@ class NvNavBar extends StatelessWidget {
               child: Container(
                 width: 22,
                 height: 3,
-                decoration: const BoxDecoration(color: NV.red, borderRadius: BorderRadius.vertical(bottom: Radius.circular(3))),
+                decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.vertical(bottom: Radius.circular(3))),
               ),
             ),
           ),
@@ -531,7 +531,7 @@ class NvNavBar extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 4),
                               alignment: Alignment.center,
                               decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.circular(999), border: Border.all(color: NV.surface, width: 1.5)),
-                              child: Text('${badges[i]}', style: const TextStyle(fontFamily: NV.mono, fontSize: 9.5, color: NV.text, height: 1.1)),
+                              child: Text('${badges[i]}', style: TextStyle(fontFamily: NV.mono, fontSize: 9.5, color: NV.onRed, height: 1.1)),
                             ),
                           )
                         else if (dots[i] != null)
@@ -567,4 +567,37 @@ class NvSheetTitle extends StatelessWidget {
         ),
         ?trailing,
       ]);
+}
+
+
+/// Liquid glass surface (iOS-27-like, Neovarch rules): backdrop blur + ONE
+/// flat translucent tint + a 1px hairline. No gradient, no shadow, no glow.
+class NvGlass extends StatelessWidget {
+  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur = NV.glassBlur, this.tint, this.border = true, this.borderRadius});
+  final Widget child;
+  final double radius;
+  final BorderRadius? borderRadius;
+  final EdgeInsetsGeometry padding;
+  final double blur;
+  final Color? tint;
+  final bool border;
+  @override
+  Widget build(BuildContext context) {
+    final br = borderRadius ?? BorderRadius.circular(radius);
+    return ClipRRect(
+      borderRadius: br,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: DecoratedBox(
+          key: const ValueKey('nv-glass'),
+          decoration: BoxDecoration(
+            color: tint ?? NV.glass,
+            borderRadius: br,
+            border: border ? Border.all(color: NV.glassBorder) : null,
+          ),
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
 }

@@ -1,11 +1,10 @@
-// The phone's link to the desktop: the Hermes `tui_gateway` JSON-RPC over
-// WebSocket (`/api/ws`, via the app's existing GatewayClient) plus the few
-// REST routes the remote needs (Kanban plugin, public status). Pure Dart so
-// it is unit-tested against an in-process mock gateway.
+// The phone's link to the desktop: the Neovarch core gateway, JSON-RPC over
+// a persistent WebSocket (`/api/ws`, via GatewayClient) plus the REST routes
+// the remote needs (Office, Obsidian vault, appearance, Kanban, update). Pure
+// Dart so it is unit-tested against an in-process mock gateway.
 //
-// Gateway facts this relies on (hermes-agent tui_gateway, see
-// docs/remote-protocol.md):
-//   * auth: `?token=` on the WS URL; REST takes `X-Hermes-Session-Token`
+// Gateway facts this relies on (see docs/remote-protocol.md):
+//   * auth: `?token=` on the WS URL; REST takes `X-Neovarch-Session-Token`
 //     or `Authorization: Bearer` with the same token;
 //   * `client.capabilities {server_requests:true}` must be sent, otherwise
 //     approvals are never sent to this connection;
@@ -13,14 +12,24 @@
 //     (string id `srq-…`), answered with `{choice}`; `request.cancel` and
 //     `approval.cancelled` withdraw them; `approval.pending` / `.respond`
 //     are the RPC fallbacks;
-//   * `ping` keeps the socket alive (the desktop pings every 15 s).
+//   * realtime: everything is pushed (`office.update`, `appearance.changed`,
+//     `kanban.changed`, `vault.changed`, session events); nothing is polled.
+//     Events carry `seq`; after a reconnect `events.replay {since, boot_id}`
+//     returns what was missed or `{resync:true}`;
+//   * `ping` is the keepalive (every 15 s here, 8 s timeout) and returns
+//     `boot_id` so a PC restart is noticed.
 import 'dart:async';
 import 'dart:convert';
+
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
 import '../data/gateway_client.dart';
 import '../models/models.dart';
+import 'office_models.dart';
+import 'pairing.dart';
+import 'vault_models.dart';
 import 'remote_transcript.dart';
 
 enum RemoteStatus { disconnected, connecting, connected, reconnecting, failed }
@@ -132,35 +141,70 @@ class RemoteGateway {
   RemoteGateway({
     required this.baseUrl,
     required this.token,
+    this.alternates = const [],
     this.headers = const {},
     this.profile,
     http.Client? httpClient,
     this.heartbeat = const Duration(seconds: 15),
+    this.pingTimeout = const Duration(seconds: 8),
     this.autoReconnect = true,
-  }) : _http = httpClient ?? http.Client() {
-    client = GatewayClient(baseUrl: baseUrl, token: token, headers: headers);
+    this.lanTimeout = const Duration(milliseconds: 2500),
+    this.wanTimeout = const Duration(seconds: 6),
+    math.Random? random,
+  })  : _http = httpClient ?? http.Client(),
+        _rand = random ?? math.Random() {
+    activeUrl = candidates.first;
+    client = GatewayClient(baseUrl: activeUrl, token: token, headers: headers);
   }
 
+  /// The paired address; [alternates] are other routes to the same PC.
   final String baseUrl;
+  List<String> alternates;
   final String token;
   final Map<String, String> headers;
   final String? profile;
   final Duration heartbeat;
+  final Duration pingTimeout;
   final bool autoReconnect;
+  final Duration lanTimeout, wanTimeout;
   final http.Client _http;
+  final math.Random _rand;
   late GatewayClient client;
+
+  /// The address the live socket uses (REST goes there too).
+  late String activeUrl;
+
+  /// LAN first, then Tailscale MagicDNS, then tailnet IPs.
+  List<String> get candidates => orderedGatewayUrls([baseUrl, ...alternates]);
+  String get route => gatewayRoute(activeUrl);
 
   RemoteStatus status = RemoteStatus.disconnected;
   String? lastError;
   final _status = StreamController<RemoteStatus>.broadcast();
   final _events = StreamController<GatewayEventFrame>.broadcast();
   final _approvalsChanged = StreamController<RemoteApproval?>.broadcast();
+  final _routes = StreamController<List<String>>.broadcast();
   final Map<String, RemoteApproval> _approvals = {};
   StreamSubscription<GatewayEventFrame>? _sub;
   Timer? _beat;
   Timer? _retry;
   int _attempt = 0;
   bool _closed = false;
+  bool _everConnected = false;
+
+  // realtime cursor (core v1.4: every event carries `seq`; ping returns boot_id)
+  int lastSeq = 0;
+  String? bootId;
+
+  /// Runtime session ids this phone attached to (re-attached on reconnect).
+  final Set<String> attached = {};
+
+  /// True after a reconnect whose missed events could not be replayed: the
+  /// open chat must be re-read with `session.resume`.
+  bool resyncNeeded = false;
+
+  /// Round trip of the last keepalive ping.
+  Duration? lastRtt;
 
   Stream<RemoteStatus> get statusStream => _status.stream;
 
@@ -169,13 +213,16 @@ class RemoteGateway {
 
   /// Fires with the new approval when one arrives, null when one goes away.
   Stream<RemoteApproval?> get approvalsChanged => _approvalsChanged.stream;
+
+  /// Fallback addresses the PC reported (`network.addresses`).
+  Stream<List<String>> get routesChanged => _routes.stream;
   List<RemoteApproval> get approvals => _approvals.values.toList()..sort((a, b) => a.receivedAt.compareTo(b.receivedAt));
 
   Map<String, dynamic> get _p => {if (profile != null && profile!.isNotEmpty) 'profile': profile};
 
   Map<String, String> get _restHeaders => {
         ...headers,
-        if (token.isNotEmpty) 'X-Hermes-Session-Token': token,
+        if (token.isNotEmpty) 'X-Neovarch-Session-Token': token,
         if (token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
@@ -185,35 +232,122 @@ class RemoteGateway {
   }
 
   // ------------------------------------------------------------ connection --
-  /// Open the socket, advertise server-request support, start the heartbeat.
-  /// Throws (and sets [lastError]) when the gateway cannot be reached.
+  /// Open the socket on the first address that answers (LAN first, then
+  /// Tailscale), advertise server-request support, replay what was missed,
+  /// start the keepalive. Throws (and sets [lastError]) when no address works.
   Future<void> connect() async {
     _closed = false;
     _retry?.cancel();
-    _setStatus(_attempt == 0 ? RemoteStatus.connecting : RemoteStatus.reconnecting);
+    _setStatus(_attempt == 0 && !_everConnected ? RemoteStatus.connecting : RemoteStatus.reconnecting);
     try {
-      await client.ensureConnected();
-      _sub ??= client.events.listen(_onFrame);
+      Object? firstError;
+      var ok = false;
+      for (final url in candidates) {
+        if (_closed) break;
+        final c = GatewayClient(
+            baseUrl: url, token: token, headers: headers, connectTimeout: gatewayRoute(url) == 'lan' ? lanTimeout : wanTimeout);
+        try {
+          await c.ensureConnected();
+        } catch (e) {
+          firstError ??= e;
+          c.close();
+          continue;
+        }
+        await _sub?.cancel();
+        client.close();
+        client = c;
+        activeUrl = url;
+        _sub = c.events.listen(_onFrame);
+        ok = true;
+        break;
+      }
+      if (!ok) throw firstError ?? const RpcError(0, 'tidak ada alamat PC yang menjawab');
       await client.call('client.capabilities', {'server_requests': true}, const Duration(seconds: 15));
+      await _replayMissed();
       _attempt = 0;
       lastError = null;
+      _everConnected = true;
       _beat?.cancel();
-      _beat = Timer.periodic(heartbeat, (_) => _ping());
+      _beat = Timer.periodic(heartbeat, (_) => ping());
       _setStatus(RemoteStatus.connected);
+      unawaited(_refreshRoutes());
+      unawaited(ping());
     } catch (e) {
       lastError = '$e';
-      final retrying = autoReconnect && !_closed && _attempt > 0;
+      final retrying = autoReconnect && !_closed && (_attempt > 0 || _everConnected);
       _setStatus(retrying ? RemoteStatus.reconnecting : RemoteStatus.failed);
       if (retrying) _scheduleRetry();
       rethrow;
     }
   }
 
-  Future<void> _ping() async {
+  /// After a reconnect: ask the core for the events this phone missed
+  /// (`events.replay`, which also re-attaches the open sessions). Cores
+  /// without it, or a gap it no longer holds, set [resyncNeeded].
+  Future<void> _replayMissed() async {
+    resyncNeeded = false;
+    if (!_everConnected) return;
+    if (bootId == null || lastSeq <= 0) {
+      resyncNeeded = true;
+      return;
+    }
     try {
-      await client.call('ping', const {}, const Duration(seconds: 20));
+      final r = await client.call('events.replay',
+          {..._p, 'since': lastSeq, 'boot_id': bootId, 'session_ids': attached.toList()}, const Duration(seconds: 10));
+      if (r is! Map || r['resync'] == true) {
+        resyncNeeded = true;
+        if (r is Map && r['boot_id'] != null) bootId = '${r['boot_id']}';
+        if (r is Map && r['seq'] is num) lastSeq = (r['seq'] as num).toInt();
+        _emit(const GatewayEventFrame('resync.required', null, {}));
+        return;
+      }
+      for (final ev in (r['events'] as List? ?? const []).whereType<Map>()) {
+        _onFrame(GatewayEventFrame('${ev['type']}', ev['session_id'] as String?,
+            ev['payload'] is Map ? Map<String, dynamic>.from(ev['payload'] as Map) : <String, dynamic>{},
+            seq: (ev['seq'] as num?)?.toInt(), replayed: true));
+      }
     } catch (_) {
-      // A half-open socket: force a reconnect.
+      resyncNeeded = true;
+      _emit(const GatewayEventFrame('resync.required', null, {}));
+    }
+  }
+
+  Future<void> _refreshRoutes() async {
+    try {
+      final r = await client.call('network.addresses', const {}, const Duration(seconds: 8));
+      final urls = (r is Map ? r['urls'] : null) as List?;
+      if (urls == null) return;
+      final list = [for (final u in urls) normalizeGatewayUrl('$u')].whereType<String>().where((u) => u != baseUrl).toList();
+      if (list.isEmpty) return;
+      alternates = list;
+      if (!_routes.isClosed) _routes.add(list);
+    } catch (_) {
+      // Older core: no network.addresses; the paired address is all we have.
+    }
+  }
+
+  /// Keepalive: a dead or half-open socket is detected within [pingTimeout]
+  /// and reconnected; a changed `boot_id` (PC restarted) forces a resync.
+  Future<void> ping() async {
+    if (status != RemoteStatus.connected) return;
+    final sw = Stopwatch()..start();
+    try {
+      final r = await client.call('ping', const {}, pingTimeout);
+      lastRtt = sw.elapsed;
+      if (r is Map) {
+        final b = r['boot_id'];
+        if (b != null) {
+          if (bootId != null && bootId != '$b') {
+            lastSeq = 0;
+            resyncNeeded = true;
+            bootId = '$b';
+            _emit(const GatewayEventFrame('resync.required', null, {'reason': 'restart'}));
+          }
+          bootId = '$b';
+        }
+        if (r['seq'] is num && lastSeq == 0) lastSeq = (r['seq'] as num).toInt();
+      }
+    } catch (_) {
       client.close();
       _onDisconnected();
     }
@@ -228,14 +362,22 @@ class RemoteGateway {
       return;
     }
     _setStatus(RemoteStatus.reconnecting);
-    if (autoReconnect) _scheduleRetry();
+    if (autoReconnect) _scheduleRetry(immediate: _attempt == 0);
   }
 
-  void _scheduleRetry() {
+  /// Exponential backoff with ±20 % jitter: 0.5, 1, 2, 4, 8, 16, 30 s cap.
+  /// The first retry after a drop is immediate (most drops are blips).
+  Duration backoff(int attempt) {
+    final base = math.min(30.0, 0.5 * math.pow(2, attempt));
+    final j = 0.8 + _rand.nextDouble() * 0.4;
+    return Duration(milliseconds: (base * j * 1000).round());
+  }
+
+  void _scheduleRetry({bool immediate = false}) {
     _retry?.cancel();
-    final secs = [1, 2, 4, 8, 15, 30][_attempt.clamp(0, 5)];
+    final wait = immediate ? Duration.zero : backoff(_attempt);
     _attempt++;
-    _retry = Timer(Duration(seconds: secs), () async {
+    _retry = Timer(wait, () async {
       _retry = null;
       if (_closed) return;
       try {
@@ -244,7 +386,7 @@ class RemoteGateway {
     });
   }
 
-  /// Reconnect now (pull-to-refresh / app resumed).
+  /// Reconnect now (pull-to-refresh / app resumed / network changed).
   Future<void> reconnect() async {
     _retry?.cancel();
     _retry = null;
@@ -253,7 +395,20 @@ class RemoteGateway {
     await connect();
   }
 
+  void _emit(GatewayEventFrame f) {
+    if (!_events.isClosed) _events.add(f);
+  }
+
   void _onFrame(GatewayEventFrame f) {
+    final seq = f.seq;
+    if (seq != null) {
+      if (f.replayed && seq <= lastSeq) return; // already seen
+      if (seq > lastSeq) lastSeq = seq;
+    }
+    if (f.payload['boot_id'] != null && (f.type == 'gateway.ready' || f.type == 'hello')) {
+      bootId = '${f.payload['boot_id']}';
+      if (f.payload['seq'] is num && lastSeq == 0) lastSeq = (f.payload['seq'] as num).toInt();
+    }
     switch (f.type) {
       case 'gateway.disconnected':
         _onDisconnected();
@@ -266,10 +421,12 @@ class RemoteGateway {
         _approvals[a.key] = a;
         _approvalsChanged.add(a);
       case 'approval.request':
-        // Older gateways: a notification instead of a server request.
+        // A notification instead of a server request.
         final a = RemoteApproval.fromParams(f.payload, sessionId: f.sessionId);
-        _approvals[a.key] = a;
-        _approvalsChanged.add(a);
+        if (!_approvals.values.any((x) => x.requestId.isNotEmpty && x.requestId == a.requestId)) {
+          _approvals[a.key] = a;
+          _approvalsChanged.add(a);
+        }
       case 'request.cancel':
         final id = '${f.payload['id'] ?? ''}';
         if (_approvals.remove(id) != null) _approvalsChanged.add(null);
@@ -280,7 +437,7 @@ class RemoteGateway {
         _approvals.removeWhere((_, a) => ids.contains(a.requestId) || (ids.isEmpty && a.sessionId == sid));
         if (_approvals.length != before) _approvalsChanged.add(null);
     }
-    if (!_events.isClosed) _events.add(f);
+    _emit(f);
   }
 
   Future<void> close() async {
@@ -295,6 +452,7 @@ class RemoteGateway {
     await _status.close();
     await _events.close();
     await _approvalsChanged.close();
+    await _routes.close();
   }
 
   // --------------------------------------------------------------- sessions --
@@ -339,6 +497,7 @@ class RemoteGateway {
   Future<OpenedSession> resume(String storedId) async {
     final r = Map<String, dynamic>.from(await client.call('session.resume', {..._p, 'session_id': storedId, 'source': 'mobile'}) as Map);
     final runtime = '${r['session_id']}';
+    attached.add(runtime);
     _absorbPending(r, runtime);
     final info = r['info'] is Map ? r['info'] as Map : const {};
     return OpenedSession(
@@ -353,6 +512,7 @@ class RemoteGateway {
   Future<OpenedSession> create() async {
     final r = Map<String, dynamic>.from(await client.call('session.create', {..._p, 'source': 'mobile'}) as Map);
     final runtime = '${r['session_id']}';
+    attached.add(runtime);
     return OpenedSession(
       storedId: '${r['stored_session_id'] ?? runtime}',
       runtimeId: runtime,
@@ -419,7 +579,7 @@ class RemoteGateway {
 
   // ------------------------------------------------------------------- REST --
   Uri _rest(String path, [Map<String, String>? q]) {
-    final b = Uri.parse(baseUrl);
+    final b = Uri.parse(activeUrl);
     return b.replace(path: '${b.path.replaceAll(RegExp(r'/+$'), '')}$path', queryParameters: q == null || q.isEmpty ? null : q);
   }
 
@@ -431,7 +591,7 @@ class RemoteGateway {
     }
     final res = await _http.send(req).timeout(const Duration(seconds: 20));
     final text = await res.stream.bytesToString();
-    if (res.statusCode == 404) throw const RemoteRestError(404, 'fitur ini tidak tersedia di gateway PC (plugin Kanban mati?)');
+    if (res.statusCode == 404) throw const RemoteRestError(404, 'fitur ini belum ada di Neovarch PC — perbarui aplikasi PC');
     if (res.statusCode == 401 || res.statusCode == 403) throw RemoteRestError(res.statusCode, 'token ditolak oleh PC — pasangkan ulang');
     if (res.statusCode < 200 || res.statusCode >= 300) {
       String msg = 'HTTP ${res.statusCode}';
@@ -463,6 +623,33 @@ class RemoteGateway {
     } catch (_) {
       return const {};
     }
+  }
+
+  /// `GET /api/office`: the agents ("pegawai") and the activity feed.
+  Future<OfficeSnapshot> office() async => OfficeSnapshot.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/office') as Map));
+
+  /// `GET /api/appearance`: `{accent, base, on_accent}`; null when the core
+  /// has no appearance route (older PC).
+  Future<Map<String, dynamic>?> appearance() async {
+    try {
+      final j = await _json('GET', '/api/appearance');
+      return j is Map ? Map<String, dynamic>.from(j) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Obsidian vault (read-only on the phone).
+  Future<VaultTree> vaultTree() async => VaultTree.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/obsidian/tree') as Map));
+
+  Future<VaultNote> vaultNote(String path) async =>
+      VaultNote.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/obsidian/note', query: {'path': path}) as Map));
+
+  Future<VaultGraph> vaultGraph() async => VaultGraph.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/obsidian/graph') as Map));
+
+  Future<List<VaultHit>> vaultSearch(String q) async {
+    final j = await _json('GET', '/api/obsidian/search', query: {'q': q});
+    return [for (final h in ((j is Map ? j['results'] : null) as List? ?? const []).whereType<Map>()) VaultHit.fromJson(Map<String, dynamic>.from(h))];
   }
 
   static const _kanban = '/api/plugins/kanban';

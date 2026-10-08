@@ -55,7 +55,7 @@ class _ScanScreenState extends State<ScanScreen> {
                       ? 'Izin kamera ditolak. Izinkan kamera di Pengaturan, atau masukkan alamat & token secara manual.'
                       : 'Kamera tidak tersedia: ${e.errorDetails?.message ?? e.errorCode.name}',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: NV.text, fontSize: 14, height: 1.5),
+                  style: TextStyle(color: NV.text, fontSize: 14, height: 1.5),
                 ),
               ),
             ),
@@ -91,7 +91,7 @@ class _ScanScreenState extends State<ScanScreen> {
               const SizedBox(height: 6),
               Text(
                 _hint ?? 'Di PC: Neovarch Desktop → Remote / Perangkat → tampilkan QR pemasangan.',
-                style: const TextStyle(color: NV.text, fontSize: 14, height: 1.45),
+                style: TextStyle(color: NV.text, fontSize: 14, height: 1.45),
               ),
             ]),
           ),

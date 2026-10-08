@@ -8,6 +8,7 @@ import '../../state/app_controller.dart' show settingsProvider;
 import '../../state/settings_controller.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/screens/startup_splash.dart';
+import '../appearance.dart';
 import '../remote_controller.dart';
 import '../saved_desktops.dart';
 import 'connect_screen.dart';
@@ -18,10 +19,13 @@ Future<void> runRemoteApp(
     {required SharedPreferences prefs, required SettingsController settings, bool skipSplash = false, String? openSession}) async {
   final desktops = SavedDesktops(prefs)..load();
   final remote = RemoteController(desktops);
+  final look = AppearanceController(prefs);
+  remote.onAppearance = look.applyPc;
   runApp(ProviderScope(
     overrides: [
       settingsProvider.overrideWith((ref) => settings),
       remoteProvider.overrideWith((ref) => remote),
+      appearanceProvider.overrideWith((ref) => look),
     ],
     child: RemoteNeovarchApp(skipSplash: skipSplash),
   ));
@@ -30,8 +34,17 @@ Future<void> runRemoteApp(
   if (openSession != null && remote.connected) await remote.openSession(openSession);
 }
 
-/// Built once; the remote never switches themes.
-final neovarchMobileTheme = buildNeovarchMobileTheme();
+ThemeData? _theme;
+int _themeRev = -1;
+
+/// Rebuilt only when the palette changes (PC appearance / local override).
+ThemeData themeFor(AppearanceController look) {
+  if (_theme == null || _themeRev != look.revision) {
+    _theme = buildNeovarchMobileTheme();
+    _themeRev = look.revision;
+  }
+  return _theme!;
+}
 
 class RemoteNeovarchApp extends ConsumerWidget {
   const RemoteNeovarchApp({super.key, this.skipSplash = false});
@@ -41,15 +54,18 @@ class RemoteNeovarchApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final remote = ref.watch(remoteProvider);
+    final look = ref.watch(appearanceProvider);
     final paired = remote.desktop != null || remote.desktops.items.isNotEmpty;
+    final theme = themeFor(look);
     return MaterialApp(
       title: 'Neovarch Remote',
       debugShowCheckedModeBanner: false,
-      // The phone has one look (Neovarch dark red, rounded, flat): the
-      // desktop theme presets / light mode do not apply to the remote.
-      theme: neovarchMobileTheme,
-      darkTheme: neovarchMobileTheme,
-      themeMode: ThemeMode.dark,
+      // Follows the PC's look (accent + dark/light) unless overridden on the
+      // phone; flat, rounded, no gradients/shadows/glow in every variant.
+      theme: theme,
+      darkTheme: theme,
+      themeMode: look.dark ? ThemeMode.dark : ThemeMode.light,
+      builder: (context, child) => PaletteScope(revision: look.revision, child: child!),
       home: !s.introSeen
           ? const RemoteIntroScreen()
           : StartupSplash(
@@ -62,3 +78,30 @@ class RemoteNeovarchApp extends ConsumerWidget {
     );
   }
 }
+
+/// Repaints the whole tree (state kept) when the palette revision changes.
+class PaletteScope extends StatefulWidget {
+  const PaletteScope({super.key, required this.revision, required this.child});
+  final int revision;
+  final Widget child;
+  @override
+  State<PaletteScope> createState() => _PaletteScopeState();
+}
+
+class _PaletteScopeState extends State<PaletteScope> {
+  @override
+  void didUpdateWidget(PaletteScope old) {
+    super.didUpdateWidget(old);
+    if (old.revision != widget.revision) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) rebuildAllChildren(context);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// The current palette's theme (tests / previews).
+ThemeData get neovarchMobileTheme => buildNeovarchMobileTheme();

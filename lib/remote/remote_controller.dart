@@ -1,6 +1,8 @@
 // Phone remote state: which desktop, the live gateway link, the open chat,
-// approvals, the Kanban board and the desktop's status. One ChangeNotifier
-// the remote screens watch.
+// approvals, the Office, the Kanban board and the desktop's status. One
+// ChangeNotifier the remote screens watch. Everything after the first load is
+// pushed by the PC over the WebSocket (no polling); a reconnect re-reads the
+// snapshots and replays or resumes what was missed.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -9,8 +11,10 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../data/device_tools.dart';
 import '../data/gateway_client.dart';
 import '../models/models.dart';
+import 'office_models.dart';
 import 'pairing.dart';
 import 'remote_gateway.dart';
+import 'update_check.dart';
 import 'remote_transcript.dart';
 import 'saved_desktops.dart';
 
@@ -22,7 +26,21 @@ class RemoteController extends ChangeNotifier {
   SavedDesktop? desktop;
   RemoteStatus status = RemoteStatus.disconnected;
   String? error;
-  StreamSubscription? _statusSub, _eventSub, _approvalSub;
+  StreamSubscription? _statusSub, _eventSub, _approvalSub, _routeSub;
+
+  /// The PC's appearance (`/api/appearance`, `appearance.changed`).
+  void Function(Map<String, dynamic> appearance)? onAppearance;
+
+  /// Checks GitHub Releases for a newer phone app (injectable for tests).
+  UpdateChecker updateChecker = UpdateChecker();
+
+  // office (pushed via `office.update`)
+  OfficeSnapshot? office;
+  String? officeError;
+  DateTime? officeAt;
+
+  /// Bumped on `vault.changed` so an open vault screen re-reads its note.
+  int vaultRevision = 0;
 
   // chat
   List<ChatSessionInfo> sessions = [];
@@ -45,11 +63,20 @@ class RemoteController extends ChangeNotifier {
   List<ActiveSession> active = [];
   Map<String, dynamic> serverInfo = const {};
 
-  /// Latest GitHub release as the PC core reports it (`/api/update`).
+  /// Newest release for this phone app: GitHub Releases API directly, the
+  /// PC core's `/api/update` (cached GitHub check) as the fallback.
   Map<String, dynamic> update = const {};
   String? dismissedUpdate;
   bool get updateAvailable =>
       update['available'] == true && update['latest'] != null && update['latest'] != dismissedUpdate;
+
+  Future<void> checkUpdate() async {
+    final u = await updateChecker.check(fallback: gateway?.updateInfo);
+    if (u != null) {
+      update = u;
+      notifyListeners();
+    }
+  }
   void dismissUpdate() {
     dismissedUpdate = update['latest'] as String?;
     notifyListeners();
@@ -113,10 +140,11 @@ class RemoteController extends ChangeNotifier {
     desktop = d;
     desktops.touch(d);
     final token = await desktops.token(d.id);
-    final g = gateway = RemoteGateway(baseUrl: d.url, token: token, headers: d.headers, profile: d.profile);
+    final g = gateway = RemoteGateway(baseUrl: d.url, alternates: d.alternates, token: token, headers: d.headers, profile: d.profile);
     _statusSub = g.statusStream.listen(_onStatus);
     _eventSub = g.events.listen(_onEvent);
     _approvalSub = g.approvalsChanged.listen(_onApproval);
+    _routeSub = g.routesChanged.listen((urls) => desktops.updateRoutes(d, alternates: urls));
     error = null;
     notifyListeners();
     try {
@@ -136,6 +164,7 @@ class RemoteController extends ChangeNotifier {
     await _statusSub?.cancel();
     await _eventSub?.cancel();
     await _approvalSub?.cancel();
+    await _routeSub?.cancel();
     final g = gateway;
     gateway = null;
     await g?.close();
@@ -147,7 +176,8 @@ class RemoteController extends ChangeNotifier {
     boardError = null;
     active = [];
     serverInfo = const {};
-    update = const {};
+    office = null;
+    officeError = null;
     status = RemoteStatus.disconnected;
   }
 
@@ -184,9 +214,14 @@ class RemoteController extends ChangeNotifier {
     status = s;
     if (s == RemoteStatus.connected) {
       error = null;
+      final d = desktop, g = gateway;
+      if (d != null && g != null) desktops.updateRoutes(d, lastUrl: g.activeUrl);
       unawaited(refreshAll());
-      // Re-attach to the open chat: picks up a turn or approval we missed.
-      if (was != RemoteStatus.connected && storedId != null) unawaited(openSession(storedId!, quiet: true));
+      // Re-attach to the open chat when the missed events could not be
+      // replayed (older core, PC restarted, gap too old).
+      if (was != RemoteStatus.connected && storedId != null && (g == null || g.resyncNeeded || runtimeId == null)) {
+        unawaited(openSession(storedId!, quiet: true));
+      }
     } else if (s == RemoteStatus.reconnecting || s == RemoteStatus.failed) {
       transcript.interrupted();
       if (s == RemoteStatus.failed) error ??= _friendly(gateway?.lastError ?? 'gagal terhubung');
@@ -195,6 +230,20 @@ class RemoteController extends ChangeNotifier {
   }
 
   void _onEvent(GatewayEventFrame f) {
+    switch (f.type) {
+      case 'office.update':
+        _applyOffice(f.payload);
+      case 'appearance.changed':
+        onAppearance?.call(f.payload);
+      case 'kanban.changed':
+        unawaited(refreshBoard());
+      case 'vault.changed':
+        vaultRevision++;
+        notifyListeners();
+      case 'resync.required':
+        unawaited(refreshAll());
+        if (storedId != null) unawaited(openSession(storedId!, quiet: true));
+    }
     if (f.type == 'sessions.changed' || f.type == 'session.title') unawaited(loadSessions());
     if (f.sessionId != null && f.sessionId == runtimeId) {
       if (transcript.apply(f)) {
@@ -222,8 +271,41 @@ class RemoteController extends ChangeNotifier {
     }
   }
 
+  /// Snapshots after (re)connecting; from here on the PC pushes changes.
   Future<void> refreshAll() async {
-    await Future.wait([loadSessions(), refreshStatus(), refreshBoard()]);
+    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance()]);
+  }
+
+  Future<void> _loadAppearance() async {
+    final a = await gateway?.appearance();
+    if (a != null) onAppearance?.call(a);
+  }
+
+  // --------------------------------------------------------------- office --
+  Future<void> refreshOffice() async {
+    final g = gateway;
+    if (g == null || !connected) return;
+    try {
+      office = await g.office();
+      officeAt = DateTime.now();
+      officeError = null;
+    } catch (e) {
+      officeError = '$e';
+    }
+    notifyListeners();
+  }
+
+  void _applyOffice(Map<String, dynamic> payload) {
+    final before = office;
+    office = OfficeSnapshot.fromJson(payload);
+    officeAt = DateTime.now();
+    officeError = null;
+    // The Kanban counts changed or a task moved: re-read the board (event
+    // driven; cores without `kanban.changed`).
+    final k = office!.kanban, kb = before?.kanban ?? const {};
+    final moved = office!.feed.isNotEmpty && office!.feed.first.kind == 'task' && office!.feed.first.id != (before?.feed.firstOrNull?.id);
+    if (before != null && (moved || k.entries.any((e) => kb[e.key] != e.value))) unawaited(refreshBoard());
+    notifyListeners();
   }
 
   // ----------------------------------------------------------------- chat --
@@ -382,8 +464,8 @@ class RemoteController extends ChangeNotifier {
       }
     } catch (_) {}
     serverInfo = await g.serverStatus();
-    update = await g.updateInfo();
     notifyListeners();
+    unawaited(checkUpdate());
   }
 
   @override

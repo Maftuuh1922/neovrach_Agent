@@ -90,11 +90,18 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final pc = r.desktop?.name ?? 'PC';
     final tps = r.transcript.tokensPerSecond;
 
+    final empty = msgs.isEmpty && !r.opening;
     return Scaffold(
       body: Column(children: [
+        if (empty)
+          _MinimalTopBar(
+            onHistory: r.connected ? _sessions : null,
+            onNew: r.connected ? r.newChat : null,
+          )
+        else ...[
         NvHeader(
           kicker: 'chat · $pc',
-          title: r.title.isNotEmpty ? r.title : (r.storedId == null ? 'Chat baru' : 'Percakapan'),
+          title: r.title.isNotEmpty ? r.title : (r.storedId == null ? 'Sesi baru' : 'Percakapan'),
           status: Row(children: [
             NvDot(r.connected ? NV.ok : NV.warn, size: 7),
             const SizedBox(width: 8),
@@ -109,10 +116,11 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
           ]),
           actions: [
             NvIconButton(tooltip: 'Riwayat sesi di PC', icon: Icons.history_rounded, onPressed: r.connected ? _sessions : null),
-            NvIconButton(tooltip: 'Chat baru', icon: Icons.add_rounded, onPressed: r.connected ? r.newChat : null),
+            NvIconButton(tooltip: 'Sesi baru', icon: Icons.add_rounded, onPressed: r.connected ? r.newChat : null),
           ],
         ),
-        const Divider(height: 1, color: NV.border),
+        Divider(height: 1, color: NV.border),
+        ],
         if (others > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -171,59 +179,30 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     );
   }
 
-  Widget _empty(BuildContext context, RemoteController r) => ListView(padding: const EdgeInsets.only(top: 16, bottom: 16), children: [
-        NvEmpty(
-          art: 'assets/art/portal-banner.webp',
-          kicker: r.connected ? 'siap · ${r.desktop?.name ?? 'pc'}' : 'offline',
-          title: 'Perintahkan agen di PC',
-          body: r.connected
-              ? 'Pesanmu dijalankan agen Neovarch di ${r.desktop?.name ?? 'PC'}. Alat, berkas, dan terminal ada di sana; HP ini mengirim perintah dan menampilkan hasilnya.'
-              : 'Belum terhubung ke PC. Sambungkan dari tab PC.',
+  /// Minimal start: only a time-based greeting (the composer sits below).
+  Widget _empty(BuildContext context, RemoteController r) => LayoutBuilder(
+        builder: (context, c) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Text(greetingFor(DateTime.now()),
+                    key: const ValueKey('chat-greeting'), textAlign: TextAlign.center, style: NV.display(size: 40)),
+              ),
+            ),
+          ),
         ),
-        if (r.connected) ...[
-          const NvSection('coba perintah', padding: EdgeInsets.fromLTRB(20, 4, 20, 10)),
-          NvList(children: [
-            for (final (i, p) in const [
-              'Apa yang sedang dikerjakan agen sekarang?',
-              'Ringkas papan Kanban hari ini',
-              'Jalankan tes proyek dan laporkan hasilnya',
-            ].indexed)
-              NvRow(
-                icon: [Icons.bolt_rounded, Icons.view_week_outlined, Icons.terminal_rounded][i],
-                title: p,
-                trailing: const Icon(Icons.north_east_rounded, size: 16, color: NV.faint),
-                onTap: () => _send(p),
-              ),
-          ]),
-        ],
-        if (r.sessions.isNotEmpty) ...[
-          const NvSection('terakhir di pc'),
-          NvList(children: [
-            for (final s in r.sessions.take(5))
-              NvRow(
-                icon: Icons.chat_bubble_outline_rounded,
-                title: s.title,
-                subtitle: '${relTime(s.updatedAt)} · ${s.messageCount} pesan',
-                mono: true,
-                trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
-                onTap: () => r.openSession(s.id).then((_) => _toBottom()),
-              ),
-          ]),
-        ],
-      ]);
+      );
 
   Widget _composer(BuildContext context, RemoteController r) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final kb = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 6, 16, (kb > 0 ? kb : bottom) + 8),
-      child: Container(
+      child: NvGlass(
+        key: const ValueKey('chat-composer'),
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-        decoration: BoxDecoration(
-          color: NV.surface,
-          borderRadius: BorderRadius.circular(NV.rCard),
-          border: Border.all(color: NV.borderStrong),
-        ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           if (canDictate)
             NvIconButton(
@@ -240,9 +219,9 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
               enabled: r.connected,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _send(),
-              style: const TextStyle(fontSize: 15, color: NV.text, height: 1.4),
+              style: TextStyle(fontSize: 15, color: NV.text, height: 1.4),
               decoration: InputDecoration(
-                hintText: r.connected ? 'Perintah untuk agen di PC…' : 'Menunggu koneksi ke PC…',
+                hintText: r.connected ? 'Ketik perintah untuk agen di PC…' : 'Menunggu koneksi ke PC…',
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -296,7 +275,7 @@ class _SessionsSheet extends ConsumerWidget {
                               subtitle: '${relTime(s.updatedAt)} · ${s.messageCount} pesan',
                               mono: true,
                               trailing: r.active.any((a) => a.title == s.title && a.status == 'running')
-                                  ? const NvPill('jalan', color: NV.red)
+                                  ? NvPill('jalan', color: NV.red)
                                   : null,
                               onTap: () => onPick(s.id),
                             ),
@@ -311,3 +290,27 @@ class _SessionsSheet extends ConsumerWidget {
 
 /// Small helper so other tabs can show an approval with its session label.
 String approvalOrigin(RemoteController r, RemoteApproval a) => r.sessionTitle(a.sessionId);
+
+/// "Selamat pagi/siang/sore/malam" by the phone's local hour.
+String greetingFor(DateTime t) {
+  final h = t.hour;
+  if (h >= 4 && h < 11) return 'Selamat pagi';
+  if (h >= 11 && h < 15) return 'Selamat siang';
+  if (h >= 15 && h < 18) return 'Selamat sore';
+  return 'Selamat malam';
+}
+
+class _MinimalTopBar extends StatelessWidget {
+  const _MinimalTopBar({required this.onHistory, required this.onNew});
+  final VoidCallback? onHistory;
+  final VoidCallback? onNew;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + 10, 12, 0),
+        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          NvIconButton(tooltip: 'Riwayat sesi di PC', icon: Icons.history_rounded, onPressed: onHistory),
+          const SizedBox(width: 6),
+          NvIconButton(tooltip: 'Sesi baru', icon: Icons.add_rounded, onPressed: onNew),
+        ]),
+      );
+}

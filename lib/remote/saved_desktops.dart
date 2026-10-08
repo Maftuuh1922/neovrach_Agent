@@ -17,8 +17,26 @@ class SavedDesktop {
   final Map<String, String> headers;
   final DateTime addedAt;
   DateTime? lastConnected;
+
+  /// Fallback addresses of this PC (Tailscale / other LAN interfaces), kept
+  /// fresh from `network.addresses` after each connect.
+  List<String> alternates;
+
+  /// The address that answered last (tried first next time).
+  String? lastUrl;
   SavedDesktop(
-      {required this.id, required this.name, required this.url, this.profile, this.headers = const {}, required this.addedAt, this.lastConnected});
+      {required this.id,
+      required this.name,
+      required this.url,
+      this.profile,
+      this.headers = const {},
+      required this.addedAt,
+      this.lastConnected,
+      this.alternates = const [],
+      this.lastUrl});
+
+  /// Candidate addresses in connect order: LAN first, then Tailscale.
+  List<String> get candidates => orderedGatewayUrls([url, ...alternates]);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -28,6 +46,8 @@ class SavedDesktop {
         'headers': headers,
         'addedAt': addedAt.toIso8601String(),
         'lastConnected': lastConnected?.toIso8601String(),
+        'alternates': alternates,
+        'lastUrl': lastUrl,
       };
   factory SavedDesktop.fromJson(Map<String, dynamic> j) => SavedDesktop(
         id: '${j['id']}',
@@ -37,6 +57,8 @@ class SavedDesktop {
         headers: j['headers'] is Map ? (j['headers'] as Map).map((k, v) => MapEntry('$k', '$v')) : const {},
         addedAt: DateTime.tryParse('${j['addedAt'] ?? ''}') ?? DateTime.now(),
         lastConnected: DateTime.tryParse('${j['lastConnected'] ?? ''}'),
+        alternates: [for (final a in (j['alternates'] as List? ?? const [])) '$a'],
+        lastUrl: j['lastUrl'] as String?,
       );
 }
 
@@ -81,6 +103,7 @@ class SavedDesktops {
       headers: p.headers,
       addedAt: existing?.addedAt ?? DateTime.now(),
       lastConnected: DateTime.now(),
+      alternates: p.alternates.isNotEmpty ? p.alternates : (existing?.alternates ?? const []),
     );
     items
       ..removeWhere((x) => x.id == d.id)
@@ -94,6 +117,13 @@ class SavedDesktops {
   void touch(SavedDesktop d) {
     d.lastConnected = DateTime.now();
     activeId = d.id;
+    _save();
+  }
+
+  /// Remember the addresses the PC reported and which one answered.
+  void updateRoutes(SavedDesktop d, {List<String>? alternates, String? lastUrl}) {
+    if (alternates != null) d.alternates = [for (final a in alternates) if (a != d.url) a];
+    if (lastUrl != null) d.lastUrl = lastUrl;
     _save();
   }
 

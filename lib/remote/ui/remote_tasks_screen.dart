@@ -166,10 +166,10 @@ class _TaskCard extends StatelessWidget {
             if (task.priority > 0) NvPill('P${task.priority}', color: NV.red),
           ]),
           const SizedBox(height: 8),
-          Text(task.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3, color: NV.text)),
+          Text(task.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3, color: NV.text)),
           if ((task.summary ?? '').isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(task.summary!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.45, color: NV.muted)),
+            Text(task.summary!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, height: 1.45, color: NV.muted)),
           ],
           const SizedBox(height: 12),
           Row(children: [
@@ -180,7 +180,7 @@ class _TaskCard extends StatelessWidget {
                   maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10.5, color: NV.muted).copyWith(letterSpacing: 0.3)),
             ),
             if (task.comments > 0) ...[
-              const Icon(Icons.mode_comment_outlined, size: 13, color: NV.muted),
+              Icon(Icons.mode_comment_outlined, size: 13, color: NV.muted),
               const SizedBox(width: 4),
               Text('${task.comments}', style: NV.monoLabel(size: 10.5)),
             ],
@@ -203,8 +203,8 @@ class _Avatar extends StatelessWidget {
           border: Border.all(color: name == null ? NV.border : NV.darkRed),
         ),
         child: name == null
-            ? const Icon(Icons.person_outline_rounded, size: 13, color: NV.faint)
-            : Text(initials(name!).substring(0, 1), style: const TextStyle(fontFamily: NV.mono, fontSize: 10.5, color: NV.text)),
+            ? Icon(Icons.person_outline_rounded, size: 13, color: NV.faint)
+            : Text(initials(name!).substring(0, 1), style: TextStyle(fontFamily: NV.mono, fontSize: 10.5, color: NV.text)),
       );
 }
 
@@ -241,10 +241,10 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
           const SizedBox(height: 12),
           NvKv('Penanggung', t.assignee ?? '—'),
           if (t.priority > 0) NvKv('Prioritas', 'P${t.priority}', mono: true),
-          if ((t.body ?? '').isNotEmpty) ...[const SizedBox(height: 8), Text(t.body!, style: const TextStyle(fontSize: 14, height: 1.5, color: NV.text))],
+          if ((t.body ?? '').isNotEmpty) ...[const SizedBox(height: 8), Text(t.body!, style: TextStyle(fontSize: 14, height: 1.5, color: NV.text))],
           if ((t.summary ?? '').isNotEmpty) ...[
             const NvSection('ringkasan terakhir', padding: EdgeInsets.fromLTRB(0, 16, 0, 8)),
-            Text(t.summary!, style: const TextStyle(fontSize: 13, height: 1.5, color: NV.muted)),
+            Text(t.summary!, style: TextStyle(fontSize: 13, height: 1.5, color: NV.muted)),
           ],
           if (moves.isNotEmpty) ...[
             const NvSection('pindahkan ke', padding: EdgeInsets.fromLTRB(0, 18, 0, 10)),
@@ -312,7 +312,7 @@ class _NewTaskSheetState extends ConsumerState<_NewTaskSheet> {
             onChanged: (v) => setState(() => assignee = v),
           ),
           const SizedBox(height: 6),
-          Text('Tugas dengan penanggung dikerjakan agen di PC saat siap.', style: const TextStyle(fontSize: 12.5, color: NV.muted)),
+          Text('Tugas dengan penanggung dikerjakan agen di PC saat siap.', style: TextStyle(fontSize: 12.5, color: NV.muted)),
           const SizedBox(height: 14),
           FilledButton(
             onPressed: busy
