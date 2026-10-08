@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import remotePairingArt from '@/assets/neovarch/remote-pairing.webp'
+import { HaloMark } from '@/components/neovarch/halo-mark'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Input } from '@/components/ui/input'
@@ -44,7 +46,7 @@ async function renderQr(payload: string): Promise<string> {
     errorCorrectionLevel: 'M',
     margin: 2,
     width: 232,
-    color: { dark: '#0a0a0a', light: '#f2ede4' }
+    color: { dark: '#0d0606', light: '#f4f2ed' }
   })
 }
 
@@ -138,7 +140,30 @@ export function RemoteSettings() {
 
   return (
     <SettingsContent>
-      <SectionHeading icon={QrCode} meta={stateLabel} title="Remote / Perangkat" />
+      <section className="nv-remote-hero" data-slot="nv-remote-hero">
+        <img alt="" aria-hidden="true" className="nv-remote-art" draggable={false} src={remotePairingArt} />
+        <div className="nv-remote-copy">
+          <span className="nv-eyebrow">Remote / Perangkat</span>
+          <h2 className="nv-remote-title">Pasangkan HP</h2>
+          <div className="nv-remote-device">
+            <HaloMark className={status?.running ? 'size-3 text-(--nv-red)' : 'size-3 text-[#7d7470]'} />
+            <span className="nv-remote-device-name">{status?.deviceName || 'PC Neovarch'}</span>
+            <span className="nv-remote-device-state">{stateLabel}</span>
+          </div>
+          <ol className="nv-remote-steps">
+            <li>
+              <span>01</span>Aktifkan akses remote
+            </li>
+            <li>
+              <span>02</span>Pindai QR dari HP
+            </li>
+            <li>
+              <span>03</span>Obrolan, persetujuan &amp; Kanban di HP
+            </li>
+          </ol>
+        </div>
+      </section>
+      <SectionHeading icon={QrCode} meta={stateLabel} title="Detail koneksi" />
       <p className={`${CAPTION} mb-2`}>
         Kendalikan agen di PC ini dari aplikasi Neovarch di HP: obrolan, persetujuan, dan Kanban. HP harus berada di
         jaringan yang sama (Wi‑Fi/LAN) atau terhubung lewat Tailscale/VPN.
@@ -165,11 +190,11 @@ export function RemoteSettings() {
             wide
             below={
               <div className="mt-3 flex flex-wrap items-start gap-5">
-                <div className="grid size-[232px] place-items-center rounded-[4px] bg-[#f2ede4]">
+                <div className="nv-qr-frame grid size-[232px] place-items-center bg-[#f4f2ed]">
                   {qr ? (
                     <img alt="QR pemasangan Neovarch" className="size-[232px]" src={qr} />
                   ) : (
-                    <span className="text-xs text-[#0a0a0a]/60">
+                    <span className="text-xs text-[#0d0606]/60">
                       {status.url ? 'Membuat QR…' : 'Tidak ada alamat LAN'}
                     </span>
                   )}

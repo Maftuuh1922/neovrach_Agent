@@ -42,11 +42,9 @@ const TAB_ACTIVE_UNDERLINE = 'shadow-[inset_0_-2px_0_var(--pane-tab-active-accen
 const TAB_IDLE =
   'text-(--ui-text-tertiary) [--tab-bg:var(--pane-tab-strip-bg,var(--ui-sidebar-surface-background))] hover:shadow-[inset_0_0_0_100vmax_color-mix(in_srgb,#000_var(--ui-tab-hover-darken),transparent)] hover:text-(--ui-text-secondary)'
 
-// A tab riding a multi-tab selection: an accent wash over whatever surface the
-// tab sits on. A background-image gradient (not a shadow) so it stacks cleanly
-// over `--tab-bg` without fighting the active underline / hover shadows.
-const TAB_SELECTED =
-  '[background-image:linear-gradient(color-mix(in_srgb,var(--ui-accent)_14%,transparent),color-mix(in_srgb,var(--ui-accent)_14%,transparent))] text-foreground'
+// A tab riding a multi-tab selection: a flat accent wash (Neovarch: solid
+// colours only, no gradient layers).
+const TAB_SELECTED = 'bg-[color-mix(in_srgb,var(--ui-accent)_14%,var(--tab-bg,transparent))] text-foreground'
 
 interface PaneTabProps extends React.ComponentProps<'div'> {
   active?: boolean

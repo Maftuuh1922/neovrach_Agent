@@ -164,7 +164,7 @@ function ScreenHeroContent({ bot, meta }: { bot: RosterRow; meta?: BotMeta | nul
           src={dataUrl}
         />
       ) : (
-        <span className="absolute inset-0 grid place-items-center bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.08),transparent_70%)]">
+        <span className="absolute inset-0 grid place-items-center bg-white/5">
           <Codicon
             className="text-[2.25rem] text-white/30"
             name={running ? 'loading' : tone === 'missing' ? 'cloud-download' : 'vm'}
@@ -172,7 +172,7 @@ function ScreenHeroContent({ bot, meta }: { bot: RosterRow; meta?: BotMeta | nul
         </span>
       )}
 
-      <span className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/85 to-black/0 px-2.5 pb-2 pt-6 text-white">
+      <span className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-black/85 px-2.5 py-2 text-white">
         <span
           className={`size-2 shrink-0 rounded-full ${running && !stale ? (tone === 'live' ? 'bg-emerald-400' : tone === 'human' ? 'bg-red-400' : 'bg-amber-400') : 'bg-white/40'}`}
         />
@@ -181,7 +181,7 @@ function ScreenHeroContent({ bot, meta }: { bot: RosterRow; meta?: BotMeta | nul
           <span className="block truncate text-[0.65rem] text-white/70">{caption}</span>
         </span>
         {cta ? (
-          <span className="flex shrink-0 items-center gap-1 rounded-md bg-white/15 px-2 py-1 text-[0.65rem] font-medium backdrop-blur-sm transition-colors group-hover:bg-white/25">
+          <span className="flex shrink-0 items-center gap-1 rounded-md bg-white/15 px-2 py-1 text-[0.65rem] font-medium transition-colors group-hover:bg-white/25">
             {cta} <Codicon name="arrow-right" />
           </span>
         ) : null}

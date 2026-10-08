@@ -10,7 +10,7 @@ import { $reviewMaxChurn } from '@/store/review'
 // (which must be `relative isolate overflow-hidden`) to revive it.
 const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾚﾜ0123456789:=*+<>¦'
 
-const MASK = 'linear-gradient(to left, #000 45%, transparent)'
+// Neovarch: flat colour only — the rain ends on a hard edge, no mask fade.
 
 // Deterministic glyph run (FNV-1a seed → xorshift) so a file's rain is stable
 // across renders instead of reshuffling every paint.
@@ -47,9 +47,7 @@ export function ChurnBar({ file }: { file: HermesReviewFile }) {
       aria-hidden
       className="pointer-events-none absolute inset-y-0 right-0 -z-10 block overflow-hidden text-right font-mono text-[0.7rem] leading-6 tracking-tight whitespace-nowrap opacity-30 dark:opacity-40"
       style={{
-        WebkitMaskImage: MASK,
         color: `var(--ui-${file.added >= file.removed ? 'green' : 'red'})`,
-        maskImage: MASK,
         width: `${width}%`
       }}
     >

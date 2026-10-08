@@ -1,6 +1,6 @@
 import { createContext, memo, useContext } from 'react'
 
-import { DecodeText } from '@/components/ui/decode-text'
+import { NeoLabel } from '@/components/neovarch/halo-mark'
 
 import { StatusbarControls } from '../shell/statusbar-controls'
 
@@ -27,7 +27,7 @@ export const WiredPane = memo(function WiredPane({ part }: { part: keyof WiringA
 
     return (
       <div className="grid h-full place-items-center">
-        <DecodeText className="text-(--ui-text-quaternary)" cursor prefix={1} text="NEOVARCH" />
+        <NeoLabel className="text-(--ui-text-quaternary)" text="Neovarch" />
       </div>
     )
   }

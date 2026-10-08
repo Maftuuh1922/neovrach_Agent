@@ -1691,11 +1691,8 @@ body.guest-pointer-lock :is(webview, iframe) {
 }
 
 [data-slot='pane-tab'][data-closeable]:hover > .pane-tab-content {
-  mask-image: linear-gradient(
-    to right,
-    #000 calc(100% - var(--pane-tab-close-width) - 1rem),
-    transparent calc(100% - var(--pane-tab-close-width))
-  );
+  /* Hard clip under the close button (flat; no fade mask). */
+  clip-path: inset(0 var(--pane-tab-close-width) 0 0);
 }
 
 [data-slot='aui_assistant-message-content'] .aui-md,
@@ -1842,8 +1839,8 @@ body.guest-pointer-lock :is(webview, iframe) {
 }
 
 .sticky-human-clamp[data-clamped='true'] {
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
-  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  /* Flat: a dashed bottom rule says "clipped" (no fade mask). */
+  border-bottom: 1px dashed var(--ui-stroke-secondary);
 }
 
 /* Stick-to-bottom owns scrollTop while following. Once escaped, native anchoring
@@ -2125,21 +2122,20 @@ body.guest-pointer-lock :is(webview, iframe) {
     background-color 180ms ease-out;
 }
 
+/* Streaming code card: a flat 1px ring + solid bottom rule mark "still
+   writing" (Neovarch: no glow shadow, no fade mask). */
 [data-slot='aui_assistant-message-content'] .aui-md [data-slot='code-card'][data-streaming='true'] {
-  animation:
-    code-card-stream-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both,
-    code-card-stream-glow 1.8s ease-in-out 180ms infinite alternate;
-  box-shadow:
-    0 0 0 0.0625rem color-mix(in srgb, var(--dt-ring) 10%, transparent),
-    0 0.625rem 1.75rem color-mix(in srgb, var(--dt-ring) 8%, transparent);
+  animation: code-card-stream-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-shadow: none;
+  outline: 1px solid color-mix(in srgb, var(--dt-ring) 35%, transparent);
+  outline-offset: -1px;
 }
 
 [data-slot='aui_assistant-message-content']
   .aui-md
   [data-slot='code-card'][data-streaming='true']
   [data-slot='code-card-body'] {
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 1.5rem), rgb(0 0 0 / 64%) 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 1.5rem), rgb(0 0 0 / 64%) 100%);
+  border-bottom: 2px solid var(--dt-ring);
 }
 
 /* Themed at the renderer root so every `aui-md` consumer (assistant turns,
@@ -2577,20 +2573,6 @@ button[data-slot='aui_msg-reactions'] svg {
   .thread-jump-button[data-state='in'] {
     opacity: 1;
     transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-@keyframes code-card-stream-glow {
-  from {
-    box-shadow:
-      0 0 0 0.0625rem color-mix(in srgb, var(--dt-ring) 6%, transparent),
-      0 0.5rem 1.5rem color-mix(in srgb, var(--dt-ring) 5%, transparent);
-  }
-
-  to {
-    box-shadow:
-      0 0 0 0.0625rem color-mix(in srgb, var(--dt-ring) 12%, transparent),
-      0 0.75rem 2rem color-mix(in srgb, var(--dt-ring) 10%, transparent);
   }
 }
 
@@ -3206,8 +3188,8 @@ button[data-slot='aui_msg-reactions'] svg {
    consulted, which is why raising the value changed nothing on screen. Masking
    the viewport puts the ramp where the clipping actually happens. */
 [data-hud-shell] [data-slot='aui_thread-viewport'] {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--hud-top-fade, 3.5rem));
-  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--hud-top-fade, 3.5rem));
+  /* Neovarch: hard clip with a solid top rule instead of a fade mask. */
+  border-top: 1px solid var(--ui-stroke-secondary);
 }
 
 /* Every descendant that sets its own colour — assistant prose, user text,

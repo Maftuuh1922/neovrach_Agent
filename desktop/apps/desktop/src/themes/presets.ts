@@ -21,7 +21,7 @@
 import { THEME_PRESET_PALETTES } from '@hermes/shared'
 
 import { skinToDesktopTheme } from './skin'
-import type { DesktopTheme, DesktopThemeTypography } from './types'
+import type { DesktopTheme, DesktopThemeColors, DesktopThemeTypography } from './types'
 
 // Color-emoji fonts to append to every stack as a last resort. None of the UI
 // text/mono fonts carry emoji glyphs, so without this emoji render as tofu
@@ -178,18 +178,79 @@ export const nousTheme: DesktopTheme = {
 }
 
 /**
- * Neovarch — the Neovarch Agent default. Light is bone paper (#F2EDE4) with ink
- * type (#140607) and the brand red (#C8101A); dark is ink with bone type and
- * crimson (#DC143C), which clears the ink sidebar better than the deeper red.
- * Palette lives in @hermes/shared (THEME_PRESET_PALETTES.neovarch). System
- * sans for UI text and the bundled JetBrains Mono for code, so nothing is
- * fetched at startup.
+ * Neovarch — the Neovarch Agent default, a red/white duotone. Dark (the
+ * default) is deep red-black (#0D0606) with off-white type (#F4F2ED) and
+ * electric red (#EE1C1C); light is off-white paper with ink type, electric red
+ * accents and dark red (#8F0A0A) where red carries small text. No blue in the
+ * chrome. System sans for UI text, bundled JetBrains Mono for code/labels and
+ * the bundled Playfair Display (styles/neovarch.css) for display type, so
+ * nothing is fetched at startup.
  */
+const NEOVARCH_LIGHT: DesktopThemeColors = {
+  background: '#f4f2ed',
+  foreground: '#120d0d',
+  card: '#ebe8e1',
+  cardForeground: '#120d0d',
+  muted: '#e5e1d9',
+  mutedForeground: '#5e5552',
+  popover: '#faf9f6',
+  popoverForeground: '#120d0d',
+  primary: '#ee1c1c',
+  primaryForeground: '#f4f2ed',
+  secondary: '#f3dcd8',
+  secondaryForeground: '#120d0d',
+  accent: '#efe4e0',
+  accentForeground: '#120d0d',
+  border: '#d9d4cb',
+  input: '#faf9f6',
+  ring: '#ee1c1c',
+  midground: '#ee1c1c',
+  midgroundForeground: '#f4f2ed',
+  composerRing: '#ee1c1c',
+  destructive: '#8f0a0a',
+  destructiveForeground: '#f4f2ed',
+  sidebarBackground: '#ece9e2',
+  sidebarBorder: '#d9d4cb',
+  userBubble: '#f4f2ed',
+  userBubbleBorder: '#f4f2ed'
+}
+
+const NEOVARCH_DARK: DesktopThemeColors = {
+  background: '#0d0606',
+  foreground: '#f4f2ed',
+  card: '#120909',
+  cardForeground: '#f4f2ed',
+  muted: '#1c1010',
+  mutedForeground: '#a39c96',
+  popover: '#160b0b',
+  popoverForeground: '#f4f2ed',
+  primary: '#ee1c1c',
+  primaryForeground: '#f4f2ed',
+  secondary: '#2a0b0b',
+  secondaryForeground: '#f4f2ed',
+  accent: '#201111',
+  accentForeground: '#f4f2ed',
+  border: '#2c1d1d',
+  input: '#0d0606',
+  ring: '#ee1c1c',
+  midground: '#ee1c1c',
+  midgroundForeground: '#f4f2ed',
+  composerRing: '#ee1c1c',
+  destructive: '#ff5a4f',
+  destructiveForeground: '#0d0606',
+  sidebarBackground: '#0a0505',
+  sidebarBorder: '#241717',
+  userBubble: '#0d0606',
+  userBubbleBorder: '#0d0606'
+}
+
 export const neovarchTheme: DesktopTheme = {
   name: 'neovarch',
   label: 'Neovarch',
-  description: 'Bone and ink with Neovarch red',
+  description: 'Red and off-white duotone on red-black ink',
   ...THEME_PRESET_PALETTES.neovarch,
+  colors: NEOVARCH_LIGHT,
+  darkColors: NEOVARCH_DARK,
   typography: {
     fontSans: SYSTEM_SANS,
     fontMono: SYSTEM_MONO

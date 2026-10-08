@@ -118,7 +118,7 @@ export const OverlayNavItem = memo(function OverlayNavItem({
     <button
       aria-current={current ? 'page' : undefined}
       className={cn(
-        'flex h-7 w-full items-center justify-start gap-2 rounded-md border px-2 text-left text-[length:var(--conversation-text-font-size)] font-normal transition-colors',
+        'nv-nav-item flex h-7 w-full items-center justify-start gap-2 rounded-none border px-2 text-left text-[length:var(--conversation-text-font-size)] font-normal transition-colors',
         nested
           ? active
             ? current
@@ -128,11 +128,12 @@ export const OverlayNavItem = memo(function OverlayNavItem({
                 'border-transparent bg-transparent font-medium text-foreground hover:bg-(--chrome-action-hover)'
             : 'border-transparent bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
           : active
-            ? 'border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary) text-foreground'
+            ? 'nv-nav-active border-transparent bg-transparent text-foreground'
             : 'border-transparent bg-transparent text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
       )}
       // Names the row by its own id, so a tour can address one link
       // (`[data-tour="nav-models"]`) instead of guessing at nth-child.
+      data-nested={nested ? '' : undefined}
       data-tour={id ? `nav-${id}` : undefined}
       onClick={onClick}
       type="button"

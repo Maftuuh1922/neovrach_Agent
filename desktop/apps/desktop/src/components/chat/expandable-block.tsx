@@ -50,7 +50,7 @@ export function ExpandableBlock({ children, className }: ExpandableBlockProps) {
         // both sideways scrolling and text selection. Keep the fade
         // `pointer-events-none` and pin the only clickable target — a compact
         // toggle — to the right edge, clear of the draggable scrollbar track.
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-7 justify-end bg-linear-to-t from-[var(--expandable-fade-from,var(--ui-chat-surface-background))] to-transparent">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-7 justify-end bg-[var(--expandable-fade-from,var(--ui-chat-surface-background))]">
           <button
             aria-expanded={expanded}
             aria-label={expanded ? 'Collapse' : 'Expand'}

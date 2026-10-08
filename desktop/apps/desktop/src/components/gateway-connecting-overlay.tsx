@@ -3,7 +3,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { DecodeText } from '@/components/ui/decode-text'
+import { NeoLabel } from '@/components/neovarch/halo-mark'
 import { prefersReducedMotion } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
 import { isOnboardingEnabled } from '@/lib/onboarding-enabled'
@@ -17,7 +17,7 @@ import { isMainWindow } from '@/store/windows'
 
 // Decode mechanics live in the shared <DecodeText> primitive
 // (components/ui/decode-text.tsx). "CONN" stays legible via prefix={4}.
-const TEXT = 'CONNECTING'
+const TEXT = 'Menghubungkan'
 
 // Exit choreography (ms): text fades down + out, hold, then the overlay fades.
 const TEXT_OUT_MS = 360
@@ -98,15 +98,12 @@ function ConnectingOverlayView({ decoding, onExit, phase }: ConnectingOverlayVie
       {onExit ? (
         <SlowSetupStart onExit={onExit} />
       ) : (
-        <DecodeText
-          active={decoding}
+        <NeoLabel
           className={cn(
-            'pl-[0.4em] text-(--theme-primary) transition duration-300 ease-out',
-            leaving ? 'translate-y-2 opacity-0 saturate-0' : 'translate-y-0 opacity-100 saturate-100'
+            'nv-connecting text-(--ui-text-secondary) transition duration-300 ease-out',
+            decoding && 'nv-connecting-live',
+            leaving ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'
           )}
-          cursor
-          loop
-          prefix={4}
           text={TEXT}
         />
       )}

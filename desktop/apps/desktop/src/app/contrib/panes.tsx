@@ -18,7 +18,7 @@ import { ReviewPane } from '@/app/right-sidebar/review'
 import type { GroupSetter } from '@/app/shell/group-setter'
 import type { StatusbarItem } from '@/app/shell/statusbar-controls'
 import type { TitlebarTool } from '@/app/shell/titlebar-controls'
-import { DecodeText } from '@/components/ui/decode-text'
+import { NeoLabel } from '@/components/neovarch/halo-mark'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { registry } from '@/contrib/registry'
@@ -78,7 +78,7 @@ export function LogsPane() {
   if (!data) {
     return (
       <div className="grid h-full place-items-center">
-        <DecodeText className="text-(--ui-text-quaternary)" cursor prefix={1} text="LOGS" />
+        <NeoLabel className="text-(--ui-text-quaternary)" text="Log" />
       </div>
     )
   }
