@@ -5,10 +5,8 @@
 //   NV_SHOTS_DIR=/path flutter test test/remote_screens_test.dart
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,16 +112,13 @@ RemoteController _controller(SharedPreferences prefs, {bool connected = true, bo
   return r;
 }
 
+// Written through the golden-file pipeline (run with --update-goldens):
+// RenderRepaintBoundary.toImage inside runAsync hangs on flutter_tester.
 Future<void> _shot(WidgetTester tester, String name) async {
-  final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(const ValueKey('shot')));
-  final bytes = await tester.runAsync(() async {
-    final img = await boundary.toImage(pixelRatio: 3);
-    final data = await img.toByteData(format: ui.ImageByteFormat.png);
-    return data!.buffer.asUint8List();
-  });
-  final f = File('$_shotsDir/$name.png');
-  await f.parent.create(recursive: true);
-  await f.writeAsBytes(bytes!);
+  final dir = Directory(_shotsDir).absolute.path;
+  // Sync on purpose: async file I/O never completes inside the fake-async zone.
+  Directory(dir).createSync(recursive: true);
+  await expectLater(find.byKey(const ValueKey('shot')), matchesGoldenFile('$dir/$name.png'));
 }
 
 Widget _host(SettingsController settings, RemoteController remote, Widget home) => ProviderScope(
@@ -187,13 +182,17 @@ void main() {
     tester.view.viewPadding = const FakeViewPadding(top: 141, bottom: 102);
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(settings, remote ?? _controller(prefs), home()));
+    debugPrint('[$name] pumped');
     await _precache(tester);
+    debugPrint('[$name] precached');
     await _settle(tester);
+    debugPrint('[$name] settled');
     if (act != null) {
       await act();
       await _settle(tester);
     }
     await _shot(tester, name);
+    debugPrint('[$name] shot');
     // Unmount so repeating animations stop before the test ends.
     await tester.pumpWidget(const SizedBox());
   }
