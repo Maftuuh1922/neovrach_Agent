@@ -26,8 +26,10 @@ const PREVIEW_STATUS: NeovarchRemoteStatus = {
   port: 9319,
   addresses: [
     { address: '192.168.1.5', iface: 'wlan0' },
-    { address: '100.84.12.7', iface: 'tailscale0' }
+    { address: '100.84.12.7', iface: 'tailscale0', kind: 'tailscale' }
   ],
+  altUrls: ['http://pc-kantor.tail1234.ts.net:9319', 'http://100.84.12.7:9319'],
+  tailscale: { dnsName: 'pc-kantor.tail1234.ts.net', ips: ['100.84.12.7'] },
   address: '192.168.1.5',
   url: 'http://192.168.1.5:9319',
   token: 'eyJzdWIiOiJuZW92YXJjaC1yZW1vdGUiLCJraW5kIjoiYWNjZXNzIiwiZXhwIjoxOTE3NjgwMDAwfdcg06aPZhiOLEAVRMba-pi23576xtM_tVRtdvf8-eZL',
@@ -206,6 +208,22 @@ export function RemoteSettings() {
                   <Field copy={status.token ?? ''} label="Token">
                     <span className={MONO}>{status.token ?? '—'}</span>
                   </Field>
+                  {(status.altUrls?.length ?? 0) > 0 && (
+                    <div data-nv-remote-alt="">
+                      <p className={CAPTION}>Cadangan (dicoba HP bila LAN tidak terjangkau)</p>
+                      {status.altUrls!.map(u => (
+                        <p className={MONO} key={u}>
+                          {u}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {status.tailscale?.dnsName && (
+                    <p className={CAPTION} data-nv-remote-tailscale="">
+                      Tailscale: <span className="font-mono">{status.tailscale.dnsName}</span> — HP bisa terhubung dari
+                      mana saja selama Tailscale aktif di keduanya.
+                    </p>
+                  )}
                   {status.profile && (
                     <p className={CAPTION}>
                       Profil: <span className="font-mono">{status.profile}</span>
@@ -227,7 +245,7 @@ export function RemoteSettings() {
                 >
                   {status.addresses.map(a => (
                     <option key={a.address} value={a.address}>
-                      {a.address} ({a.iface})
+                      {a.address} ({a.kind === 'tailscale' ? 'Tailscale' : a.iface})
                     </option>
                   ))}
                 </select>

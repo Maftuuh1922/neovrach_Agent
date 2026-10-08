@@ -38,11 +38,13 @@ declare global {
     running: boolean
     starting: boolean
     port: number
-    addresses: { address: string; iface: string }[]
+    addresses: { address: string; iface: string; kind?: 'lan' | 'magicdns' | 'tailscale' }[]
     address: string | null
     url: string | null
     token: string | null
     pairingUri: string | null
+    altUrls?: string[]
+    tailscale?: { dnsName: string | null; ips: string[] } | null
     deviceName: string
     profile: string | null
     error: string | null

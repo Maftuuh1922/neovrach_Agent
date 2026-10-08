@@ -4,8 +4,11 @@ import {
   buildPairingUri,
   decodeSecret,
   FALLBACK_DEVICE_NAME,
+  fallbackUrls,
+  isTailnetIp,
   lanAddresses,
   mintAccessToken,
+  parseTailscaleStatus,
   resolveDeviceName,
   verifyAccessToken
 } from './neovarch-remote'
@@ -52,5 +55,31 @@ describe('neovarch remote token', () => {
     expect(resolveDeviceName('(none)')).toBe(FALLBACK_DEVICE_NAME)
     expect(resolveDeviceName(' workstation ')).toBe('workstation')
     expect(FALLBACK_DEVICE_NAME).toBe('PC Neovarch')
+  })
+
+  it('adds Tailscale fallbacks (MagicDNS, then tailnet IP) to the pairing URI', () => {
+    expect(isTailnetIp('100.64.0.1')).toBe(true)
+    expect(isTailnetIp('100.127.255.1')).toBe(true)
+    expect(isTailnetIp('100.128.0.1')).toBe(false)
+    expect(isTailnetIp('192.168.1.5')).toBe(false)
+    const ts = parseTailscaleStatus(
+      JSON.stringify({ Self: { DNSName: 'pc-kantor.tail1234.ts.net.', TailscaleIPs: ['100.84.12.7', 'fd7a:115c::1'] } })
+    )
+    expect(ts).toEqual({ dnsName: 'pc-kantor.tail1234.ts.net', ips: ['100.84.12.7'] })
+    expect(parseTailscaleStatus('not json')).toBeNull()
+    const addresses = lanAddresses({
+      wlan0: [{ address: '192.168.1.5', family: 'IPv4', internal: false } as never],
+      eth0: [{ address: '10.0.0.7', family: 'IPv4', internal: false } as never],
+      tailscale0: [{ address: '100.84.12.7', family: 'IPv4', internal: false } as never],
+      docker0: [{ address: '172.17.0.1', family: 'IPv4', internal: false } as never]
+    })
+    expect(addresses.find(a => a.address === '100.84.12.7')?.kind).toBe('tailscale')
+    const alt = fallbackUrls({ primary: '192.168.1.5', addresses, tailscale: ts, port: 9319 })
+    expect(alt).toEqual(['http://10.0.0.7:9319', 'http://pc-kantor.tail1234.ts.net:9319', 'http://100.84.12.7:9319'])
+    const uri = buildPairingUri({ url: 'http://192.168.1.5:9319', token: 't', name: 'PC', profile: null, alt })
+    const q = new URL(uri.replace('neovarch://', 'http://x/')).searchParams
+    expect(q.get('url')).toBe('http://192.168.1.5:9319')
+    expect(q.getAll('alt')).toEqual(alt)
+    expect(q.get('token')).toBe('t')
   })
 })
