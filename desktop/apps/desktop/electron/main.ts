@@ -3290,8 +3290,10 @@ function looksLikeDesktopAppBinary(commandPath) {
   )
 }
 
+// The Neovarch core (core/ in the repo, ~/.neovarch/neovarch-agent when installed)
+// is identified by its CLI module; a Hermes checkout never qualifies.
 function isHermesSourceRoot(root) {
-  return directoryExists(root) && fileExists(path.join(root, 'hermes_cli', 'main.py'))
+  return directoryExists(root) && fileExists(path.join(root, 'neovarch', 'cli.py'))
 }
 
 async function findPythonForRoot(root: string): Promise<string | null> {

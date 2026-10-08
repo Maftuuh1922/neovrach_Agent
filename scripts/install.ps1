@@ -8,7 +8,7 @@
 #   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1))) -Portable
 #
 # Installs, per user (no admin):
-#   * the Neovarch core (Python agent in core/ of this repo, derived from Hermes Agent) into
+#   * the Neovarch core (original Python agent in core/ of this repo) into
 #     %LOCALAPPDATA%\neovarch\neovarch-agent with its own Python + venv (uv);
 #   * the `neovarch` command (%LOCALAPPDATA%\Programs\NeovarchAgent\bin\neovarch.cmd, on the user PATH);
 #   * the desktop app (NSIS, %LOCALAPPDATA%\Programs\Neovarch Agent; or -Portable).
@@ -147,7 +147,7 @@ function Resolve-CoreSource {
     if ($env:NEOVARCH_CORE_SRC) { return $env:NEOVARCH_CORE_SRC }
     if (-not $Commit -and -not $env:NEOVARCH_REF -and $PSCommandPath) {
         $candidate = Join-Path (Split-Path -Parent (Split-Path -Parent $PSCommandPath)) 'core'
-        if (Test-Path (Join-Path $candidate 'neovarch_entry.py')) { return (Split-Path -Parent $candidate) }
+        if (Test-Path (Join-Path (Join-Path $candidate 'neovarch') 'cli.py')) { return (Split-Path -Parent $candidate) }
     }
     return $null
 }
@@ -161,7 +161,7 @@ function Install-CoreFiles {
     $src = Resolve-CoreSource
     if ($src) {
         if (Test-Path (Join-Path $src 'core')) { $src = Join-Path $src 'core' }
-        if (-not (Test-Path (Join-Path $src 'neovarch_entry.py'))) { Stop-WithError "NEOVARCH_CORE_SRC has no Neovarch core: $src" }
+        if (-not (Test-Path (Join-Path (Join-Path $src 'neovarch') 'cli.py'))) { Stop-WithError "NEOVARCH_CORE_SRC has no Neovarch core: $src" }
         Write-Step "Copying the Neovarch core from $src"
         New-Item -ItemType Directory -Path $staging -Force | Out-Null
         Get-ChildItem -Path $src -Force | Where-Object { $_.Name -notin @('venv', '__pycache__', 'node_modules') } |
@@ -178,7 +178,7 @@ function Install-CoreFiles {
         Expand-Archive -Path $zip -DestinationPath $x -Force
         $top = Get-ChildItem -Path $x -Directory | Select-Object -First 1
         $coreSrc = Join-Path $top.FullName 'core'
-        if (-not (Test-Path (Join-Path $coreSrc 'neovarch_entry.py'))) { Stop-WithError 'archive has no core\ directory' }
+        if (-not (Test-Path (Join-Path (Join-Path $coreSrc 'neovarch') 'cli.py'))) { Stop-WithError 'archive has no core\ directory' }
         Move-Item -Path $coreSrc -Destination $staging
         Remove-Item $zip, $x -Recurse -Force -ErrorAction SilentlyContinue
     }

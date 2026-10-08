@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.sh | sh
 #
 # Installs, all as the current user (no root):
-#   * the Neovarch core (Python agent, vendored from Hermes Agent, in core/ of
+#   * the Neovarch core (original Python agent, in core/ of
 #     this repo) into ~/.neovarch/neovarch-agent, with its own Python and venv;
 #   * the `neovarch` command (~/.local/bin/neovarch);
 #   * the desktop app (Electron) into ~/.local/share/neovarch-agent, started
@@ -188,7 +188,7 @@ stage_core() {
     case "$0" in
       */install.sh)
         here=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || here=""
-        if [ -n "$here" ] && [ -f "$here/../core/neovarch_entry.py" ]; then
+        if [ -n "$here" ] && [ -f "$here/../core/neovarch/cli.py" ]; then
           NEOVARCH_CORE_SRC=$(cd "$here/.." && pwd)
         fi ;;
     esac
@@ -196,7 +196,7 @@ stage_core() {
   if [ -n "${NEOVARCH_CORE_SRC:-}" ]; then
     src="$NEOVARCH_CORE_SRC"
     [ -d "$src/core" ] && src="$src/core"
-    [ -f "$src/neovarch_entry.py" ] || die "NEOVARCH_CORE_SRC has no Neovarch core: $NEOVARCH_CORE_SRC"
+    [ -f "$src/neovarch/cli.py" ] || die "NEOVARCH_CORE_SRC has no Neovarch core: $NEOVARCH_CORE_SRC"
     step "Copying the Neovarch core from $src"
     (cd "$src" && tar --exclude=venv --exclude=__pycache__ --exclude=node_modules -cf - .) | (cd "$staging" && tar -xf -)
     commit=$(git -C "$src" rev-parse HEAD 2>/dev/null || true)
@@ -213,7 +213,7 @@ stage_core() {
     rm -rf "$staging"; mv "$top/core" "$staging"
     rm -rf "$staging.x" "$staging.tgz"
   fi
-  [ -f "$staging/neovarch_entry.py" ] || die "downloaded core is incomplete"
+  [ -f "$staging/neovarch/cli.py" ] || die "downloaded core is incomplete"
   # Keep an existing venv across updates when the Python still matches.
   if [ -d "$CORE_DIR/venv" ]; then mv "$CORE_DIR/venv" "$staging/venv"; fi
   rm -rf "$CORE_DIR.old"

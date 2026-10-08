@@ -11,13 +11,6 @@ import { serveBackendArgs } from './backend-command'
 import { waitForDashboardPort } from './backend-ready'
 import { createSourcePythonBackend, resolveSourceInstallationBackend, type SourceBackend } from './source-backend'
 
-interface Fixture {
-  root: string
-  launcher: string
-  python: string
-  selected: string
-}
-
 async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return
@@ -67,147 +60,112 @@ async function ping(port: number, token: string): Promise<unknown> {
 }
 
 test.skipIf(process.platform === 'win32')(
-  'a PM source launcher reaches real health and RPC without adopting a legacy venv (POSIX)',
+  'an installed Neovarch core reaches real health and RPC, and a Hermes checkout is never adopted (POSIX)',
   async (): Promise<void> => {
-    const temp: string = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-pm-start-'))
+    const temp: string = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-neovarch-start-'))
     const home: string = path.join(temp, 'home with spaces')
+    const root: string = path.join(home, '.neovarch', 'neovarch-agent')
+    const python: string = process.env.NEOVARCH_PYTHON || 'python3'
+    const token: string = 'desktop-neovarch-contract'
 
     const env: NodeJS.ProcessEnv = Object.fromEntries(
       Object.entries(process.env).filter(
-        ([key]: [string, string | undefined]): boolean => !/^(HERMES_|PYTHON|UV_|VIRTUAL_ENV|XDG_)/.test(key)
+        ([key]: [string, string | undefined]): boolean => !/^(HERMES_|NEOVARCH_|PYTHON|VIRTUAL_ENV|XDG_)/.test(key)
       )
     )
 
     Object.assign(env, {
       HOME: home,
       USERPROFILE: home,
-      HERMES_HOME: path.join(home, '.hermes'),
-      HERMES_RUNTIME_DIR: path.join(temp, 'tools'),
-      HERMES_DISABLE_LAZY_INSTALLS: '1',
-      XDG_CONFIG_HOME: path.join(temp, 'config'),
-      XDG_CONFIG_DIRS: path.join(temp, 'config'),
-      PYTHONDONTWRITEBYTECODE: '1',
-      UV_CACHE_DIR: path.join(temp, 'cache'),
-      UV_OFFLINE: '1'
+      NEOVARCH_HOME: path.join(home, '.neovarch'),
+      HERMES_DASHBOARD_SESSION_TOKEN: token,
+      PYTHONDONTWRITEBYTECODE: '1'
     })
-    const python: string = process.env.HERMES_PYTHON || 'python3'
-    const fixtureScript: string = path.join(import.meta.dirname, 'fixtures', 'source-backend.py')
-    const token: string = 'desktop-pm-contract'
-    env.HERMES_DASHBOARD_SESSION_TOKEN = token
     vi.stubEnv('HOME', home)
 
     try {
-      const fixture: Fixture = JSON.parse(
-        execFileSync(python, ['-I', fixtureScript, temp], {
-          cwd: temp,
-          env,
-          encoding: 'utf8',
-          timeout: 90_000
-        })
-      ) as Fixture
+      // Same layout the installers write: core at ~/.neovarch/neovarch-agent,
+      // its launcher in the install's venv.
+      fs.cpSync(path.resolve(import.meta.dirname, '..', '..', '..', '..', 'core', 'neovarch'), path.join(root, 'neovarch'), {
+        recursive: true,
+        filter: (source: string): boolean => !source.includes('__pycache__')
+      })
+      const launcher: string = path.join(root, 'venv', 'bin', 'neovarch')
+      fs.mkdirSync(path.dirname(launcher), { recursive: true })
+      fs.writeFileSync(launcher, `#!/bin/sh\nPYTHONPATH='${root}' exec '${python}' -m neovarch "$@"\n`, { mode: 0o755 })
 
-      assert.equal(fs.existsSync(path.join(fixture.root, 'venv')), false)
-      assert.equal(fs.existsSync(path.join(fixture.root, '.venv')), false)
+      // A Hermes-shaped tree is not a Neovarch install.
+      const hermesRoot: string = path.join(temp, 'hermes-agent')
+      fs.mkdirSync(path.join(hermesRoot, 'hermes_cli'), { recursive: true })
+      fs.writeFileSync(path.join(hermesRoot, 'hermes_cli', 'main.py'), '')
+      assert.equal(await resolveSourceInstallationBackend(hermesRoot, serveBackendArgs(), { env }), null)
 
-      const origin: { python: string; module: string; value: string } = JSON.parse(
-        execFileSync(fixture.launcher, ['--run-module', 'desktop_launch_probe'], {
-          cwd: temp,
-          env,
-          encoding: 'utf8',
-          timeout: 15_000
-        })
-      )
+      const backend: SourceBackend | null = await resolveSourceInstallationBackend(root, serveBackendArgs('work'), {
+        hermesHome: env.NEOVARCH_HOME,
+        env
+      })
 
-      assert.equal(origin.python, fixture.python)
-      assert.ok(origin.module.startsWith(`${fixture.selected}${path.sep}`))
-      assert.equal(origin.value, 'selected by PM')
+      assert.ok(backend, 'an installed, runnable Neovarch core must be accepted')
+      assert.equal(backend.command, launcher)
+      assert.deepEqual(backend.args, ['--profile', 'work', 'serve', '--host', '127.0.0.1', '--port', '0'])
 
-      for (const poisoned of [false, true]) {
-        const poison: string = path.join(temp, 'legacy-python-used')
+      const child: ChildProcess = spawn(backend.command, backend.args, {
+        cwd: temp,
+        env: { ...env, ...backend.env },
+        shell: backend.shell,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
 
-        if (poisoned) {
-          for (const suffix of ['bin/python', 'Scripts/python.exe']) {
-            const oldPython: string = path.join(fixture.root, 'venv', suffix)
-            fs.mkdirSync(path.dirname(oldPython), { recursive: true })
-            fs.writeFileSync(oldPython, `#!/bin/sh\ntouch '${poison}'\nexit 93\n`, { mode: 0o755 })
-          }
-        }
+      let output: string = ''
+      child.stdout?.on('data', (data: Buffer): void => {
+        output += data.toString()
+      })
+      child.stderr?.on('data', (data: Buffer): void => {
+        output += data.toString()
+      })
 
-        const backend: SourceBackend | null = await resolveSourceInstallationBackend(fixture.root, serveBackendArgs(), {
-          hermesHome: env.HERMES_HOME,
-          env
-        })
+      try {
+        const port: number = (await waitForDashboardPort(child, 45_000)) as number
 
-        assert.ok(backend, 'a published, runnable PM installation must be accepted')
-        assert.equal(backend.command, fixture.launcher)
-        assert.equal(backend.bootstrap, false)
-
-        const child: ChildProcess = spawn(backend.command, backend.args, {
-          cwd: temp,
-          env: { ...env, ...backend.env },
-          shell: backend.shell,
-          stdio: ['ignore', 'pipe', 'pipe']
+        const response: Response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+          headers: { 'X-Hermes-Session-Token': token }
         })
 
-        let output: string = ''
-        child.stdout?.on('data', (data: Buffer): void => {
-          output += data.toString()
-        })
-        child.stderr?.on('data', (data: Buffer): void => {
-          output += data.toString()
-        })
-
-        try {
-          const port: number = (await waitForDashboardPort(child, 45_000)) as number
-
-          const response: Response = await fetch(`http://127.0.0.1:${port}/api/health`, {
-            headers: { 'X-Hermes-Session-Token': token }
-          })
-
-          assert.equal(response.status, 200, output)
-          assert.deepEqual(await ping(port, token), { jsonrpc: '2.0', id: 1, result: { pong: true } })
-          assert.equal(fs.existsSync(poison), false, 'the stale checkout interpreter must never execute')
-          console.info('PM backend verified', { poisoned, port, health: response.status, origin })
-        } catch (error: unknown) {
-          throw new Error(`${String(error)}\n${output}`)
-        } finally {
-          await stop(child)
-        }
-
-        if (poisoned) {
-          const source: SourceBackend | null = createSourcePythonBackend(fixture.root, fixture.python, ['--version'], {
-            isWindows: true,
-            env
-          })
-
-          assert.ok(source)
-          assert.equal(source.command, fixture.python)
-          assert.match(
-            // The real spawn runs in the user's workspace, never the checkout.
-            execFileSync(source.command, source.args, {
-              cwd: temp,
-              env: { ...env, ...source.env },
-              encoding: 'utf8',
-              timeout: 15_000
-            }),
-            /Hermes/
-          )
-          assert.equal(fs.existsSync(poison), false)
-        }
+        assert.equal(response.status, 200, output)
+        assert.deepEqual(await ping(port, token), { jsonrpc: '2.0', id: 1, result: { pong: true } })
+        assert.ok(fs.existsSync(path.join(home, '.neovarch', 'profiles', 'work')), 'the profile lives under ~/.neovarch')
+        assert.equal(fs.existsSync(path.join(home, '.hermes')), false, 'the core must never create ~/.hermes')
+      } catch (error: unknown) {
+        throw new Error(`${String(error)}\n${output}`)
+      } finally {
+        await stop(child)
       }
 
-      fs.unlinkSync(fixture.launcher)
+      const source: SourceBackend | null = createSourcePythonBackend(root, python, ['--version'], { env })
+      assert.ok(source)
+      assert.deepEqual(source.args, ['-m', 'neovarch', '--version'])
+      assert.match(
+        execFileSync(source.command, source.args, {
+          cwd: temp,
+          env: { ...env, ...source.env },
+          encoding: 'utf8',
+          timeout: 15_000
+        }),
+        /Neovarch/
+      )
+
+      fs.unlinkSync(launcher)
       assert.equal(
-        await resolveSourceInstallationBackend(fixture.root, serveBackendArgs(), { hermesHome: env.HERMES_HOME, env }),
+        await resolveSourceInstallationBackend(root, serveBackendArgs(), { hermesHome: env.NEOVARCH_HOME, env }),
         null,
-        'a missing PM command must not fall back to the stale venv'
+        'a missing launcher must not fall back to anything else'
       )
     } finally {
       fs.rmSync(temp, { recursive: true, force: true })
       vi.unstubAllEnvs()
     }
   },
-  150_000
+  90_000
 )
 
 test('Windows console selection uses only the selected interpreter directory', (): void => {

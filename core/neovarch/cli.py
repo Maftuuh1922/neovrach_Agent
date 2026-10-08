@@ -202,6 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-V", "--version", action="store_true", help="show version")
     p.add_argument("-q", "--query", help="run one prompt and exit")
     p.add_argument("--resume", help="continue a session (id or title)")
+    p.add_argument("-p", "--profile", help="use a named profile (data under <home>/profiles/<name>)")
     sub = p.add_subparsers(dest="cmd")
 
     c = sub.add_parser("chat", help="interactive chat (default)")
@@ -241,6 +242,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     install_guard()
     args = build_parser().parse_args(argv)
+    profile = (args.profile or "").strip()
+    if profile and profile != "default":
+        if not profile.replace("-", "").replace("_", "").isalnum():
+            print(f"invalid profile name: {profile}", file=sys.stderr)
+            raise SystemExit(2)
+        os.environ["NEOVARCH_HOME"] = str(neovarch_home() / "profiles" / profile)
     if args.version or args.cmd == "version":
         print(version_line())
         print(f"Home: {neovarch_home()}")

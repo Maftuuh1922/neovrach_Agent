@@ -117,7 +117,7 @@ async function canImportHermesCli(
     // Bootstrap selects the committed generation before any dependency import.
     await execProbe(
       pythonPath,
-      ['-c', 'import hermes_bootstrap; import hermes_yaml; import dotenv; import hermes_cli.config'],
+      ['-c', 'import yaml; import aiohttp; import neovarch.cli'],
       {
         cwd: opts.cwd,
         env: { ...env, ...buildDesktopBackendEnv({ currentEnv: env }) },

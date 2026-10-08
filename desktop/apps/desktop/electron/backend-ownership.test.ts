@@ -33,7 +33,7 @@ function identity(overrides: Partial<BackendIdentity> = {}): BackendIdentity {
 }
 
 function ownershipEntry(overrides: Partial<BackendIdentity> = {}) {
-  return { command: 'hermes serve --port 0', ...identity(overrides) }
+  return { command: 'neovarch serve --port 0', ...identity(overrides) }
 }
 
 function stored(entries: object[]): string {
@@ -300,13 +300,18 @@ test('release removes only the exact identity rather than every record for its P
   assert.deepEqual(parseBackendOwnership(store.value()), [reusedPid])
 })
 
-test('backend identity check matches only serve and dashboard invocation shapes', () => {
-  assert.equal(backendCommandMatches('/venv/bin/hermes serve --port 0'), true)
-  assert.equal(backendCommandMatches('python -m hermes_cli.main dashboard --no-open'), true)
-  assert.equal(backendCommandMatches('/venv/bin/hermes --profile work serve --port 0'), true)
-  assert.equal(backendCommandMatches('"C:\\Hermes Runtime\\hermes.exe" dashboard --no-open'), true)
-  assert.equal(backendCommandMatches('hermes chat --query serve'), false)
+test('backend identity check matches only Neovarch serve and dashboard invocation shapes', () => {
+  assert.equal(backendCommandMatches('/venv/bin/neovarch serve --port 0'), true)
+  assert.equal(backendCommandMatches('python -m neovarch serve --host 127.0.0.1 --port 0'), true)
+  assert.equal(backendCommandMatches('/venv/bin/neovarch --profile work serve --port 0'), true)
+  assert.equal(backendCommandMatches('"C:\\Neovarch Runtime\\neovarch.exe" serve --port 0'), true)
+  assert.equal(backendCommandMatches('python /opt/core/neovarch/cli.py serve'), true)
+  assert.equal(backendCommandMatches('neovarch chat --query serve'), false)
   assert.equal(backendCommandMatches('unrelated dashboard'), false)
+  // A Hermes Agent backend is never ours to adopt or reap.
+  assert.equal(backendCommandMatches('/venv/bin/hermes serve --port 0'), false)
+  assert.equal(backendCommandMatches('python -m hermes_cli.main dashboard --no-open'), false)
+  assert.equal(backendCommandMatches('"C:\\Hermes Runtime\\hermes.exe" dashboard --no-open'), false)
 })
 
 test('shutdown coordinator returns one promise and awaits teardown exactly once', async () => {

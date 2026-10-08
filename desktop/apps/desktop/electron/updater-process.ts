@@ -41,7 +41,7 @@ export function resolveInstallationLauncher(
 
   // Earlier PM installers published only to user-bin. Trust that historical
   // launcher only after its existing version surface proves exact source identity.
-  if (stagedFileExists(path.join(updateRoot, 'hermes_cli', '_launchers.py'))) {
+  if (stagedFileExists(path.join(updateRoot, 'neovarch', 'cli.py'))) {
     const extraDirs: string[] = isWindows ? [path.join(path.dirname(updateRoot), 'bin')] : []
 
     for (const candidate of userBinLaunchers(isWindows, hermesHome, extraDirs)) {
@@ -94,7 +94,7 @@ export function userLauncherInstallRoot(
   for (const launcher of userBinLaunchers(isWindows, hermesHome)) {
     const root: string | null = launcherInstallDirectory(launcher)
 
-    if (root && existsSync(path.join(root, 'hermes_cli', 'main.py'))) {
+    if (root && existsSync(path.join(root, 'neovarch', 'cli.py'))) {
       return { launcher, root }
     }
   }

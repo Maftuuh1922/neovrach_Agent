@@ -192,7 +192,8 @@ async function installApp(target, { force = false } = {}) {
 // ---- core ------------------------------------------------------------------
 
 function coreInstalled() {
-  return fs.existsSync(CORE_CLI);
+  // An install of the original core: its CLI module and the venv entry point.
+  return fs.existsSync(CORE_CLI) && fs.existsSync(path.join(CORE_DIR, 'neovarch', 'cli.py'));
 }
 
 /** Run scripts/install.sh --core-only (install.ps1 -CoreOnly on Windows) from this repo. */
