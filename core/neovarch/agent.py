@@ -114,7 +114,8 @@ class Agent:
                     self.store.save(self.rec)
                     self.emit("tool.complete", {"tool_id": call.id, "name": call.name,
                                                 "summary": result.splitlines()[0][:160] if result else "",
-                                                "result_text": result[:4000], "duration_s": round(dur, 2)})
+                                                "result": result[:4000], "result_text": result[:4000],
+                                                "duration_s": round(dur, 2)})
             else:
                 error = f"stopped after {max_turns} model calls"
         except LLMError as exc:

@@ -33,7 +33,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 fs.mkdirSync(SHOTS, { recursive: true })
 
 // The core's own OpenAI-compatible mock provider.
-const mock = spawn(process.env.PYTHON ?? 'python3', [path.resolve('../core/tests/mock_llm.py'), '--port', String(LLM_PORT)], {
+const mock = spawn(process.env.PYTHON ?? 'python3', [path.resolve('../core/tests/mock_llm.py'), '--port', String(LLM_PORT), '--delay', process.env.MOCK_LLM_DELAY ?? '0.3'], {
   stdio: 'ignore'
 })
 fs.mkdirSync(NV_HOME, { recursive: true })
@@ -111,13 +111,14 @@ const chat = async (text: string, reply: string, key: string) => {
   await page.keyboard.press('Enter')
   // Streaming: the reply grows in place before it is complete.
   const seen = new Set<number>()
-  for (let i = 0; i < 180; i++) {
-    await sleep(500)
+  const head = reply.split(' ')[0]
+  for (let i = 0; i < 360; i++) {
+    await sleep(250)
     const body: string = await page.evaluate(() => document.body.innerText)
-    const at = body.lastIndexOf(reply.split(' ')[0])
-    if (at >= 0) seen.add(body.length)
+    if (body.lastIndexOf(head) >= 0) seen.add(body.length)
+    if (seen.size === 1 && !body.includes(reply)) await shot(`${key}-streaming.png`)
     if (body.includes(reply)) {
-      report[`${key}Seconds`] = (i + 1) / 2
+      report[`${key}Seconds`] = (i + 1) / 4
       report[`${key}Frames`] = seen.size
       return true
     }

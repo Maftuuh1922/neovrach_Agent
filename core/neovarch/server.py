@@ -58,6 +58,9 @@ def _log_unhandled(kind: str, what: str) -> None:
 
 # ------------------------------------------------------------------- auth -----
 
+DESKTOP_CONTRACT = 8
+
+
 class Auth:
     """Local mode: the desktop passes a session token. Remote mode (--isolated
     with a basic-auth secret): the phone presents an HMAC-signed access token."""
@@ -193,7 +196,10 @@ class LiveSession:
     def info(self) -> dict:
         return {"title": self.rec.get("title") or "", "running": self.status == "running",
                 "model": self.rec.get("model") or cfgmod.resolve_endpoint(cfgmod.load_config())["model"],
-                "cwd": str(self.ctx.cwd), "status": self.status}
+                "cwd": str(self.ctx.cwd), "status": self.status,
+                # Version of the desktop session protocol this core speaks; the
+                # desktop warns "backend out of date" below its required level.
+                "desktop_contract": DESKTOP_CONTRACT}
 
 
 def to_ui_messages(rec: dict) -> list[dict]:

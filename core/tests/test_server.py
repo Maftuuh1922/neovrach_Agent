@@ -78,6 +78,7 @@ async def test_ws_chat_stream_and_tool(mock_provider, monkeypatch):
         assert (await ws.pump())["params"]["type"] == "gateway.ready"
         created = (await ws.call("session.create", {"source": "desktop"}))["result"]
         sid = created["session_id"]
+        assert created["info"]["desktop_contract"] == 8
         assert (await ws.call("prompt.submit", {"session_id": sid, "text": "halo"}))["result"]["ok"]
         done = await ws.until("message.complete")
         assert done["payload"]["text"].endswith("Kamu bilang: halo")
@@ -86,6 +87,7 @@ async def test_ws_chat_stream_and_tool(mock_provider, monkeypatch):
         await ws.call("prompt.submit", {"session_id": sid, "text": "jalankan tool"})
         done = await ws.until("message.complete")
         assert any(e["type"] == "tool.start" and e["payload"]["name"] == "shell" for e in ws.events)
+        assert any(e["type"] == "tool.complete" and "neovarch-tool-ok" in e["payload"]["result"] for e in ws.events)
         assert done["payload"]["text"] == "Selesai. Hasil alat: neovarch-tool-ok"
         listed = (await ws.call("session.list", {}))["result"]["sessions"]
         assert listed[0]["id"] == sid and listed[0]["title"] == "halo"
