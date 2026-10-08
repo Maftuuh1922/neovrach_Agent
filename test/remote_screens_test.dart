@@ -1,8 +1,9 @@
 // Renders every main screen of the phone remote at 390x844 (dark, Neovarch
 // mobile theme) with demo data, fails on any layout overflow, and writes a
-// PNG per screen to $NV_SHOTS_DIR (default build/screenshots/remote).
+// PNG per screen to $NV_SHOTS_DIR (default build/screenshots/remote) when run
+// with --update-goldens. A plain `flutter test` checks layout only.
 //
-//   NV_SHOTS_DIR=/path flutter test test/remote_screens_test.dart
+//   NV_SHOTS_DIR=/path flutter test --update-goldens test/remote_screens_test.dart
 import 'dart:convert';
 import 'dart:io';
 
@@ -117,6 +118,8 @@ RemoteController _controller(SharedPreferences prefs, {bool connected = true, bo
 // Written through the golden-file pipeline (run with --update-goldens):
 // RenderRepaintBoundary.toImage inside runAsync hangs on flutter_tester.
 Future<void> _shot(WidgetTester tester, String name) async {
+  // The PNGs are screenshots, not committed goldens: only write them on request.
+  if (!autoUpdateGoldenFiles) return;
   final dir = Directory(_shotsDir).absolute.path;
   // Sync on purpose: async file I/O never completes inside the fake-async zone.
   Directory(dir).createSync(recursive: true);
