@@ -70,7 +70,20 @@ export const NV_SOCIAL_ID = {
   justNow: 'baru saja',
   minutesAgo: '{n} mnt lalu',
   hoursAgo: '{n} jam lalu',
-  daysAgo: '{n} hari lalu'
+  daysAgo: '{n} hari lalu',
+  share: 'Bagikan profil',
+  shareTitle: 'Bagikan profil',
+  shareFormat: 'Format kartu',
+  shareStory: 'Story 9:16',
+  shareSquare: 'Kotak 1:1',
+  sharePreview: 'Pratinjau kartu profil',
+  shareSize: 'PNG {w}×{h} piksel',
+  shareSave: 'Simpan PNG',
+  shareSaved: 'PNG disimpan ke folder unduhan.',
+  shareCopy: 'Salin gambar',
+  shareCopied: 'Gambar disalin ke papan klip.',
+  shareLink: 'Salin tautan Gist',
+  shareLinkCopied: 'Tautan profil disalin.'
 } as const
 
 export type NvSocialKey = keyof typeof NV_SOCIAL_ID

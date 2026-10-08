@@ -4,6 +4,8 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { socialT as t } from '@/i18n/neovarch-social'
 import { cn } from '@/lib/utils'
 
+import { ShareProfileDialog } from './share-dialog'
+
 import {
   $socialError,
   $socialFriends,
@@ -31,6 +33,7 @@ import {
   startGithubLogin,
   unfollowUser
 } from './social-store'
+import { TechLogo, TechStackChips } from './tech-logo'
 
 function openExternal(url: string) {
   void window.hermesDesktop?.openExternal?.(url)
@@ -284,7 +287,7 @@ function PrivacyCard() {
   )
 }
 
-export function ProfileCard({ profile }: { profile: null | SocialProfile }) {
+export function ProfileCard({ onShare, profile }: { onShare?: () => void; profile: null | SocialProfile }) {
   if (!profile) {
     return null
   }
@@ -299,6 +302,11 @@ export function ProfileCard({ profile }: { profile: null | SocialProfile }) {
           {profile.bio && <p className="nv-social-bio">{profile.bio}</p>}
           <CodingBadge status={profile.status} />
         </div>
+        {onShare && (
+          <button className="nv-social-btn nv-social-share-btn" data-slot="nv-share-open" onClick={onShare} type="button">
+            {t('share')}
+          </button>
+        )}
       </header>
       {profile.heatmap && (
         <>
@@ -309,7 +317,7 @@ export function ProfileCard({ profile }: { profile: null | SocialProfile }) {
       {profile.stack && (
         <>
           <h3 className="nv-social-h3">{t('stackTitle')}</h3>
-          <StackChips items={profile.stack.languages} />
+          <TechStackChips items={profile.stack.languages} />
           {profile.stack.tools?.length > 0 && (
             <>
               <h3 className="nv-social-h3">{t('toolsTitle')}</h3>
@@ -350,7 +358,13 @@ export function FriendRow({ friend, onOpen }: { friend: FriendCard; onOpen: (log
                 : t('noNeovarch')}
           </span>
         </span>
-        {friend.top_stack.length > 0 && <span className="nv-social-friend-stack">{friend.top_stack.join(' · ')}</span>}
+        {friend.top_stack.length > 0 && (
+          <span className="nv-social-friend-stack" title={friend.top_stack.join(' · ')}>
+            {friend.top_stack.slice(0, 4).map(n => (
+              <TechLogo key={n} name={n} size={14} />
+            ))}
+          </span>
+        )}
       </button>
     </li>
   )
@@ -499,6 +513,7 @@ export function NeovarchSocialPage() {
   const friends = useStore($socialFriends)
   const error = useStore($socialError)
   const [open, setOpen] = useState<null | string>(null)
+  const [sharing, setSharing] = useState(false)
 
   return (
     <div className="nv-social" data-slot="nv-social">
@@ -517,6 +532,9 @@ export function NeovarchSocialPage() {
       )}
       {!status && !error && <p className="nv-social-muted">{t('loading')}</p>}
       {status && !status.signed_in && <LoginCard />}
+      {sharing && profile && (
+        <ShareProfileDialog gistUrl={status?.gist_url} onClose={() => setSharing(false)} profile={profile} />
+      )}
       {status?.signed_in && (
         <div className="nv-social-body">
           <div className="nv-social-main">
@@ -524,7 +542,11 @@ export function NeovarchSocialPage() {
               <FriendDetailView login={open} onBack={() => setOpen(null)} />
             ) : (
               <>
-                {profile ? <ProfileCard profile={profile} /> : <p className="nv-social-muted">{t('loading')}</p>}
+                {profile ? (
+                  <ProfileCard onShare={() => setSharing(true)} profile={profile} />
+                ) : (
+                  <p className="nv-social-muted">{t('loading')}</p>
+                )}
                 <PrivacyCard />
               </>
             )}

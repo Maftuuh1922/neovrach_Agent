@@ -115,6 +115,33 @@ export const $socialProfile = atom<null | SocialProfile>(null)
 export const $socialFriends = atom<FriendsResponse | null>(null)
 export const $socialError = atom<null | string>(null)
 
+const AVATAR_KEY = 'nv.social.avatar'
+
+function storedAvatar(): null | string {
+  try {
+    return window.localStorage?.getItem(AVATAR_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+/** The signed-in GitHub avatar for the rail (remembered across launches, cleared on sign-out). */
+export const $socialAvatar = atom<null | string>(storedAvatar())
+
+function rememberAvatar(url: null | string) {
+  $socialAvatar.set(url)
+
+  try {
+    if (url) {
+      window.localStorage?.setItem(AVATAR_KEY, url)
+    } else {
+      window.localStorage?.removeItem(AVATAR_KEY)
+    }
+  } catch {
+    // storage unavailable: keep the in-memory value
+  }
+}
+
 const api = <T>(path: string, method = 'GET', body?: unknown) =>
   hermesApi<T>({ path, method, ...(body === undefined ? {} : { body }) })
 
@@ -149,6 +176,7 @@ export async function refreshSocial(): Promise<void> {
     if (!status.signed_in) {
       $socialProfile.set(null)
       $socialFriends.set(null)
+      rememberAvatar(null)
 
       return
     }
@@ -159,6 +187,7 @@ export async function refreshSocial(): Promise<void> {
     ])
 
     $socialProfile.set(profile)
+    rememberAvatar(profile.avatar_url)
     $socialFriends.set({ ...friends, friends: sortFriends(friends.friends) })
   } catch (error) {
     $socialError.set(message(error))

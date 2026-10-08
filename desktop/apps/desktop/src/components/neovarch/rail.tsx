@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, navigateToWorkspacePage } from '@/app/routes'
 import { openNeovarchKanban } from '@/components/neovarch/home'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
-import { SOCIAL_ROUTE } from '@/components/neovarch/social-store'
+import { $socialAvatar, $socialStatus, SOCIAL_ROUTE } from '@/components/neovarch/social-store'
 import { VAULT_ROUTE } from '@/components/neovarch/vault'
 import { Tip } from '@/components/ui/tooltip'
 import { NV_SOCIAL_ID } from '@/i18n/neovarch-social'
@@ -85,6 +85,9 @@ export function NeovarchRail() {
   const navigate = useNavigate()
   const location = useLocation()
   const sessionsOpen = useStore($nvSessionsOpen)
+  const avatar = useStore($socialAvatar)
+  // subscribing loads the social status once at launch (avatar refresh)
+  useStore($socialStatus)
 
   // Neovarch has no Hermes-style always-on session sidebar: the list is the
   // rail-opened panel, so the inherited sidebar pane is folded on launch.
@@ -125,7 +128,11 @@ export function NeovarchRail() {
     },
     {
       active: path.startsWith(SOCIAL_ROUTE),
-      icon: <UserCircle className={icon} />,
+      icon: avatar ? (
+        <img alt="" className="nv-rail-avatar" data-slot="nv-rail-avatar" src={avatar} />
+      ) : (
+        <UserCircle className={icon} />
+      ),
       id: 'social',
       label: NV_COPY.social,
       onSelect: () => navigate(SOCIAL_ROUTE)

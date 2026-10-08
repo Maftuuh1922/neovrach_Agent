@@ -2399,3 +2399,92 @@
   border: 1px dashed var(--nv-line);
   font-size: 0.82rem;
 }
+
+/* technology logos (Simple Icons, CC0) in stack chips */
+.nv-tech-logo {
+  flex: none;
+  color: var(--nv-red);
+}
+.nv-tech-chip {
+  background: color-mix(in srgb, var(--nv-ink-3) 70%, var(--nv-red) 6%);
+  border-color: color-mix(in srgb, var(--nv-text) 12%, transparent);
+}
+.nv-tech-chip-icon {
+  padding: 0.3rem 0.5rem;
+}
+.nv-social-friend-stack {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.nv-social-friend-stack .nv-tech-logo {
+  color: var(--nv-text-3);
+}
+.nv-social-profile-head {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.nv-social-share-btn {
+  align-self: start;
+}
+.nv-rail-avatar {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  object-fit: cover;
+}
+/* share dialog */
+.nv-share-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--nv-ink) 72%, transparent);
+}
+.nv-share-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(34rem, 92vw);
+  max-height: 92vh;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+}
+.nv-share-head {
+  justify-content: space-between;
+}
+.nv-share-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink-3);
+}
+.nv-share-seg-btn {
+  padding: 0.3rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nv-text-2);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.nv-share-seg-btn[data-active='true'] {
+  background: var(--nv-ink-2);
+  color: var(--nv-text);
+}
+.nv-share-preview {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.nv-share-canvas {
+  height: min(60vh, 34rem);
+  max-width: 100%;
+  border-radius: 18px;
+}
+.nv-share-preview[data-format='square'] .nv-share-canvas {
+  height: auto;
+  width: min(100%, 26rem);
+}
