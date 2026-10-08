@@ -1,0 +1,38 @@
+name: Attach npm launcher to a release
+
+# Packs npm/ and uploads it as neovarch-agent-npm.tgz to an existing release.
+# build-release.yml already does this for new releases; use this to (re)attach it manually.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.1.0). Empty = latest release.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  npm-asset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pack and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$TAG" ]; then TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName); fi
+          VERSION="${TAG#v}"
+          cd npm
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          npm pack
+          mv "neovarch-agent-$VERSION.tgz" neovarch-agent-npm.tgz
+          gh release upload "$TAG" neovarch-agent-npm.tgz --clobber --repo "$GITHUB_REPOSITORY"
