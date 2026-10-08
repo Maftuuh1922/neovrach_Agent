@@ -134,14 +134,27 @@ const SETTINGS = ['config:model', 'providers', 'config:chat', 'config:appearance
 for (const tab of SETTINGS) {
   await visit(`settings ${tab}`, () => page.evaluate(t => { window.location.hash = `#/settings?tab=${encodeURIComponent(t)}` }, tab))
 }
-for (const sub of ['keys', 'custom-endpoints']) {
-  await visit(`settings providers/${sub}`, () => page.evaluate(s => { window.location.hash = `#/settings?tab=providers&page=${s}` }, sub))
+// Provider sub-pages are chosen with ?pview=, and the nav item is clicked as a
+// user would, so the sweep proves the sidebar entry itself opens the page.
+const PROVIDER_NAV: Record<string, RegExp> = { keys: /^kunci api$|^api keys$/i, 'custom-endpoints': /^endpoint kustom$/i }
+async function openProviderPage(sub: string) {
+  await page.evaluate(() => { window.location.hash = '#/settings?tab=providers' })
+  await sleep(1500)
+  const nav = page.getByText(PROVIDER_NAV[sub], { exact: false }).first()
+  if (await nav.isVisible().catch(() => false)) await nav.click()
+  else await page.evaluate(s => { window.location.hash = `#/settings?tab=providers&pview=${s}` }, sub)
 }
+for (const sub of Object.keys(PROVIDER_NAV)) await visit(`settings providers/${sub}`, () => openProviderPage(sub))
 
 // ---- Add model, end to end, through the real form ---------------------------
 async function addEndpoint(o: { name: string; url: string; key?: string; headers?: string; insecure?: boolean }) {
-  await page.evaluate(() => { window.location.hash = '#/settings?tab=providers&page=custom-endpoints' })
+  await openProviderPage('custom-endpoints')
   await sleep(2500)
+  if (!(await page.locator('[data-nv-field="endpoint-headers"]').isVisible().catch(() => false))) {
+    fail(`add model (${o.name}): Endpoint kustom page did not open`)
+    await shot(`addmodel-${o.name.replace(/\W+/g, '-').toLowerCase()}-noform.png`)
+    return { model: '', cfg: fs.readFileSync(path.join(NV_HOME, 'config.yaml'), 'utf8') }
+  }
   const newBtn = page.getByRole('button', { name: /new endpoint|endpoint baru/i })
   if (await newBtn.isVisible().catch(() => false)) await newBtn.click()
   const field = (label: RegExp) => page.locator('label').filter({ hasText: label }).locator('input').first()
