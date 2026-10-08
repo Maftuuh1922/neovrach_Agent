@@ -445,6 +445,10 @@ def build_app(gw: Gateway) -> web.Application:
         if request.method == "OPTIONS":
             return web.Response(status=204, headers=_cors(request))
         if path.startswith("/api/") and path not in PUBLIC and not gw.auth.ok(request):
+            access = os.environ.get("NEOVARCH_ACCESS_LOG")
+            if access:
+                with open(access, "a", encoding="utf-8") as fh:
+                    fh.write(f"401 {request.method} {request.path}\n")
             return web.json_response({"detail": "Unauthorized"}, status=401, headers=_cors(request))
         try:
             resp = await handler(request)
@@ -454,6 +458,13 @@ def build_app(gw: Gateway) -> web.Application:
         except web.HTTPException as exc:
             resp = exc
         resp.headers.update(_cors(request))
+        access = os.environ.get("NEOVARCH_ACCESS_LOG")
+        if access and path.startswith("/api/"):
+            try:
+                with open(access, "a", encoding="utf-8") as fh:
+                    fh.write(f"{resp.status} {request.method} {request.path_qs}\n")
+            except OSError:
+                pass
         return resp
 
     app = web.Application(middlewares=[auth_mw], client_max_size=64 * 1024 * 1024)
