@@ -113,6 +113,16 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
               ]),
             ),
           ),
+          // Solid band behind the lower half of the floating bar so scrolled
+          // content never shows through under it or in the system nav inset.
+          if (!keyboard)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: mq.viewPadding.bottom + gap + barH / 2,
+              child: const IgnorePointer(child: ColoredBox(color: NV.bg)),
+            ),
           if (!keyboard)
             Positioned(
               left: 16,

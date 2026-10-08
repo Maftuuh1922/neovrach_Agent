@@ -149,7 +149,7 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _precache(WidgetTester tester) async {
   final ctx = tester.element(find.byType(MaterialApp));
   await tester.runAsync(() async {
-    for (final a in const ['assets/art/feat-remote.webp', 'assets/art/portal-banner.webp', 'assets/art/feat-automation.webp', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png', ]) {
+    for (final a in const ['assets/art/feat-remote.webp', 'assets/art/portal-banner.webp', 'assets/art/feat-automation.webp', 'assets/brand/wordmark_text.png', 'assets/brand/wordmark_halo.png', 'assets/brand/monogram.png']) {
       await precacheImage(AssetImage(a), ctx);
     }
   });
@@ -289,6 +289,8 @@ void main() {
   testWidgets('13 startup splash', (tester) async {
     await run(tester, '13_splash',
         () => const StartupSplash(background: NV.bg, foreground: NV.text, accent: NV.red, child: ConnectScreen(onboarding: true)),
+        // monogram is precached, so the reveal starts at once and the shot
+        // lands mid-reveal (~0.56): halo down, wordmark mostly wiped in.
         remote: _controller(prefs, demo: false));
   });
 }
