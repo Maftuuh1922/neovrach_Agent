@@ -173,6 +173,9 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
     ...TITLEBAR_FIXED_TOOLS.sidebar,
     actionId: 'view.toggleSidebar',
     badge: panesFlipped ? undefined : unreadBadge,
+    // Neovarch: the inherited Hermes session sidebar is replaced by the rail's
+    // "Sesi" panel, so its pane-header toggle is hidden and can't reopen it.
+    hidden: true,
     icon: <TitlebarIcon name="layout-sidebar-left" />,
     id: 'sidebar',
     label: `${leftLabel}${panesFlipped ? '' : unreadHint}`,

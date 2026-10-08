@@ -30,6 +30,9 @@ interface OverlayViewProps {
   /** Controls rendered on the close button's row, to its left. They ride the
    *  titlebar strip, so keep them titlebar-sized and quiet. */
   titlebarActions?: ReactNode
+  /** `page` fills its containing block flush (no dim backdrop, no floating
+   *  card) — Neovarch renders Settings as a page this way. */
+  variant?: 'card' | 'page'
 }
 
 export function OverlayView({
@@ -40,8 +43,11 @@ export function OverlayView({
   edgeBadge,
   headerContent,
   rootClassName,
-  titlebarActions
+  titlebarActions,
+  variant = 'card'
 }: OverlayViewProps) {
+  const page = variant === 'page'
+
   const closeOverlay = () => {
     triggerHaptic('close')
     onClose()
@@ -74,14 +80,15 @@ export function OverlayView({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 bg-black/22 backdrop-blur-[0.125rem]',
+        page ? 'fixed inset-0 z-50 bg-(--ui-chat-surface-background)' : 'fixed inset-0 z-50 bg-black/22 backdrop-blur-[0.125rem]',
         // Equidistant inset on every side. The top value is driven by the
         // titlebar height so the card clears the OS traffic-lights vertically;
         // since the card top already sits below them, the left needs no extra
         // inset — keeping all sides equal so the card is ~full-width at any size.
-        'p-[calc(var(--titlebar-height)+0.625rem)]',
-        'sm:p-[calc(var(--titlebar-height)+0.875rem)]'
+        !page && 'p-[calc(var(--titlebar-height)+0.625rem)]',
+        !page && 'sm:p-[calc(var(--titlebar-height)+0.875rem)]'
       )}
+      data-overlay-variant={variant}
       // Every OverlayView-based overlay (settings, command-center, agents, cron,
       // profiles, star map, …) covers the chat while the composer stays mounted
       // beneath it. This marker tells `composerFocusBlockedBySurface` to stand
@@ -105,7 +112,9 @@ export function OverlayView({
       <div className="relative h-full min-h-0">
         <div
           className={cn(
-            'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-surface-background) shadow-md',
+            page
+              ? 'relative flex h-full min-h-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)'
+              : 'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-surface-background) shadow-md',
             rootClassName
           )}
           // Marks the card as a RAISED surface for window glass: while the field

@@ -52,7 +52,9 @@ export function titlebarAppActionsClusterCounts(
   mode: InterfaceMode = DEFAULT_INTERFACE_MODE
 ): { left: number; right: number } {
   const shown = shownInMode(mode)
-  const sidebar = 1
+  // Neovarch hides the Hermes sidebar toggle (see titlebar-controls), so it
+  // reserves no slot in the left cluster.
+  const sidebar = 0
   const appActions = APP_ACTION_IDS.filter(id => shown(TITLEBAR_FIXED_TOOLS[id])).length
   const rightFixed = RIGHT_FIXED_IDS.filter(id => shown(TITLEBAR_FIXED_TOOLS[id])).length
 

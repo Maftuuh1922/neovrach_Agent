@@ -1,0 +1,1213 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   NEOVARCH — desktop brand layer.
+
+   Red/white duotone on red-black ink. Flat solid colours ONLY: no gradients,
+   no glow shadows, no gradient text or overlays (brand rule). Display type is
+   the bundled Playfair Display (Didone), labels are JetBrains Mono, body stays
+   the system sans. Loaded after styles.css and unlayered, so it wins over the
+   Tailwind utility layer without !important.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('../fonts/PlayfairDisplay-latin.woff2') format('woff2');
+}
+
+:root {
+  --nv-red: #ee1c1c;
+  --nv-red-deep: #8f0a0a;
+  --nv-paper: #f4f2ed;
+  --nv-ink: #0d0606;
+  --nv-ink-2: #120909;
+  --nv-ink-3: #1c1010;
+  --nv-line: #2c1d1d;
+  --nv-text: #f4f2ed;
+  --nv-text-2: #b9b2ac;
+  --nv-text-3: #7d7470;
+  --nv-red-text: #ff4a3d;
+  --nv-red-wash: #2a0b0b;
+  --nv-font-display: 'Playfair Display', Didot, 'Bodoni MT', Georgia, serif;
+  --nv-font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+
+:root[data-hermes-mode='light'] {
+  --nv-ink: #f4f2ed;
+  --nv-ink-2: #ebe8e1;
+  --nv-ink-3: #e1ddd4;
+  --nv-line: #d4cec4;
+  --nv-text: #120d0d;
+  --nv-text-2: #4a4240;
+  --nv-text-3: #857c78;
+  --nv-red-text: #8f0a0a;
+  --nv-red-wash: #f6dcd8;
+}
+
+/* Brand surface tokens for the Neovarch skin: flat chrome, red accents, no
+   blue, red-tinted selection. */
+:root[data-hermes-theme='neovarch'] {
+  --ui-blue: var(--nv-red-deep);
+  --ui-selection-background: color-mix(in srgb, var(--nv-red) 34%, transparent);
+  --ui-bg-chrome: var(--nv-ink);
+  --ui-chat-surface-background: var(--nv-ink);
+  --ui-sidebar-surface-background: var(--nv-ink-2);
+  --ui-bg-sidebar: var(--nv-ink-2);
+}
+
+/* ── Flat-colour rule: neutralise inherited gradient paint ─────────────── */
+.dither {
+  background: currentColor;
+  border-radius: 9999px;
+}
+.btn-arc,
+.tool-memory-legendary-title {
+  background-image: none;
+}
+.tool-memory-legendary-title {
+  color: var(--nv-red);
+  -webkit-text-fill-color: currentColor;
+}
+.arc-border::before {
+  background: var(--nv-red);
+}
+[data-slot='composer-drag-region'] {
+  background-image: none;
+  background-color: color-mix(in srgb, var(--ui-text-tertiary) 22%, transparent);
+}
+[data-slot='composer-root'] > .pointer-events-none {
+  background: transparent !important;
+}
+.pet-egg__glow {
+  display: none;
+}
+
+/* ── Frame: command bar · rail · stage ──────────────────────────────────── */
+.nv-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  background: var(--nv-ink);
+  color: var(--nv-text);
+}
+.nv-frame-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.nv-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Containing block for the shell's `position: fixed` chrome + overlays. */
+  transform: translateZ(0);
+  border-top: 1px solid var(--nv-line);
+  border-left: 1px solid var(--nv-line);
+}
+
+.nv-command-bar {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 34rem) auto;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex: 0 0 auto;
+  padding-left: 1rem;
+  /* Clear native window controls (WCO) on Windows/Linux. */
+  padding-right: max(0.75rem, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 0.5rem));
+  background: var(--nv-ink);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.nv-command-bar button {
+  -webkit-app-region: no-drag;
+}
+.nv-command-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.nv-wordmark {
+  color: var(--nv-text);
+}
+.nv-wordmark-serif {
+  font-family: var(--nv-font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+}
+.nv-wordmark-tag {
+  font-family: var(--nv-font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--nv-paper);
+  background: var(--nv-red);
+  padding: 0.18rem 0.3rem 0.14rem 0.4rem;
+  transform: translateY(-0.1rem);
+}
+
+.nv-command-search {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 1.875rem;
+  width: 100%;
+  padding: 0 0.5rem 0 0.75rem;
+  border: 1px solid var(--nv-line);
+  background: var(--nv-ink-2);
+  color: var(--nv-text-3);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: text;
+  transition: border-color 120ms ease;
+}
+.nv-command-search:hover,
+.nv-command-search:focus-visible {
+  border-color: var(--nv-red);
+  outline: none;
+  color: var(--nv-text-2);
+}
+.nv-command-search-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nv-command-kbd {
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--nv-line);
+  color: var(--nv-text-3);
+}
+
+.nv-command-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 1.875rem;
+  max-width: 18rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--nv-line);
+  background: transparent;
+  color: var(--nv-text);
+  font-size: 0.78rem;
+}
+.nv-command-model:hover {
+  border-color: var(--nv-red);
+}
+.nv-command-model-label {
+  font-family: var(--nv-font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.24em;
+  color: var(--nv-red-text);
+}
+.nv-command-model-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-mono);
+  font-size: 0.72rem;
+}
+
+.nv-rail {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0 0.75rem;
+  background: var(--nv-ink);
+  -webkit-app-region: no-drag;
+}
+.nv-rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.nv-rail-rule {
+  width: 1.25rem;
+  height: 1px;
+  margin: 0.35rem 0;
+  background: var(--nv-line);
+}
+.nv-rail-logo {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.35rem;
+  color: var(--nv-red);
+  background: transparent;
+}
+.nv-rail-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.375rem;
+  height: 2.375rem;
+  color: var(--nv-text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.nv-rail-button:hover {
+  color: var(--nv-text);
+  border-color: var(--nv-line);
+}
+.nv-rail-button-active {
+  color: var(--nv-text);
+  background: var(--nv-red-wash);
+}
+.nv-rail-button-active::before {
+  content: '';
+  position: absolute;
+  left: -0.6rem;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  width: 3px;
+  background: var(--nv-red);
+}
+
+/* ── Panes: tab strips + sessions panel ─────────────────────────────────── */
+:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+  font-family: var(--nv-font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 0;
+}
+.nv-panel-label {
+  font-family: var(--nv-font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--nv-text-2);
+}
+.nv-panel-label .nv-halo {
+  color: var(--nv-red);
+}
+
+.nv-label-text {
+  font-family: var(--nv-font-display);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+.nv-connecting .nv-label-text {
+  font-size: 1.5rem;
+}
+.nv-connecting-live .nv-halo {
+  animation: nv-halo-turn 1.6s linear infinite;
+}
+@keyframes nv-halo-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Home ───────────────────────────────────────────────────────────────── */
+.nv-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 1.5rem;
+  text-align: left;
+  container-type: inline-size;
+}
+.nv-home-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-left: 1rem;
+  border-left: 3px solid var(--nv-red);
+}
+.nv-home-wordmark .nv-wordmark-serif {
+  font-size: 0.8rem;
+  letter-spacing: 0.3em;
+  color: var(--nv-text-3);
+}
+.nv-home-greeting {
+  margin: 0;
+  font-family: var(--nv-font-display);
+  font-weight: 600;
+  font-size: clamp(2.2rem, 5.5cqi, 3.6rem);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  color: var(--nv-text);
+}
+.nv-home-body {
+  max-width: 36rem;
+  color: var(--nv-text-2);
+  font-size: 0.95rem;
+}
+.nv-home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13.5rem;
+  gap: 1.5rem;
+  align-items: start;
+}
+@container (max-width: 44rem) {
+  .nv-home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nv-home-poster {
+    display: none;
+  }
+}
+.nv-home-lower {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.nv-home-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--nv-line);
+}
+@container (max-width: 34rem) {
+  .nv-home-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.nv-home-action {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.15rem 0.5rem;
+  padding: 0.8rem 0.85rem 0.85rem;
+  text-align: left;
+  color: var(--nv-text);
+  background: var(--nv-ink);
+  border-right: 1px solid var(--nv-line);
+  transition: background-color 120ms ease;
+}
+.nv-home-action:last-child {
+  border-right: 0;
+}
+.nv-home-action:hover {
+  background: var(--nv-red-wash);
+}
+.nv-home-action:hover .nv-home-action-icon {
+  color: var(--nv-red);
+}
+.nv-home-action-icon {
+  grid-row: 1;
+  color: var(--nv-text-2);
+  padding-top: 0.15rem;
+}
+.nv-home-action-label {
+  grid-row: 1;
+  font-family: var(--nv-font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.nv-home-action-hint {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.72rem;
+  color: var(--nv-text-3);
+}
+
+.nv-home-index-head {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--nv-text-3);
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--nv-text-3);
+}
+.nv-home-index ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nv-home-index-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto 1rem;
+  align-items: baseline;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--nv-line);
+  text-align: left;
+  color: var(--nv-text);
+  background: transparent;
+}
+.nv-home-index-row:hover .nv-home-index-title {
+  color: var(--nv-red-text);
+}
+.nv-home-index-no {
+  font-family: var(--nv-font-mono);
+  font-size: 0.62rem;
+  color: var(--nv-text-3);
+}
+.nv-home-index-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-display);
+  font-size: 0.98rem;
+}
+.nv-home-index-time {
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  color: var(--nv-text-3);
+}
+.nv-home-index-go {
+  color: var(--nv-text-3);
+}
+.nv-home-index-empty {
+  display: block;
+  padding: 0.75rem 0;
+  color: var(--nv-text-3);
+}
+
+.nv-home-poster {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--nv-line);
+  background: #0d0606;
+}
+.nv-home-poster img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+/* ── Conversation: no boxed user bubbles ────────────────────────────────── */
+:root[data-hermes-theme='neovarch'] .composer-human-message {
+  border: 0;
+  border-left: 2px solid var(--nv-red);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0.15rem 2.25rem 0.15rem 0.9rem;
+  backdrop-filter: none;
+}
+:root[data-hermes-theme='neovarch'] .composer-human-message::before {
+  content: 'ANDA';
+  display: block;
+  margin-bottom: 0.15rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: var(--nv-red-text);
+}
+:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+  background: color-mix(in srgb, var(--nv-red) 5%, transparent);
+}
+:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-content'] {
+  position: relative;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root'] {
+  position: relative;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root']::before {
+  content: 'NEOVARCH';
+  display: block;
+  margin: 0.25rem 0 0.35rem;
+  font-family: var(--nv-font-mono);
+  font-weight: 700;
+  font-size: 0.56rem;
+  letter-spacing: 0.2em;
+  color: var(--nv-text-3);
+}
+
+/* ── Composer ───────────────────────────────────────────────────────────── */
+:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'] {
+  border-radius: 0 !important;
+  border-color: var(--nv-line) !important;
+  border-top: 2px solid var(--nv-red) !important;
+  background: var(--nv-ink-2);
+  box-shadow: none !important;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='composer-surface']:focus-within {
+  border-color: var(--nv-text-3) !important;
+  border-top-color: var(--nv-red) !important;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+  border-radius: 0;
+}
+
+/* ── Overlay / Settings navigation ──────────────────────────────────────── */
+:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+  border-radius: 0;
+  box-shadow: none;
+  border-color: var(--nv-line);
+}
+[data-tour='overlay-nav'] {
+  border-right: 1px solid var(--nv-line);
+}
+.nv-nav-item {
+  position: relative;
+  color: var(--nv-text-2);
+}
+.nv-nav-item:hover {
+  background: transparent;
+  color: var(--nv-text);
+}
+.nv-nav-active {
+  color: var(--nv-text);
+  background: var(--nv-red-wash) !important;
+}
+.nv-nav-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  width: 2px;
+  background: var(--nv-red);
+}
+.nv-nav-active svg {
+  color: var(--nv-red);
+}
+
+/* ── Remote / Devices ───────────────────────────────────────────────────── */
+.nv-remote-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--nv-line);
+  background: #0d0606;
+  color: #f4f2ed;
+}
+.nv-remote-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 11rem;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-right: 1px solid #2c1d1d;
+}
+.nv-remote-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1.1rem 1.25rem 1.1rem 0;
+  min-width: 0;
+}
+.nv-eyebrow {
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: #ff4a3d;
+}
+.nv-remote-title {
+  margin: 0;
+  font-family: var(--nv-font-display);
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1.05;
+}
+.nv-remote-device {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.nv-remote-device-name {
+  font-family: var(--nv-font-display);
+  font-weight: 600;
+  font-size: 1rem;
+}
+.nv-remote-device-state {
+  font-family: var(--nv-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: #b9b2ac;
+}
+.nv-remote-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid #2c1d1d;
+}
+.nv-remote-steps li {
+  padding: 0.55rem 0.6rem 0 0;
+  font-size: 0.74rem;
+  color: #b9b2ac;
+}
+.nv-remote-steps span {
+  display: block;
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  color: #ee1c1c;
+}
+.nv-qr-frame {
+  position: relative;
+  outline: 2px solid var(--nv-red);
+  outline-offset: 6px;
+}
+
+/* ── Flat-colour rule: no drop/box shadows, no glow filters ─────────────────
+   Tailwind composes box-shadow from ring + shadow vars; zeroing only the
+   shadow vars keeps focus rings (a 1px ring is a flat line) but drops every
+   elevation shadow. Theme `--shadow-*` tokens used by raw CSS go flat too. */
+:root[data-hermes-theme='neovarch'] {
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+}
+:root[data-hermes-theme='neovarch'] *,
+:root[data-hermes-theme='neovarch'] *::before,
+:root[data-hermes-theme='neovarch'] *::after {
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-inset-shadow: 0 0 #0000 !important;
+  --tw-drop-shadow: drop-shadow(0 0 #0000) !important;
+}
+.btn-arc {
+  background-color: var(--nv-red);
+  color: var(--nv-paper);
+}
+.btn-arc:hover:not(:disabled) {
+  filter: none;
+  background-color: var(--nv-red-deep);
+}
+.tool-memory-legendary-glyph {
+  filter: none;
+  color: var(--nv-red);
+}
+.pet-egg,
+.pet-egg--sm {
+  background: var(--nv-paper);
+  box-shadow: none;
+}
+.pet-egg__shine {
+  filter: none;
+}
+.pet-egg-shadow,
+.pet-contact-shadow {
+  background: color-mix(in srgb, #000 30%, transparent);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   NEOVARCH LAYOUT v3 — non-Hermes frame + one rounded system.
+   Radii: panels/cards 14px · buttons/inputs/menus/popovers/chips 10px ·
+   rail active item 12px · composer 16px. Flat colours, no shadows/gradients.
+   ═════════════════════════════════════════════════════════════════════════ */
+:root[data-hermes-theme='neovarch'] {
+  --nv-r-panel: 14px;
+  --nv-r-control: 10px;
+  --nv-r-rail: 12px;
+  --nv-r-composer: 16px;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+  --radius-3xl: 16px;
+  --radius: 10px;
+  /* Reading column width; the column sits left, not centred. */
+  --composer-width: 46rem;
+}
+
+/* ── Frame: rail · [sessions panel] · stage panel · context rail ────────── */
+.nv-frame-body {
+  gap: 0.5rem;
+  padding: 0 0.5rem 0.5rem 0;
+}
+.nv-stage {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  overflow: hidden;
+  background: var(--nv-ink);
+}
+
+/* Rail */
+.nv-rail-button {
+  border-radius: var(--nv-r-control);
+}
+.nv-rail-button-active {
+  border-radius: var(--nv-r-rail);
+}
+.nv-rail-button-active::before {
+  left: -0.7rem;
+  border-radius: 3px;
+}
+.nv-rail-logo {
+  border-radius: var(--nv-r-rail);
+}
+
+/* Command bar */
+.nv-command-search,
+.nv-command-model {
+  border-radius: var(--nv-r-control);
+}
+.nv-command-kbd {
+  border-radius: 6px;
+}
+.nv-wordmark-tag {
+  border-radius: 4px;
+}
+
+/* Generic small icon button used by the Neovarch panels */
+.nv-icon-button {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--nv-r-control);
+  color: var(--nv-text-3);
+  background: transparent;
+}
+.nv-icon-button:hover {
+  color: var(--nv-text);
+  background: var(--nv-ink-3);
+}
+
+/* ── Sessions panel (opened from the rail) ──────────────────────────────── */
+.nv-sessions {
+  display: flex;
+  flex: 0 0 17rem;
+  flex-direction: column;
+  min-height: 0;
+  width: 17rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+  overflow: hidden;
+}
+.nv-sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.6rem 0.4rem 0.9rem;
+}
+.nv-sessions-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--nv-font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--nv-text);
+}
+.nv-sessions-count {
+  font-family: var(--nv-font-mono);
+  font-size: 0.66rem;
+  color: var(--nv-text-3);
+}
+.nv-sessions-new {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0.6rem 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-red);
+  color: var(--nv-paper);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.nv-sessions-new:hover {
+  background: var(--nv-red-deep);
+}
+.nv-sessions-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.45rem 0.6rem;
+}
+.nv-sessions-group + .nv-sessions-group {
+  margin-top: 0.6rem;
+}
+.nv-sessions-group-label {
+  margin: 0.3rem 0.45rem 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--nv-text-3);
+}
+.nv-sessions-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nv-sessions-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.42rem 0.5rem;
+  border-radius: var(--nv-r-control);
+  text-align: left;
+  color: var(--nv-text-2);
+  background: transparent;
+}
+.nv-sessions-row:hover {
+  color: var(--nv-text);
+  background: var(--nv-ink-3);
+}
+.nv-sessions-row-active {
+  color: var(--nv-text);
+  background: var(--nv-red-wash);
+}
+.nv-sessions-row-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.82rem;
+}
+.nv-sessions-row-time {
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  color: var(--nv-text-3);
+}
+.nv-sessions-empty {
+  margin: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--nv-text-3);
+}
+
+/* ── Context rail (right of the conversation) ───────────────────────────── */
+.nv-context {
+  display: flex;
+  flex: 0 0 16rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 16rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+@media (max-width: 1100px) {
+  .nv-context {
+    display: none;
+  }
+}
+.nv-context-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.8rem 0.85rem 0.85rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+}
+.nv-context-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--nv-text-3);
+}
+.nv-context-label svg {
+  color: var(--nv-red);
+}
+.nv-context-model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink);
+  color: var(--nv-text);
+}
+.nv-context-model:hover {
+  border-color: var(--nv-red);
+}
+.nv-context-model-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-mono);
+  font-size: 0.74rem;
+}
+.nv-context-facts {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+}
+.nv-context-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+}
+.nv-context-facts dt {
+  color: var(--nv-text-3);
+}
+.nv-context-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--nv-text-2);
+  font-family: var(--nv-font-mono);
+}
+.nv-context-list {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nv-context-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink);
+}
+.nv-context-mono {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-mono);
+  font-size: 0.7rem;
+  color: var(--nv-text-2);
+}
+.nv-context-count {
+  flex: 0 0 auto;
+  font-family: var(--nv-font-mono);
+  font-size: 0.66rem;
+  color: var(--nv-red-text);
+}
+.nv-context-empty {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--nv-text-3);
+}
+
+/* ── Conversation: left-aligned reading column ──────────────────────────── */
+:root[data-hermes-theme='neovarch'] [data-slot='aui_thread-content'] {
+  margin-left: 0;
+  margin-right: auto;
+  padding-left: 2rem;
+  padding-right: 1.5rem;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='composer-dock'].absolute {
+  left: calc(2rem - 5px);
+  translate: none;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='aui_intro'] {
+  align-items: flex-start;
+  text-align: left;
+}
+.nv-home {
+  margin: 0;
+  padding: 2.25rem 1.5rem 1.5rem 2rem;
+}
+
+/* User turns: a rounded card instead of a ruled bubble */
+:root[data-hermes-theme='neovarch'] .composer-human-message {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+  padding: 0.55rem 2.25rem 0.6rem 0.9rem;
+}
+:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+  background: var(--nv-ink-3);
+}
+
+/* Composer: one rounded surface, 1px line, red on focus */
+:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'] {
+  border-radius: var(--nv-r-composer) !important;
+  border: 1px solid var(--nv-line) !important;
+  border-top: 1px solid var(--nv-line) !important;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='composer-surface']:focus-within {
+  border-color: var(--nv-red) !important;
+  border-top-color: var(--nv-red) !important;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+  border-radius: var(--nv-r-composer);
+}
+
+/* Pane tabs */
+:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+  border-radius: var(--nv-r-control);
+}
+
+/* Home */
+.nv-home-head {
+  border-left: 0;
+  padding-left: 0;
+}
+.nv-home-actions {
+  gap: 0.5rem;
+  border: 0;
+}
+.nv-home-action {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+}
+.nv-home-action:last-child {
+  border-right: 1px solid var(--nv-line);
+}
+.nv-home-action {
+  align-items: center;
+  padding: 0.75rem 0.8rem;
+}
+.nv-home-action-label,
+.nv-home-action-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nv-home-action-label {
+  font-size: 0.98rem;
+}
+/* Home lower block: one column, 2×2 quick actions. The dithered poster never
+   had room beside the narrow intro column (it only took a blank 13.5rem track),
+   so it is dropped and the actions + session index use the full width. */
+.nv-home-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.nv-home-poster {
+  display: none;
+}
+.nv-home-lower {
+  /* the intro shrink-wraps its content, so give the block a real width (an
+     empty session index would otherwise collapse it to the hint's width) */
+  width: 34rem;
+  max-width: 100%;
+}
+.nv-home-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.nv-home-index {
+  padding: 0.75rem 0.9rem 0.4rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+}
+.nv-home-index-row {
+  border-radius: var(--nv-r-control);
+  padding-inline: 0.4rem;
+}
+.nv-home-index-row:hover {
+  background: var(--nv-ink-3);
+}
+.nv-home-index li:last-child .nv-home-index-row {
+  border-bottom: 0;
+}
+.nv-home-poster {
+  border-radius: var(--nv-r-panel);
+  overflow: hidden;
+}
+
+/* Floating chrome: menus, popovers, tooltips, selects at 10px; dialogs 14px */
+:root[data-hermes-theme='neovarch'] [data-slot='tooltip-content'],
+:root[data-hermes-theme='neovarch'] [role='tooltip'],
+:root[data-hermes-theme='neovarch'] [role='menu'],
+:root[data-hermes-theme='neovarch'] [role='listbox'],
+:root[data-hermes-theme='neovarch'] [data-slot='popover-content'],
+:root[data-hermes-theme='neovarch'] [data-slot='dropdown-menu-content'],
+:root[data-hermes-theme='neovarch'] [data-slot='context-menu-content'],
+:root[data-hermes-theme='neovarch'] [data-slot='select-content'] {
+  border-radius: var(--nv-r-control);
+}
+:root[data-hermes-theme='neovarch'] [role='menuitem'],
+:root[data-hermes-theme='neovarch'] [role='option'] {
+  border-radius: 8px;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='dialog-content'],
+:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+  border-radius: var(--nv-r-panel);
+}
+
+/* ── Settings as a page: numbered seven-group index ─────────────────────── */
+:root[data-hermes-theme='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
+  border-radius: 0;
+  border: 0;
+}
+.nv-settings-page [data-tour='overlay-nav'] {
+  counter-reset: nv-group;
+  border-right: 0;
+  margin: 0.75rem 0 0.75rem 0.75rem;
+  padding-top: 0.75rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+}
+.nv-settings-page .nv-nav-item {
+  height: 2rem;
+  border-radius: var(--nv-r-control);
+}
+.nv-settings-page .nv-nav-item:not([data-nested]) {
+  font-weight: 600;
+}
+.nv-settings-page .nv-nav-item:not([data-nested])::before {
+  counter-increment: nv-group;
+  content: counter(nv-group, decimal-leading-zero);
+  flex: 0 0 auto;
+  width: 1.4rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--nv-text-3);
+}
+.nv-settings-page .nv-nav-active:not([data-nested])::before {
+  color: var(--nv-red-text);
+}
+.nv-nav-item {
+  border-radius: var(--nv-r-control);
+}
+.nv-nav-active::after {
+  display: none;
+}
+
+/* Remote / QR */
+.nv-remote-hero {
+  border-radius: var(--nv-r-panel);
+  overflow: hidden;
+}
+.nv-qr-frame {
+  border-radius: var(--nv-r-control);
+}
+
+/* v3b: wider settings index so group names fit */
+@media (min-width: 47.5rem) {
+  .nv-settings-page div:has(> [data-tour='overlay-nav']) {
+    grid-template-columns: 16rem minmax(0, 1fr);
+  }
+}

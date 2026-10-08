@@ -16,12 +16,12 @@ interface FadeTextProps extends Omit<ComponentProps<'span'>, 'children'> {
 }
 
 /**
- * Single-line text that fades out instead of truncating with an ellipsis.
+ * Single-line text that clips with a plain ellipsis when it overflows.
  *
- * Uses an inline mask-image so the fade resolves against whatever the parent
- * background is — no need to know the surface color, no after-pseudo overlap.
- * The mask is only applied when the text is actually overflowing, so short
- * strings render as plain text without an unnecessary gradient on their tail.
+ * Neovarch: flat colours only, so the old trailing mask-image fade is gone —
+ * overflow is marked with a solid ellipsis and a `data-overflowing` flag
+ * (callers can hang a hard edge off it). `fadeWidth` is kept for API
+ * compatibility and ignored.
  *
  * Layout reads (`el.scrollWidth`) are forced reflows. To avoid measuring
  * once per parent re-render — which during streaming happens on every token —
@@ -30,7 +30,7 @@ interface FadeTextProps extends Omit<ComponentProps<'span'>, 'children'> {
  * comparator so scalar-string children skip re-render entirely when the text
  * is unchanged but the parent re-rendered.
  */
-function FadeTextImpl({ children, className, fadeWidth = '3rem', style, ...rest }: FadeTextProps) {
+function FadeTextImpl({ children, className, fadeWidth: _fadeWidth, style, ...rest }: FadeTextProps) {
   const ref = useRef<HTMLSpanElement>(null)
   const [overflowing, setOverflowing] = useState(false)
 
@@ -53,20 +53,13 @@ function FadeTextImpl({ children, className, fadeWidth = '3rem', style, ...rest 
 
   useResizeObserver(measureOverflow, ref)
 
-  const maskStyle: CSSProperties = overflowing
-    ? {
-        maskImage: `linear-gradient(to right, black calc(100% - ${fadeWidth}), transparent)`,
-        WebkitMaskImage: `linear-gradient(to right, black calc(100% - ${fadeWidth}), transparent)`,
-        ...style
-      }
-    : (style ?? {})
-
   return (
     <span
       {...rest}
-      className={cn('block min-w-0 max-w-full overflow-hidden whitespace-nowrap', className)}
+      className={cn('block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap', className)}
+      data-overflowing={overflowing ? '' : undefined}
       ref={ref}
-      style={maskStyle}
+      style={style}
     >
       {children}
     </span>

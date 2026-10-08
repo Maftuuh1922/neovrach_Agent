@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { edgeMask, scrollEdges } from '@/components/ui/fade-scroll'
+import { edgeRules, type FadeEdges, scrollEdges } from '@/components/ui/fade-scroll'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { ProfileGlyph } from '@/components/ui/profile-glyph'
 import { Tip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -194,6 +194,8 @@ const stepThroughCells: Modifier = ({ containerNodeRect, draggingNodeRect, trans
 // (gateway, profile); the workspace still lives on one gateway at a time, only
 // the picker spans the fleet. Groups keep registry order regardless of which
 // one is active, so a square never moves under the pointer that clicked it.
+const NO_SCROLL_EDGES: FadeEdges = { above: false, below: false }
+
 export function ProfileRail() {
   const { t, locale } = useI18n()
   const p = t.profiles
@@ -222,7 +224,7 @@ export function ProfileRail() {
   const [pendingRoute, setPendingRoute] = useState<null | string>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollContentRef = useRef<HTMLDivElement>(null)
-  const [scrollMask, setScrollMask] = useState<string | undefined>()
+  const [scrollEdgeState, setScrollEdgeState] = useState<FadeEdges | undefined>()
   const [dragging, setDragging] = useState(false)
   const { dialog: localDeviceDialog, request: requestLocalDevice } = useLocalDeviceSwitch()
 
@@ -286,22 +288,19 @@ export function ProfileRail() {
     const el = scrollRef.current
 
     if (condensed || !el) {
-      setScrollMask(undefined)
+      setScrollEdgeState(undefined)
 
       return
     }
 
-    setScrollMask(
-      edgeMask(
-        scrollEdges({
-          clientHeight: el.clientWidth,
-          scrollHeight: el.scrollWidth,
-          scrollTop:
-            getComputedStyle(el).direction === 'rtl' ? el.scrollWidth - el.clientWidth + el.scrollLeft : el.scrollLeft
-        }),
-        'x'
-      )
-    )
+    const next = scrollEdges({
+      clientHeight: el.clientWidth,
+      scrollHeight: el.scrollWidth,
+      scrollTop:
+        getComputedStyle(el).direction === 'rtl' ? el.scrollWidth - el.clientWidth + el.scrollLeft : el.scrollLeft
+    })
+
+    setScrollEdgeState(prev => (prev && prev.above === next.above && prev.below === next.below ? prev : next))
   }, [condensed])
 
   // Observe both widths: adding/removing a profile need not resize the viewport.
@@ -593,7 +592,7 @@ export function ProfileRail() {
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             onScroll={measureScroll}
             ref={scrollRef}
-            style={{ maskImage: dragging ? undefined : scrollMask }}
+            style={edgeRules(dragging || !scrollEdgeState ? NO_SCROLL_EDGES : scrollEdgeState, 'x')}
           >
             <div className="flex shrink-0 items-center gap-1" ref={scrollContentRef}>
               {/* The active gateway's squares. In fleet mode they sit in the

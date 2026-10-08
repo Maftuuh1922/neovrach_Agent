@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { useInRouterContext } from 'react-router'
 
 import { useI18n } from '@/i18n'
 import { capitalize, normalize } from '@/lib/text'
 
+import { NeovarchWordmark } from '@/components/neovarch/halo-mark'
+import { NeovarchHomeActions, NeovarchHomePoster, neovarchGreeting } from '@/components/neovarch/home'
+
 import introCopyJsonl from './intro-copy.jsonl?raw'
-import { Wordmark } from './wordmark'
 
 type IntroCopy = {
   headline: string
@@ -146,8 +149,6 @@ function pickCopy(copies: IntroCopy[], seed = 0): IntroCopy {
   return copies[Math.abs(seed) % copies.length] || FALLBACK_COPY[0]
 }
 
-const WORDMARK = 'NEOVARCH AGENT'
-
 function resolveCopy(personality?: string, seed?: number): IntroCopy {
   const personalityKey = normalizeKey(personality)
 
@@ -169,17 +170,24 @@ export function Intro({ personality, seed }: IntroProps) {
     t.intro.stock[key] ?? (NEUTRAL_PERSONALITIES.has(key) ? t.intro.stock.none : t.intro.custom(personality || ''))
 
   const body = bodies?.[Math.abs(rotationSeed) % bodies.length] ?? copy.body
+  const inRouter = useInRouterContext()
 
+  // The Neovarch home: serif greeting + the rotating intro line, then quick
+  // actions and the recent-session index (router-bound, so skipped when the
+  // intro renders standalone), with the dithered poster on wide panes.
   return (
-    <div
-      className="pointer-events-none flex w-full min-w-0 flex-col items-center justify-center px-0.5 py-6 text-center text-muted-foreground sm:px-6 lg:px-8"
-      data-slot="aui_intro"
-    >
-      <div className="w-full min-w-0">
-        <Wordmark className="mb-1" text={WORDMARK} />
-
-        <p className="m-0 text-center leading-normal tracking-tight">{body}</p>
+    <div className="nv-home pointer-events-none w-full min-w-0 text-muted-foreground" data-slot="aui_intro">
+      <div className="nv-home-head min-w-0">
+        <NeovarchWordmark className="nv-home-wordmark" />
+        <h1 className="nv-home-greeting">{neovarchGreeting()}</h1>
+        <p className="nv-home-body m-0 leading-normal">{body}</p>
       </div>
+      {inRouter && (
+        <div className="nv-home-grid pointer-events-auto">
+          <NeovarchHomeActions />
+          <NeovarchHomePoster />
+        </div>
+      )}
     </div>
   )
 }

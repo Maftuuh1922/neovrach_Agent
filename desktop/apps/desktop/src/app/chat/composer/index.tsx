@@ -1253,11 +1253,9 @@ export function ChatBar({
           // a containing block.
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-32"
           style={{
-            // A bottom-centered radial glow — soft on every side by construction,
-            // so it reads as the dock target without any hard band edges. Its
-            // intensity tracks how close the composer is to the dock (1 = peak).
-            background:
-              'radial-gradient(64% 130% at 50% 100%, color-mix(in srgb, var(--color-primary) 26%, transparent) 0%, transparent 70%)',
+            // Neovarch: a flat dock band (no gradient, no glow) whose intensity
+            // tracks how close the composer is to the dock (1 = peak).
+            background: 'color-mix(in srgb, var(--color-primary) 18%, transparent)',
             // Scaled by --dock-glow-scale (lower in light mode — see styles.css).
             opacity: `calc(${0.1 + dockProximity * 0.57} * var(--dock-glow-scale, 1))`
           }}
@@ -1579,7 +1577,7 @@ export function ChatBarFallback() {
     <div
       className={cn(
         'group/composer absolute bottom-0 left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
-        'bg-linear-to-b from-transparent to-background/55'
+        'bg-transparent'
       )}
       data-slot="composer-root"
     >

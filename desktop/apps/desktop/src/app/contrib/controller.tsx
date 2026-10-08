@@ -8,6 +8,10 @@ import { PALETTE_AREA, type PaletteContribution, paletteToggle } from '@/app/com
 import { type StatusbarItem } from '@/app/shell/statusbar-controls'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
+import { NeovarchCommandBar } from '@/components/neovarch/command-bar'
+import { NeovarchContextRail } from '@/components/neovarch/context-rail'
+import { NeovarchRail } from '@/components/neovarch/rail'
+import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
@@ -809,34 +813,48 @@ export function ContribController() {
       open={sidebarOpen}
       style={{ '--sidebar-width': '100%' } as CSSProperties}
     >
-      <ContribWiring>
-        <AppContextMenu />
-        <div
-          className="flex h-screen min-h-0 w-screen flex-col bg-(--ui-bg-chrome) text-(--ui-text-primary)"
-          // Window-glass hook: this div and the sidebar-wrapper above it are
-          // the app shell's two full-window opaque painters; the
-          // [data-hermes-glass] rules in styles.css clear them so the tint
-          // painted by <body> is the only thing between the page and the
-          // vibrancy material.
-          data-contrib-shell=""
-          style={{ '--titlebar-height': '0px' } as CSSProperties}
-        >
-          <LayoutTreeRoot titlebar />
+      {/* Neovarch frame: a top command bar over a slim icon rail and the
+          stage. The stage is a containing block (transform) so the shell's
+          `fixed` titlebar clusters and overlays position against it, not the
+          window — they sit beside the rail and under the command bar. */}
+      <div className="nv-frame" data-slot="nv-frame">
+        <NeovarchCommandBar />
+        <div className="nv-frame-body">
+          <NeovarchRail />
+          <NeovarchSessionsPanel />
+          <div className="nv-stage" data-slot="nv-stage">
+            <ContribWiring>
+              <AppContextMenu />
+              <div
+                className="flex h-full min-h-0 w-full flex-col bg-(--ui-bg-chrome) text-(--ui-text-primary)"
+                // Window-glass hook: this div and the sidebar-wrapper above it are
+                // the app shell's two full-window opaque painters; the
+                // [data-hermes-glass] rules in styles.css clear them so the tint
+                // painted by <body> is the only thing between the page and the
+                // vibrancy material.
+                data-contrib-shell=""
+                style={{ '--titlebar-height': '0px' } as CSSProperties}
+              >
+                <LayoutTreeRoot titlebar />
 
-          {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
-          <SessionTileCloseConfirm />
+                {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
+                <SessionTileCloseConfirm />
 
-          {/* The REAL statusbar (model pill, command center, agents, …) with
-              statusBar.left/right contributions merged in. Unmounted — not
-              just hidden — while toggled off, so its 15s status poll and the
-              per-turn readouts stop with it. */}
-          {/* Notices registered through `registerButterbar` / `useButterbar`;
-              renders nothing while none are registered. */}
-          <Butterbar />
-          <TermsButterbar />
-          {statusbarVisible && <WiredPane part="statusbar" />}
+                {/* The REAL statusbar (model pill, command center, agents, …) with
+                    statusBar.left/right contributions merged in. Unmounted — not
+                    just hidden — while toggled off, so its 15s status poll and the
+                    per-turn readouts stop with it. */}
+                {/* Notices registered through `registerButterbar` / `useButterbar`;
+                    renders nothing while none are registered. */}
+                <Butterbar />
+                <TermsButterbar />
+                {statusbarVisible && <WiredPane part="statusbar" />}
+              </div>
+            </ContribWiring>
+          </div>
+          <NeovarchContextRail />
         </div>
-      </ContribWiring>
+      </div>
     </SidebarProvider>
   )
 }
