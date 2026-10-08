@@ -178,7 +178,7 @@ async def gh(home, monkeypatch):
     monkeypatch.setenv("NEOVARCH_SECRET_BACKEND", "file")
     monkeypatch.setenv("NEOVARCH_SOCIAL_DISABLE", "1")
     monkeypatch.setenv("NEOVARCH_SOCIAL_FAST_POLL", "1")
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     monkeypatch.delenv("NEOVARCH_GITHUB_CLIENT_ID", raising=False)
     yield fake
     await server.close()

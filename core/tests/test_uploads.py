@@ -40,7 +40,7 @@ async def capture(home):
 
 
 async def _client(monkeypatch):
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     monkeypatch.setenv("NEOVARCH_SOCIAL_DISABLE", "1")
     gw = Gateway(isolated=False)
     c = TestClient(TestServer(build_app(gw)))
