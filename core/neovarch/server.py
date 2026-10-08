@@ -44,6 +44,7 @@ from neovarch.agent import Agent, default_cwd
 from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
 from neovarch.office import Office
+from neovarch import cron as cronmod
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -233,6 +234,32 @@ class Gateway:
         self.started = time.time()
         self.port = 0
         self.office = Office(self)
+        self.cron = cronmod.CronStore()
+        self.scheduler = cronmod.Scheduler(
+            self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
+            tick=float(os.environ.get("NEOVARCH_CRON_TICK") or 5))
+
+    async def _cron_run(self, job: dict) -> tuple[str, str | None]:
+        """Run one scheduled job: a fresh session (source "cron") with the job's prompt."""
+        rec = self.store.create(source="cron", title=f"Jadwal: {job.get('name') or job['id']}",
+                                model=str(job.get("model") or ""))
+        live = self.open(rec)
+        errors: list[str] = []
+        emit = live.emit
+
+        def capture(kind: str, payload: dict) -> None:
+            if kind == "error" and payload.get("message"):
+                errors.append(str(payload["message"]))
+            emit(kind, payload)
+        live.emit = capture  # type: ignore[method-assign]
+        live.agent.emit = capture
+        self.broadcast_event("sessions.changed", None, {})
+        live.submit(str(job.get("prompt") or ""))
+        if live.task:
+            await live.task
+        live.emit = emit  # type: ignore[method-assign]
+        live.agent.emit = emit
+        return rec["id"], (errors[-1] if errors else None)
 
     # ---- plumbing --------------------------------------------------------
     def conns_for(self, sid: str | None) -> list[Conn]:
@@ -484,6 +511,108 @@ def build_app(gw: Gateway) -> web.Application:
 
     app = web.Application(middlewares=[auth_mw], client_max_size=64 * 1024 * 1024)
     r = app.router
+
+    async def _start_cron(_app):
+        gw.scheduler.start()
+
+    async def _stop_cron(_app):
+        await gw.scheduler.stop()
+    app.on_startup.append(_start_cron)
+    app.on_cleanup.append(_stop_cron)
+
+    # ---- scheduled jobs (cron) ---------------------------------------------
+    def _job(jid: str):
+        job = gw.cron.get(jid)
+        if not job:
+            raise web.HTTPNotFound()
+        return job
+
+    def _job_404(jid: str):
+        return web.json_response({"detail": f"Jadwal {jid} tidak ditemukan."}, status=404)
+
+    async def cron_list(_):
+        return web.json_response([gw.cron.public(j) for j in gw.cron.list()])
+
+    async def cron_create(request):
+        try:
+            job = gw.cron.create(await _json(request))
+        except cronmod.ScheduleError as exc:
+            return web.json_response({"detail": str(exc)}, status=422)
+        gw.broadcast_event("cron.changed", None, {})
+        return web.json_response(gw.cron.public(job))
+
+    async def cron_get(request):
+        job = gw.cron.get(request.match_info["jid"])
+        return web.json_response(gw.cron.public(job)) if job else _job_404(request.match_info["jid"])
+
+    async def cron_update(request):
+        body = await _json(request)
+        updates = body.get("updates") if isinstance(body.get("updates"), dict) else body
+        safe = {k: v for k, v in updates.items() if not str(k).startswith("_")}
+        try:
+            job = gw.cron.update(request.match_info["jid"], safe)
+        except cronmod.ScheduleError as exc:
+            return web.json_response({"detail": str(exc)}, status=422)
+        if not job:
+            return _job_404(request.match_info["jid"])
+        gw.broadcast_event("cron.changed", None, {})
+        return web.json_response(gw.cron.public(job))
+
+    async def cron_delete(request):
+        ok = gw.cron.delete(request.match_info["jid"])
+        if not ok:
+            return _job_404(request.match_info["jid"])
+        gw.broadcast_event("cron.changed", None, {})
+        return web.json_response({"ok": True})
+
+    def _toggle(enabled: bool):
+        async def h(request):
+            job = gw.cron.update(request.match_info["jid"], {"enabled": enabled})
+            if not job:
+                return _job_404(request.match_info["jid"])
+            gw.broadcast_event("cron.changed", None, {})
+            return web.json_response(gw.cron.public(job))
+        return h
+
+    async def cron_trigger(request):
+        jid = request.match_info["jid"]
+        if not gw.cron.get(jid):
+            return _job_404(jid)
+        task = gw.scheduler.run_now(jid)
+        if task and request.query.get("wait", "1") != "0":
+            await asyncio.shield(task)
+        return web.json_response(gw.cron.public(gw.cron.get(jid) or {"id": jid}))
+
+    async def cron_runs(request):
+        jid = request.match_info["jid"]
+        if not gw.cron.get(jid):
+            return _job_404(jid)
+        try:
+            limit = max(1, min(int(request.query.get("limit") or 20), 50))
+        except ValueError:
+            limit = 20
+        rows = []
+        for sid in gw.cron.runs(jid)[:limit]:
+            rec = gw.store.load(sid)
+            if rec:
+                rows.append(summarize(rec))
+        return web.json_response({"runs": rows})
+
+    async def cron_targets(_):
+        return web.json_response({"targets": [{"id": "local", "name": "Lokal (sesi di PC ini)",
+                                                "home_env_var": None, "home_target_set": True}]})
+
+    r.add_get("/api/cron/jobs", cron_list)
+    r.add_post("/api/cron/jobs", cron_create)
+    r.add_get("/api/cron/jobs/{jid}", cron_get)
+    r.add_put("/api/cron/jobs/{jid}", cron_update)
+    r.add_patch("/api/cron/jobs/{jid}", cron_update)
+    r.add_delete("/api/cron/jobs/{jid}", cron_delete)
+    r.add_post("/api/cron/jobs/{jid}/pause", _toggle(False))
+    r.add_post("/api/cron/jobs/{jid}/resume", _toggle(True))
+    r.add_post("/api/cron/jobs/{jid}/trigger", cron_trigger)
+    r.add_get("/api/cron/jobs/{jid}/runs", cron_runs)
+    r.add_get("/api/cron/delivery-targets", cron_targets)
 
     async def health(_):
         return web.json_response({"ok": True, "status": "ok", "product": "neovarch", "version": __version__})
