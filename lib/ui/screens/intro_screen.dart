@@ -20,13 +20,13 @@ class _Slide {
 
 const _slides = [
   _Slide('assets/intro/eva_hero.webp', '[ 01 ]  pembuka · neovarch', 'NEOVARCH\nAGENT',
-      'Agen AI milikmu sendiri — mandiri, terbuka, dan berjalan langsung di ponsel. Dibangun di atas Hermes Agent.'),
+      'Agen AI milikmu sendiri — terbuka, berjalan di PC-mu, dan bisa kamu kendalikan dari HP. Dibangun di atas Hermes Agent.'),
   _Slide('assets/intro/eva_office.webp', '[ 02 ]  kantor agen', 'KANTOR\nAGEN',
-      'Tim agen bekerja di kantor isometrik: Kanban, rapat antar-agen, cron — kamu tinggal memantau dan menyetujui.'),
+      'Tim agen bekerja di PC: Kanban, sesi, dan cron — kamu tinggal memantau dan menyetujui dari HP.'),
   _Slide('assets/intro/eva_remote.webp', '[ 03 ]  pc = otak · hp = remote', 'OTAK DI PC,\nREMOTE\nDI SAKU',
-      'Jalankan agen langsung di ponsel, atau sambungkan ke gateway hermes serve di PC/VPS dan kendalikan dari sini.'),
+      'Agen bekerja di aplikasi desktop Neovarch. HP ini remote-nya: kirim perintah, pantau tugas, setujui aksi dari mana saja.'),
   _Slide('assets/intro/eva_pairing.webp', '[ 04 ]  pairing · mulai', 'MULAI',
-      'Pasangkan gateway atau pilih penyedia model, lalu beri izin perangkat. Semua kunci tersimpan terenkripsi di perangkat.'),
+      'Buka Neovarch di PC, tampilkan QR pemasangan, lalu pindai dari HP. Token tersimpan terenkripsi di perangkat.'),
 ];
 
 class IntroScreen extends ConsumerStatefulWidget {

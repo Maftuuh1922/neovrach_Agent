@@ -1,5 +1,5 @@
 #!/bin/sh
-# Neovarch Agent installer (Linux x86_64).
+# Neovarch Agent installer (Linux x86_64) — installs the desktop app (Electron).
 #
 #   curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.sh | sh
 #
@@ -7,16 +7,22 @@
 #   --uninstall        remove Neovarch Agent
 #   --help             show help
 # Environment:
-#   NEOVARCH_VERSION   release tag to install (e.g. v1.1.0). Default: latest.
+#   NEOVARCH_VERSION   release tag to install (e.g. v1.2.0). Default: latest.
 #
-# Installs to ~/.local/share/neovarch-agent, links ~/.local/bin/neovarch and
-# adds a desktop menu entry. No root needed.
+# Installs to ~/.local/share/neovarch-agent, links ~/.local/bin/neovarch to the
+# app executable and adds a desktop menu entry. No root needed.
+#
+# The Neovarch core (Hermes Agent, Python) is not installed by this script:
+# on first launch the app itself offers to install it (Hermes Agent's own
+# installer, pinned to the revision the app was built against) or to connect
+# to an existing Hermes gateway. An existing `hermes` install is used as is.
 
 set -eu
 
 REPO="Maftuuh1922/neovrach_Agent"
 RELEASES_URL="https://github.com/$REPO/releases"
 ASSET="neovarch-agent-linux-x64.tar.gz"
+EXE="neovarch-agent"
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 INSTALL_DIR="$DATA_HOME/neovarch-agent"
@@ -24,6 +30,8 @@ BIN_DIR="$HOME/.local/bin"
 BIN_LINK="$BIN_DIR/neovarch"
 APPS_DIR="$DATA_HOME/applications"
 DESKTOP_FILE="$APPS_DIR/neovarch-agent.desktop"
+ICON_DIR="$DATA_HOME/icons/hicolor/512x512/apps"
+ICON_FILE="$ICON_DIR/neovarch-agent.png"
 
 # ---------------------------------------------------------------- output ---
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
@@ -56,7 +64,7 @@ Options:
   -h, --help    Show this help
 
 Environment:
-  NEOVARCH_VERSION   Release tag to install, e.g. v1.1.0 (default: latest)
+  NEOVARCH_VERSION   Release tag to install, e.g. v1.2.0 (default: latest)
 EOF
 }
 
@@ -96,20 +104,42 @@ refresh_menu() {
 check_deps() {
   missing=''
   has_lib libgtk-3.so.0 || missing="$missing gtk3"
+  has_lib libnss3.so || missing="$missing nss"
+  has_lib libasound.so.2 || missing="$missing alsa"
   has_lib libsecret-1.so.0 || missing="$missing libsecret"
-  [ -z "$missing" ] && { ok "runtime libraries found (GTK 3, libsecret)"; return 0; }
+  [ -z "$missing" ] && { ok "runtime libraries found (GTK 3, NSS, ALSA, libsecret)"; return 0; }
 
   warn "missing runtime libraries:$missing"
   if have apt-get; then
-    say "      install with: sudo apt-get install -y libgtk-3-0 libsecret-1-0"
+    say "      install with: sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libsecret-1-0"
   elif have dnf; then
-    say "      install with: sudo dnf install -y gtk3 libsecret"
+    say "      install with: sudo dnf install -y gtk3 nss alsa-lib libsecret"
   elif have pacman; then
-    say "      install with: sudo pacman -S --needed gtk3 libsecret"
+    say "      install with: sudo pacman -S --needed gtk3 nss alsa-lib libsecret"
   elif have zypper; then
-    say "      install with: sudo zypper install gtk3 libsecret-1-0"
+    say "      install with: sudo zypper install gtk3 mozilla-nss libasound2 libsecret-1-0"
   else
-    say "      install GTK 3 and libsecret with your package manager"
+    say "      install GTK 3, NSS, ALSA and libsecret with your package manager"
+  fi
+}
+
+# Chromium needs either a root-owned setuid chrome-sandbox or unprivileged
+# user namespaces. Ubuntu 23.10+ restricts the latter by default, so check and
+# fall back to --no-sandbox for the menu entry when neither is available.
+sandbox_ok() { # app dir
+  sb="$1/chrome-sandbox"
+  [ -e "$sb" ] || return 0
+  if [ -u "$sb" ] && [ "$(stat -c %u "$sb" 2>/dev/null)" = "0" ]; then return 0; fi
+  if have unshare && unshare --user --map-root-user true >/dev/null 2>&1; then return 0; fi
+  return 1
+}
+
+core_note() {
+  if have hermes; then
+    ok "Neovarch core (Hermes Agent) found: $(command -v hermes)"
+  else
+    say "    The Neovarch core (Hermes Agent) is not installed yet. On first launch the"
+    say "    app offers to install it for you, or to connect to an existing gateway."
   fi
 }
 
@@ -120,17 +150,35 @@ uninstall() {
   removed=0
   if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then rm -f "$BIN_LINK"; ok "removed $BIN_LINK"; removed=1; fi
   if [ -e "$DESKTOP_FILE" ]; then rm -f "$DESKTOP_FILE"; ok "removed $DESKTOP_FILE"; removed=1; fi
+  if [ -e "$ICON_FILE" ]; then rm -f "$ICON_FILE"; fi
   if [ -d "$INSTALL_DIR" ]; then rm -rf "$INSTALL_DIR"; ok "removed $INSTALL_DIR"; removed=1; fi
   refresh_menu
   if [ "$removed" -eq 0 ]; then
     say "Neovarch Agent is not installed."
   else
     say ""
-    say "Neovarch Agent uninstalled. Your chats and settings were left in place."
+    say "Neovarch Agent uninstalled. Your chats, settings and the Neovarch core"
+    say "(Hermes Agent, in ~/.hermes) were left in place."
   fi
 }
 
 # ------------------------------------------------------------- install ---
+write_desktop_entry() { # icon exec_flags
+  cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Neovarch Agent
+Comment=Neovarch Agent desktop
+Exec="$INSTALL_DIR/$EXE"$2 %U
+Icon=$1
+Path=$INSTALL_DIR
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=Neovarch Agent
+EOF
+  chmod 644 "$DESKTOP_FILE"
+}
+
 install_linux_x64() {
   version="${NEOVARCH_VERSION:-}"
   if [ -n "$version" ]; then
@@ -152,35 +200,46 @@ install_linux_x64() {
   download "$url" "$tmp/$ASSET" || die "download failed. Check the tag or see $RELEASES_URL"
 
   step "Unpacking"
-  tar -xzf "$tmp/$ASSET" -C "$tmp" || die "could not unpack $ASSET"
-  [ -x "$tmp/neovarch-agent/neovarch-agent" ] || die "archive layout unexpected (no neovarch-agent/neovarch-agent)"
+  mkdir -p "$tmp/x"
+  tar -xzf "$tmp/$ASSET" -C "$tmp/x" || die "could not unpack $ASSET"
+  src=$(find "$tmp/x" -maxdepth 3 -type f -name "$EXE" 2>/dev/null | head -n 1)
+  [ -n "$src" ] || die "archive layout unexpected (no $EXE executable)"
+  src=$(dirname "$src")
+  chmod 755 "$src/$EXE"
 
-  mkdir -p "$DATA_HOME" "$BIN_DIR" "$APPS_DIR"
+  # Close a running copy so its files can be replaced.
+  if have pkill; then pkill -f "$INSTALL_DIR/$EXE" >/dev/null 2>&1 || true; fi
+
+  mkdir -p "$DATA_HOME" "$BIN_DIR" "$APPS_DIR" "$ICON_DIR"
   rm -rf "$INSTALL_DIR"
-  mv "$tmp/neovarch-agent" "$INSTALL_DIR"
+  mv "$src" "$INSTALL_DIR"
   ok "installed to $INSTALL_DIR"
 
-  ln -sf "$INSTALL_DIR/neovarch-agent" "$BIN_LINK"
-  ok "linked $BIN_LINK"
+  ln -sf "$INSTALL_DIR/$EXE" "$BIN_LINK"
+  ok "linked $BIN_LINK -> $INSTALL_DIR/$EXE"
 
-  icon="$INSTALL_DIR/neovarch-agent.png"
-  cat > "$DESKTOP_FILE" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Neovarch Agent
-Comment=Autonomous AI agent
-Exec=$INSTALL_DIR/neovarch-agent
-Icon=$icon
-Path=$INSTALL_DIR
-Terminal=false
-Categories=Development;Utility;
-StartupWMClass=com.neovarch.agent
-EOF
-  chmod 644 "$DESKTOP_FILE"
+  icon="neovarch-agent"
+  if [ -f "$INSTALL_DIR/resources/app.asar.unpacked/dist/apple-touch-icon.png" ]; then
+    cp "$INSTALL_DIR/resources/app.asar.unpacked/dist/apple-touch-icon.png" "$ICON_FILE"
+  elif ! download "https://raw.githubusercontent.com/$REPO/main/assets/brand/app_icon.png" "$ICON_FILE" >/dev/null 2>&1; then
+    icon="utilities-terminal"
+  fi
+
+  exec_flags=''
+  if ! sandbox_ok "$INSTALL_DIR"; then
+    exec_flags=' --no-sandbox'
+    warn "the Chromium sandbox is unavailable here (user namespaces restricted, chrome-sandbox not setuid root)"
+    say "      the menu entry starts the app with --no-sandbox; from a terminal run: neovarch --no-sandbox"
+    say "      to keep the sandbox instead (needs sudo once):"
+    say "        sudo chown root:root '$INSTALL_DIR/chrome-sandbox' && sudo chmod 4755 '$INSTALL_DIR/chrome-sandbox'"
+  fi
+
+  write_desktop_entry "$icon" "$exec_flags"
   refresh_menu
   ok "added menu entry $DESKTOP_FILE"
 
   check_deps
+  core_note
 
   case ":${PATH:-}:" in
     *":$BIN_DIR:"*) ;;

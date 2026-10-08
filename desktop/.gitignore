@@ -1,0 +1,11 @@
+node_modules/
+apps/desktop/dist/
+apps/desktop/build/
+apps/desktop/release/
+apps/desktop/test-results/
+*.tsbuildinfo
+.vite/
+
+# Repo root ignores **/build/; keep the build scripts.
+!scripts/build/
+!apps/desktop/scripts/build*

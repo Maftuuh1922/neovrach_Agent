@@ -16,7 +16,7 @@ Usage:
   neovarch --help       Show this help
 
 Environment:
-  NEOVARCH_VERSION      Release tag to use, e.g. v1.1.0 (default: v${app.PKG_VERSION})
+  NEOVARCH_VERSION      Release tag to use, e.g. v1.2.0 (default: v${app.PKG_VERSION})
 `;
 
 async function main(argv) {
@@ -41,7 +41,8 @@ async function main(argv) {
   if (force) return 0;
   if (!fs.existsSync(target.exe)) { app.log.warn(`app not found at ${target.exe}`); return 1; }
 
-  const args = argv.filter((a) => !a.startsWith('--') || a === '--');
+  const args = argv.filter((a) => !a.startsWith('--') || a === '--' || a === '--no-sandbox');
+  if (!args.includes('--no-sandbox') && app.needsNoSandbox()) args.unshift('--no-sandbox');
   const child = spawn(target.exe, args, {
     cwd: app.APP_DIR,
     detached: true,

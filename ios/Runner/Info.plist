@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Neovarch Agent memakai kamera saat kamu mengambil foto untuk dilampirkan ke chat atau saat agen memintanya.</string>
+	<string>Neovarch memakai kamera untuk memindai QR pemasangan dari aplikasi Neovarch di PC.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Neovarch Agent membuka galeri agar kamu bisa melampirkan gambar ke chat.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -21,7 +21,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Pengenalan suara mengubah dikteanmu menjadi teks pesan.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Untuk tersambung ke gateway hermes serve, Ollama atau LM Studio di jaringan lokalmu.</string>
+	<string>Untuk tersambung ke aplikasi Neovarch (gateway Hermes) di PC dalam jaringan lokalmu.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

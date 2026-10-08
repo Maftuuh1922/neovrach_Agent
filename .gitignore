@@ -69,3 +69,7 @@ landing/.next/
 landing/out/
 landing/.vercel/
 landing/next-env.d.ts
+
+# Kotlin daemon sessions
+.kotlin/
+**/.kotlin/

@@ -1,5 +1,6 @@
 'use strict';
 // Shared logic for the neovarch npm package: platform detection, download, unpack.
+// Installs the portable Electron builds (Linux tar.gz, Windows zip) from GitHub Releases.
 // Zero dependencies; Node >= 18 (global fetch).
 
 const fs = require('fs');
@@ -34,7 +35,7 @@ function detectTarget() {
   }
   if (platform === 'win32' && (isX64 || arch === 'arm64')) {
     // Windows on ARM runs the x64 build under emulation.
-    return { asset: 'neovarch-agent-windows-x64.zip', exe: path.join(APP_DIR, 'NeovarchAgent.exe'), kind: 'zip' };
+    return { asset: 'neovarch-agent-windows-x64.zip', exe: path.join(APP_DIR, 'Neovarch Agent.exe'), kind: 'zip' };
   }
   const osName = { darwin: 'macOS', linux: 'Linux', win32: 'Windows' }[platform] || platform;
   const archName = arch === 'arm64' ? 'ARM64' : arch;
@@ -108,24 +109,36 @@ function hasLinuxLib(soname) {
 }
 
 function checkRuntime() {
-  if (process.platform === 'linux') {
-    const missing = [];
-    if (!hasLinuxLib('libgtk-3.so.0')) missing.push('gtk3');
-    if (!hasLinuxLib('libsecret-1.so.0')) missing.push('libsecret');
-    if (missing.length) {
-      log.warn(`missing runtime libraries: ${missing.join(' ')}`);
-      console.log('      Debian/Ubuntu: sudo apt-get install -y libgtk-3-0 libsecret-1-0');
-      console.log('      Fedora:        sudo dnf install -y gtk3 libsecret');
-      console.log('      Arch:          sudo pacman -S --needed gtk3 libsecret');
-    }
-  } else if (process.platform === 'win32') {
-    const sys = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
-    const ok = ['vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll'].every((d) => fs.existsSync(path.join(sys, d)));
-    if (!ok) {
-      log.warn('Microsoft Visual C++ 2015-2022 runtime (x64) is missing. Install it from:');
-      console.log('      https://aka.ms/vs/17/release/vc_redist.x64.exe');
-    }
+  if (process.platform !== 'linux') return;
+  const missing = [];
+  if (!hasLinuxLib('libgtk-3.so.0')) missing.push('gtk3');
+  if (!hasLinuxLib('libnss3.so')) missing.push('nss');
+  if (!hasLinuxLib('libasound.so.2')) missing.push('alsa');
+  if (!hasLinuxLib('libsecret-1.so.0')) missing.push('libsecret');
+  if (missing.length) {
+    log.warn(`missing runtime libraries: ${missing.join(' ')}`);
+    console.log('      Debian/Ubuntu: sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libsecret-1-0');
+    console.log('      Fedora:        sudo dnf install -y gtk3 nss alsa-lib libsecret');
+    console.log('      Arch:          sudo pacman -S --needed gtk3 nss alsa-lib libsecret');
   }
+}
+
+/**
+ * Linux: Chromium needs a root-owned setuid chrome-sandbox or unprivileged user
+ * namespaces (restricted by default on Ubuntu 23.10+). When neither is there,
+ * the launcher starts the app with --no-sandbox.
+ */
+function needsNoSandbox() {
+  if (process.platform !== 'linux') return false;
+  const sb = path.join(APP_DIR, 'chrome-sandbox');
+  try {
+    const st = fs.statSync(sb);
+    if (st.uid === 0 && (st.mode & 0o4000)) return false;
+  } catch {
+    return false;
+  }
+  const r = spawnSync('unshare', ['--user', '--map-root-user', 'true'], { stdio: 'ignore' });
+  return r.status !== 0;
 }
 
 /** Download and install the app into ~/.neovarch/app. */
@@ -175,5 +188,5 @@ function uninstallApp() {
 
 module.exports = {
   APP_DIR, RELEASES_URL, PKG_VERSION,
-  detectTarget, installApp, uninstallApp, isInstalled, installedTag, wantedTag, printUnsupported, log,
+  detectTarget, installApp, uninstallApp, isInstalled, installedTag, wantedTag, printUnsupported, needsNoSandbox, log,
 };

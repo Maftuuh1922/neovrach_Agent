@@ -1,5 +1,5 @@
 name: neovarch_agent
-description: "Neovarch Agent — agen AI mandiri untuk Android & iOS."
+description: "Neovarch Agent — remote HP (Android & iOS) untuk agen Neovarch di PC."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -47,7 +47,7 @@ dependencies:
   image_picker: ^1.2.4
   url_launcher: ^6.3.3
   highlight: ^0.7.0
-
+  mobile_scanner: ^7.4.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -18,6 +18,16 @@ import 'ui/screens/startup_splash.dart';
 import 'ui/widgets/brand.dart';
 import 'ui/widgets/office_snapshot.dart';
 import 'data/agent_runtime.dart';
+import 'remote/pairing.dart';
+import 'remote/saved_desktops.dart';
+import 'remote/ui/remote_app.dart';
+
+/// Product split: the phone is ONLY a remote for the Neovarch desktop app
+/// (which runs the agent). Android/iOS → RemoteApp. Other platforms keep the
+/// legacy standalone Flutter app (not the shipped desktop product). The web
+/// build shows the remote with `?app=remote` (screenshots / preview).
+bool get isPhoneRemote =>
+    kIsWeb ? Uri.base.queryParameters['app'] == 'remote' : (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +36,12 @@ Future<void> main() async {
   final settings = SettingsController(prefs);
   await settings.load();
   _applyPreviewParams(settings);
+  if (isPhoneRemote) {
+    await _applyRemotePreview(prefs);
+    await runRemoteApp(
+        prefs: prefs, settings: settings, skipSplash: skipSplash, openSession: kIsWeb ? Uri.base.queryParameters['open'] : null);
+    return;
+  }
   final kv = await KvStore.open();
   final store = LocalStore(kv);
   await store.load();
@@ -69,6 +85,18 @@ void _applyPreviewParams(SettingsController s) {
     s.activeProviderId = 'preview';
   }
   s.resumeLastSession = false;
+}
+
+/// Web preview of the remote: `?app=remote&preview=1&gw=<pairing or url>&token=…`
+/// pre-pairs a desktop so screenshots open straight on the remote shell.
+Future<void> _applyRemotePreview(SharedPreferences prefs) async {
+  if (!kIsWeb) return;
+  final q = Uri.base.queryParameters;
+  final gw = q['gw'];
+  if (q['preview'] != '1' || gw == null) return;
+  final p = GatewayPairing.parse(gw);
+  if (p == null) return;
+  await (SavedDesktops(prefs)..load()).upsert(p.copyWith(token: q['token'] ?? p.token, name: q['name']));
 }
 
 class NeovarchApp extends ConsumerWidget {

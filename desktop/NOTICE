@@ -1,0 +1,22 @@
+Neovarch Agent Desktop
+======================
+
+Neovarch Agent Desktop (this directory) is derived from Hermes Desktop by
+Nous Research, part of the Hermes Agent project:
+
+  https://github.com/NousResearch/hermes-agent  (apps/desktop, apps/shared)
+  Forked from upstream commit 61b7f957bac7fa25c7c22d54e4b215fa446e5331
+
+Hermes Desktop is licensed under the MIT License,
+Copyright (c) 2025 Nous Research. The full license text is in LICENSE and
+applies to the derived code in this directory.
+
+Changes made for Neovarch Agent include: product identity and naming,
+icons, the default "Neovarch" theme preset, removal of the desktop usage
+metrics offer, packaging targets (NSIS installer, zip, AppImage, tar.gz, deb)
+and the release/update target (GitHub Releases of Maftuuh1922/neovrach_Agent).
+
+Neovarch Agent still runs the Hermes Agent Python core (the `hermes` CLI and
+gateway) from Nous Research as its runtime. "Hermes", "Hermes Agent",
+"Hermes Cloud" and "Nous Portal" are names of Nous Research projects and
+services; they are referenced only to describe that integration.

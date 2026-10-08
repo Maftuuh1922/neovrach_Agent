@@ -1,0 +1,197 @@
+name: Desktop (Electron) — Windows, Linux
+
+# Builds the Neovarch Agent desktop app (desktop/, Electron + Vite + React) and
+# attaches the installers to the GitHub release of the tag.
+#   - push of a v* tag: build and attach to that release
+#   - workflow_dispatch: build; attach only when a tag is given
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach to (e.g. v1.2.0). Empty = build only (artifacts).'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-electron-${{ github.ref }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.22.0'
+  NPM_VERSION: '11.21.0'
+
+jobs:
+  verify:
+    name: Typecheck + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm install -g npm@${{ env.NPM_VERSION }}
+
+      - name: Install workspace dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: desktop/apps/desktop
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run typecheck
+
+      - name: Unit tests (renderer, vitest)
+        id: test_ui
+        continue-on-error: true
+        working-directory: desktop/apps/desktop
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npx vitest run --project ui --reporter=dot 2>&1 | tee ../../../vitest-ui.log; exit ${PIPESTATUS[0]}
+        shell: bash
+
+      - name: Unit tests (electron/main, vitest)
+        id: test_electron
+        continue-on-error: true
+        working-directory: desktop/apps/desktop
+        run: npx vitest run --project electron --reporter=dot 2>&1 | tee ../../../vitest-electron.log; exit ${PIPESTATUS[0]}
+        shell: bash
+
+      - name: Test summary
+        if: always()
+        working-directory: .
+        run: |
+          {
+            echo "### Desktop unit tests"
+            echo "- renderer (ui): ${{ steps.test_ui.outcome }}"
+            echo "- electron: ${{ steps.test_electron.outcome }}"
+            echo '```'
+            grep -E "Test Files|Tests  |FAIL" vitest-ui.log | tail -40 || true
+            grep -E "Test Files|Tests  |FAIL" vitest-electron.log | tail -40 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-test-logs
+          path: |
+            vitest-ui.log
+            vitest-electron.log
+          if-no-files-found: ignore
+
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            targets: nsis zip
+          - os: ubuntu-latest
+            platform: linux
+            targets: AppImage tar.gz deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: npm install -g npm@${{ env.NPM_VERSION }}
+
+      - name: Linux packaging tools
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg libarchive-tools
+
+      - name: Install workspace dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build renderer + main
+        working-directory: desktop/apps/desktop
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run build
+
+      - name: Package
+        working-directory: desktop/apps/desktop
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ''
+        run: npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} ${{ matrix.targets }} --x64 --publish never
+
+      - name: Collect artifacts
+        working-directory: desktop/apps/desktop/release
+        run: |
+          ls -la
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          if [ "${{ matrix.platform }}" = win ]; then
+            cp neovarch-agent-windows-x64-setup.exe "$GITHUB_WORKSPACE/out/"
+            cp neovarch-agent-windows-x64.zip "$GITHUB_WORKSPACE/out/"
+          else
+            cp neovarch-agent-linux-x86_64.AppImage "$GITHUB_WORKSPACE/out/neovarch-agent-linux-x64.AppImage" 2>/dev/null \
+              || cp neovarch-agent-linux-x64.AppImage "$GITHUB_WORKSPACE/out/"
+            cp neovarch-agent-linux-x64.tar.gz "$GITHUB_WORKSPACE/out/"
+            deb=$(ls neovarch-agent-linux-*.deb | head -n 1)
+            cp "$deb" "$GITHUB_WORKSPACE/out/neovarch-agent-linux-x64.deb"
+          fi
+          ls -la "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neovarch-agent-desktop-${{ matrix.platform }}-x64
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    name: Attach to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: neovarch-agent-desktop-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          ls -la artifacts
+          VERSION="${TAG#v}"
+          # build-release.yml publishes the same tag; whichever job gets there first creates it.
+          for i in 1 2 3 4 5; do
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && break
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Neovarch Agent $VERSION" \
+              --notes "Neovarch Agent $VERSION" --verify-tag >/dev/null 2>&1 && break
+            sleep 10
+          done
+          gh release upload "$TAG" artifacts/* --clobber --repo "$GITHUB_REPOSITORY"

@@ -1,7 +1,7 @@
 {
   "name": "neovarch-agent",
-  "version": "1.1.0",
-  "description": "Neovarch Agent desktop app launcher. Installs the Neovarch Agent GUI (Linux x64, Windows x64) and adds the `neovarch` command.",
+  "version": "1.2.0",
+  "description": "Neovarch Agent desktop app launcher. Installs the Neovarch Agent desktop app (Electron; Linux x64, Windows x64) and adds the `neovarch` command.",
   "homepage": "https://github.com/Maftuuh1922/neovrach_Agent",
   "repository": {
     "type": "git",
@@ -14,7 +14,7 @@
     "agent",
     "ai",
     "desktop",
-    "flutter"
+    "electron"
   ],
   "bin": {
     "neovarch": "bin/neovarch.js"
