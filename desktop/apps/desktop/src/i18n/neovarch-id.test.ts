@@ -18,6 +18,9 @@ function at(tree: Tree, path: string): unknown {
 
 describe('Neovarch Indonesian base catalog', () => {
   const overlay = leaves(NEOVARCH_ID as unknown as Tree)
+  // Keys can contain dots themselves (e.g. hotkey ids like `composer.mention`),
+  // so look leaves up by their full flattened path instead of splitting it.
+  const upstreamLeaves = new Map(leaves(enUpstream as unknown as Tree))
 
   it('covers settings, assistant and onboarding', () => {
     for (const ns of ['settings', 'assistant', 'onboarding']) {
@@ -29,7 +32,7 @@ describe('Neovarch Indonesian base catalog', () => {
 
   it('only translates keys that exist upstream, as strings', () => {
     for (const [key, value] of overlay) {
-      expect(typeof at(enUpstream as unknown as Tree, key), key).toBe('string')
+      expect(typeof upstreamLeaves.get(key), key).toBe('string')
       expect(typeof value, key).toBe('string')
     }
   })
@@ -43,7 +46,7 @@ describe('Neovarch Indonesian base catalog', () => {
 
   it('keeps every {placeholder}', () => {
     for (const [key, value] of overlay) {
-      const want = String(at(enUpstream as unknown as Tree, key)).match(/\{\{?\w+\}?\}/g)?.sort() ?? []
+      const want = String(upstreamLeaves.get(key)).match(/\{\{?\w+\}?\}/g)?.sort() ?? []
       expect(String(value).match(/\{\{?\w+\}?\}/g)?.sort() ?? [], key).toEqual(want)
     }
   })
