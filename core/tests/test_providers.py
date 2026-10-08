@@ -241,3 +241,29 @@ async def test_every_renderer_get_is_2xx(home, monkeypatch):
             assert r.status < 400, (method, path)
     finally:
         await c.close()
+
+
+async def test_kanban_desktop_contract(home, monkeypatch):
+    gw, c = await _client(monkeypatch)
+    try:
+        boards = await (await c.get("/api/plugins/kanban/boards?token=tok")).json()
+        assert boards["current"] == "default" and boards["boards"][0]["slug"] == "default"
+        made = await (await c.post("/api/plugins/kanban/tasks?token=tok", json={"title": "Tulis laporan"})).json()
+        tid = made["task"]["id"]
+        assert made["id"] == tid  # phone reads the flat shape, desktop reads {task}
+        ws = await c.ws_connect(f"/api/plugins/kanban/events?since=0&token=tok")
+        first = await ws.receive_json(timeout=5)
+        assert first["cursor"] >= 1
+        await c.patch(f"/api/plugins/kanban/tasks/{tid}?token=tok", json={"status": "running"})
+        frame = await ws.receive_json(timeout=5)
+        assert frame["events"][-1]["task_id"] == tid and frame["events"][-1]["payload"]["to"] == "running"
+        await ws.close()
+        detail = await (await c.get(f"/api/plugins/kanban/tasks/{tid}?token=tok")).json()
+        assert detail["task"]["title"] == "Tulis laporan" and detail["runs"] == []
+        board = await (await c.get("/api/plugins/kanban/board?token=tok")).json()
+        assert board["latest_event_id"] >= 2 and board["tenants"] == [] and board["columns"][3]["name"] == "running"
+        for p in ("profiles", "projects", "orchestration", f"tasks/{tid}/log"):
+            assert (await c.get(f"/api/plugins/kanban/{p}?token=tok")).status == 200
+        assert (await (await c.delete(f"/api/plugins/kanban/tasks/{tid}?token=tok")).json())["ok"]
+    finally:
+        await c.close()

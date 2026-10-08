@@ -749,11 +749,65 @@ def build_app(gw: Gateway) -> web.Application:
     async def kanban_board(_):
         return web.json_response(gw.kanban.board())
 
+    async def kanban_boards(_):
+        total = len(gw.kanban.board()["tasks"])
+        return web.json_response({"current": "default", "boards": [{"slug": "default", "name": "Tugas", "is_current": True,
+                                                                   "total": total, "description": None}]})
+
+    async def kanban_task_get(request):
+        d = gw.kanban.detail(request.match_info["tid"])
+        return web.json_response(d) if d else web.json_response({"detail": "tugas tidak ditemukan"}, status=404)
+
+    async def kanban_task_delete(request):
+        return web.json_response({"ok": gw.kanban.delete(request.match_info["tid"])})
+
+    async def kanban_task_log(_):
+        return web.json_response({"exists": False, "size_bytes": 0, "content": "", "truncated": False})
+
+    async def kanban_bulk(request):
+        b = await _json(request)
+        results = []
+        for tid in b.get("ids") or []:
+            ok = bool(gw.kanban.update(str(tid), {k: v for k, v in b.items() if k in ("status", "assignee", "priority")}))
+            results.append({"id": tid, "ok": ok})
+        return web.json_response({"results": results})
+
+    async def kanban_profiles(_):
+        return web.json_response({"profiles": [{"name": "default", "is_default": True, "description": "Agen Neovarch",
+                                                "description_auto": False}]})
+
+    async def kanban_projects(_):
+        return web.json_response({"projects": []})
+
+    async def kanban_orchestration(_):
+        return web.json_response({"orchestrator_profile": "", "default_assignee": "", "auto_decompose": False,
+                                  "resolved_orchestrator_profile": "default", "resolved_default_assignee": "default"})
+
+    async def kanban_events(request):
+        ws = web.WebSocketResponse(heartbeat=25)
+        await ws.prepare(request)
+        try:
+            since = int(request.query.get("since") or 0)
+        except ValueError:
+            since = 0
+        try:
+            first = True
+            while not ws.closed:
+                evs, cursor = gw.kanban.events_since(since)
+                if evs or first:
+                    await ws.send_json({"cursor": cursor, "events": evs})
+                    since, first = max(since, cursor), False
+                await asyncio.sleep(0.5)
+        except (ConnectionResetError, RuntimeError, asyncio.CancelledError):
+            pass
+        return ws
+
     async def kanban_create(request):
         b = await _json(request)
         if not b.get("title"):
             return web.json_response({"detail": "title required"}, status=422)
-        return web.json_response(gw.kanban.create(str(b["title"]), str(b.get("body") or ""), b.get("assignee"), b.get("priority")))
+        task = gw.kanban.create(str(b["title"]), str(b.get("body") or ""), b.get("assignee"), b.get("priority"))
+        return web.json_response({**task, "task": task})
 
     async def kanban_patch(request):
         t = gw.kanban.update(request.match_info["tid"], await _json(request))
@@ -825,6 +879,16 @@ def build_app(gw: Gateway) -> web.Application:
 
     r.add_get("/api/cron/jobs", cron_jobs)
     r.add_get("/api/plugins/kanban/board", kanban_board)
+    r.add_get("/api/plugins/kanban/boards", kanban_boards)
+    r.add_get("/api/plugins/kanban/profiles", kanban_profiles)
+    r.add_get("/api/plugins/kanban/projects", kanban_projects)
+    r.add_get("/api/plugins/kanban/orchestration", kanban_orchestration)
+    r.add_put("/api/plugins/kanban/orchestration", kanban_orchestration)
+    r.add_get("/api/plugins/kanban/events", kanban_events)
+    r.add_post("/api/plugins/kanban/tasks/bulk", kanban_bulk)
+    r.add_get("/api/plugins/kanban/tasks/{tid}", kanban_task_get)
+    r.add_delete("/api/plugins/kanban/tasks/{tid}", kanban_task_delete)
+    r.add_get("/api/plugins/kanban/tasks/{tid}/log", kanban_task_log)
     r.add_post("/api/plugins/kanban/tasks", kanban_create)
     r.add_patch("/api/plugins/kanban/tasks/{tid}", kanban_patch)
     r.add_post("/api/plugins/kanban/tasks/{tid}/comments", kanban_comment)
