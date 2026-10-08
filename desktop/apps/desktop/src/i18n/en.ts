@@ -3398,17 +3398,15 @@ export const en: Translations = {
   composer: {
     message: 'Message',
     wakingProfile: profile => `Waking up ${profile}…`,
-    placeholderStarting: 'Starting Neovarch...',
-    placeholderReconnecting: 'Reconnecting to Neovarch…',
-    placeholderFollowUp: 'Send follow-up',
+    placeholderStarting: 'Menyalakan Neovarch…',
+    placeholderReconnecting: 'Menyambung ulang ke Neovarch…',
+    placeholderFollowUp: 'Kirim lanjutan',
     newSessionPlaceholders: [
-      'What are we building?',
-      'Give Neovarch a task',
-      "What's on your mind?",
-      'Describe what you need',
-      'What should we tackle?',
-      'Ask anything',
-      'Start with a goal'
+      'Mau kerjakan apa?',
+      'Beri Neovarch tugas',
+      'Tulis apa yang kamu butuhkan',
+      'Tanya apa saja',
+      'Mulai dari tujuanmu'
     ],
     followUpPlaceholders: [
       'Send a follow-up',

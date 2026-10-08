@@ -2,7 +2,7 @@ import { useStore } from '@nanostores/react'
 import { type ReactNode, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
-import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, MESSAGING_ROUTE, navigateToWorkspacePage } from '@/app/routes'
+import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, navigateToWorkspacePage } from '@/app/routes'
 import { openNeovarchKanban } from '@/components/neovarch/home'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { Tip } from '@/components/ui/tooltip'
@@ -10,7 +10,6 @@ import {
   Clock,
   FileText,
   LayoutDashboard,
-  MessageCircle,
   MessageSquareText,
   Moon,
   Plus,
@@ -34,9 +33,8 @@ export const NV_COPY = {
   home: 'Beranda',
   newChat: 'Obrolan baru',
   sessions: 'Sesi',
-  skills: 'Skill & kemampuan',
+  skills: 'Skill & alat',
   kanban: 'Tugas (Kanban)',
-  messaging: 'Bot & pesan',
   artifacts: 'Artefak',
   cron: 'Jadwal',
   office: 'Kantor',
@@ -131,13 +129,6 @@ export function NeovarchRail() {
       id: 'kanban',
       label: NV_COPY.kanban,
       onSelect: () => void openNeovarchKanban(navigate)
-    },
-    {
-      active: path.startsWith(MESSAGING_ROUTE),
-      icon: <MessageCircle className={icon} />,
-      id: 'messaging',
-      label: NV_COPY.messaging,
-      onSelect: page(MESSAGING_ROUTE)
     },
     {
       active: path.startsWith(ARTIFACTS_ROUTE),

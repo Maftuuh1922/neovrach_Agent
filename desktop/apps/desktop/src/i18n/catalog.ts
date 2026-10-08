@@ -1,13 +1,19 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
 import { ar } from './ar'
 import { de } from './de'
-import { en } from './en'
+import { en as enUpstream } from './en'
 import { es } from './es'
 import { fr } from './fr'
 import { ja } from './ja'
 import { ru } from './ru'
+import { NEOVARCH_ID } from './neovarch-id'
 import type { BundledLocale, Translations } from './types'
 import { zh } from './zh'
 import { zhHant } from './zh-hant'
+
+/** Neovarch's base catalog: upstream English with the Indonesian strings on top. */
+const en: Translations = mergeTranslations<Translations>(enUpstream, NEOVARCH_ID)
 
 /** The catalogs compiled into the app. Runtime-registered languages (plugin
  *  packs, backend `.desktop.yaml` packs) are NOT here — resolve through

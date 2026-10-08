@@ -602,6 +602,12 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response({"targets": [{"id": "local", "name": "Lokal (sesi di PC ini)",
                                                 "home_env_var": None, "home_target_set": True}]})
 
+    async def update_check(request):
+        from neovarch import updates
+        return web.json_response(await updates.check(force=request.query.get("force") in ("1", "true"),
+                                                     platform=str(request.query.get("platform") or "")))
+
+    r.add_get("/api/update", update_check)
     r.add_get("/api/cron/jobs", cron_list)
     r.add_post("/api/cron/jobs", cron_create)
     r.add_get("/api/cron/jobs/{jid}", cron_get)

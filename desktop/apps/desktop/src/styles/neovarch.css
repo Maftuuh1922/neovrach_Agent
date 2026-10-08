@@ -1529,3 +1529,14 @@
   font-size: 0.66rem;
   color: var(--nv-text-3);
 }
+
+/* Minimal start screen: only the greeting, centred above the composer. */
+.nv-home-minimal {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-bottom: 2.5rem;
+}
+.nv-home-minimal .nv-home-greeting {
+  font-size: clamp(2rem, 4.5cqi, 3rem);
+}

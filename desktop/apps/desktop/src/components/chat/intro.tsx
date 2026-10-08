@@ -1,11 +1,7 @@
-import { useState } from 'react'
-import { useInRouterContext } from 'react-router'
 
-import { useI18n } from '@/i18n'
 import { capitalize, normalize } from '@/lib/text'
 
-import { NeovarchWordmark } from '@/components/neovarch/halo-mark'
-import { NeovarchHomeActions, NeovarchHomePoster, neovarchGreeting } from '@/components/neovarch/home'
+import { neovarchGreeting } from '@/components/neovarch/home'
 
 import introCopyJsonl from './intro-copy.jsonl?raw'
 
@@ -159,35 +155,12 @@ function resolveCopy(personality?: string, seed?: number): IntroCopy {
   return pickCopy(copies, seed)
 }
 
-export function Intro({ personality, seed }: IntroProps) {
-  const [mountSeed] = useState(() => Math.floor(Math.random() * 100000))
-  const { t } = useI18n()
-  const rotationSeed = mountSeed + (seed ?? 0)
-  const copy = resolveCopy(personality, rotationSeed)
-  const key = normalizeKey(personality)
-
-  const bodies =
-    t.intro.stock[key] ?? (NEUTRAL_PERSONALITIES.has(key) ? t.intro.stock.none : t.intro.custom(personality || ''))
-
-  const body = bodies?.[Math.abs(rotationSeed) % bodies.length] ?? copy.body
-  const inRouter = useInRouterContext()
-
-  // The Neovarch home: serif greeting + the rotating intro line, then quick
-  // actions and the recent-session index (router-bound, so skipped when the
-  // intro renders standalone), with the dithered poster on wide panes.
+export function Intro(_props: IntroProps) {
+  // Neovarch's start screen is deliberately minimal: a time-of-day greeting
+  // above the composer. No intro copy, no cards, no session index.
   return (
-    <div className="nv-home pointer-events-none w-full min-w-0 text-muted-foreground" data-slot="aui_intro">
-      <div className="nv-home-head min-w-0">
-        <NeovarchWordmark className="nv-home-wordmark" />
-        <h1 className="nv-home-greeting">{neovarchGreeting()}</h1>
-        <p className="nv-home-body m-0 leading-normal">{body}</p>
-      </div>
-      {inRouter && (
-        <div className="nv-home-grid pointer-events-auto">
-          <NeovarchHomeActions />
-          <NeovarchHomePoster />
-        </div>
-      )}
+    <div className="nv-home nv-home-minimal pointer-events-none w-full min-w-0" data-slot="aui_intro">
+      <h1 className="nv-home-greeting">{neovarchGreeting()}</h1>
     </div>
   )
 }
