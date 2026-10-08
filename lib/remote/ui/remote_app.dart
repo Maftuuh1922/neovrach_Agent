@@ -7,11 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../state/app_controller.dart' show settingsProvider;
 import '../../state/settings_controller.dart';
 import '../../theme/neovarch_mobile_theme.dart';
-import '../../ui/screens/intro_screen.dart';
 import '../../ui/screens/startup_splash.dart';
 import '../remote_controller.dart';
 import '../saved_desktops.dart';
 import 'connect_screen.dart';
+import 'remote_intro_screen.dart';
 import 'remote_shell.dart';
 
 Future<void> runRemoteApp(
@@ -51,7 +51,7 @@ class RemoteNeovarchApp extends ConsumerWidget {
       darkTheme: neovarchMobileTheme,
       themeMode: ThemeMode.dark,
       home: !s.introSeen
-          ? const IntroScreen()
+          ? const RemoteIntroScreen()
           : StartupSplash(
               enabled: !skipSplash,
               child: paired ? const RemoteShell() : const ConnectScreen(onboarding: true),

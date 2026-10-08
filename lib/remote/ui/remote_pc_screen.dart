@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/app_controller.dart' show settingsProvider;
 import '../../state/settings_controller.dart';
 import '../../theme/neovarch_mobile_theme.dart';
-import '../../ui/screens/intro_screen.dart';
+import 'remote_intro_screen.dart';
 import '../../ui/widgets/common.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
@@ -175,7 +175,7 @@ class RemotePcScreen extends ConsumerWidget {
               icon: Icons.slideshow_outlined,
               title: 'Putar ulang intro',
               trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
-              onTap: () => open(const IntroScreen(replay: true)),
+              onTap: () => open(const RemoteIntroScreen(replay: true)),
             ),
           ]),
           const SizedBox(height: 24),

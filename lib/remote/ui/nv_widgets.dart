@@ -131,7 +131,7 @@ class NvPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: filled ? color : color.withValues(alpha: 0.35)),
         ),
-        child: Text(label, style: NV.monoLabel(size: 10, color: filled ? NV.text : color)),
+        child: Text(label, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10, color: filled ? NV.text : color)),
       );
 }
 
@@ -408,11 +408,12 @@ class NvApprovalCard extends StatelessWidget {
           const Icon(Icons.shield_outlined, size: 16, color: NV.red),
           const SizedBox(width: 8),
           Text('// PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red)),
-          const Spacer(),
-          if (origin != null && origin!.isNotEmpty) ...[
-            const SizedBox(width: 10),
-            Flexible(child: NvPill(origin!, color: NV.muted)),
-          ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: origin != null && origin!.isNotEmpty
+                ? Align(alignment: Alignment.centerRight, child: NvPill(origin!, color: NV.muted))
+                : const SizedBox.shrink(),
+          ),
         ]),
         if (description.isNotEmpty) ...[
           const SizedBox(height: 10),
