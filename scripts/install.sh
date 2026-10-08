@@ -24,7 +24,7 @@
 #   NEOVARCH_HOME       data home (default ~/.neovarch)
 #   NEOVARCH_VERSION    desktop release tag (e.g. v1.3.0). Default: latest.
 #   NEOVARCH_REF        git ref of this repo to take the core from. Default:
-#                       NEOVARCH_VERSION when set, else main.
+#                       NEOVARCH_VERSION when set, else v1.3.0.
 #   NEOVARCH_CORE_SRC   local checkout of this repo (or its core/ dir) to
 #                       install the core from instead of downloading.
 
@@ -35,6 +35,8 @@ RELEASES_URL="https://github.com/$REPO/releases"
 ASSET="neovarch-agent-linux-x64.tar.gz"
 EXE="neovarch-agent"
 PY_VERSION="3.14"
+# Core ref used when nothing else is asked for: the tag this installer ships with.
+DEFAULT_CORE_REF="v1.3.0"
 
 NEOVARCH_HOME="${NEOVARCH_HOME:-$HOME/.neovarch}"
 CORE_DIR=""            # set after argument parsing (default $NEOVARCH_HOME/neovarch-agent)
@@ -93,7 +95,7 @@ Options:
 Environment:
   NEOVARCH_HOME      data home (default ~/.neovarch)
   NEOVARCH_VERSION   desktop release tag, e.g. v1.3.0 (default: latest)
-  NEOVARCH_REF       git ref for the core (default: NEOVARCH_VERSION or main)
+  NEOVARCH_REF       git ref for the core (default: NEOVARCH_VERSION or v1.3.0)
   NEOVARCH_CORE_SRC  install the core from a local checkout instead
 EOF
 }
@@ -201,7 +203,7 @@ stage_core() {
     (cd "$src" && tar --exclude=venv --exclude=__pycache__ --exclude=node_modules -cf - .) | (cd "$staging" && tar -xf -)
     commit=$(git -C "$src" rev-parse HEAD 2>/dev/null || true)
   else
-    ref="${COMMIT_ARG:-${NEOVARCH_REF:-${BRANCH_ARG:-${NEOVARCH_VERSION:-main}}}}"
+    ref="${COMMIT_ARG:-${NEOVARCH_REF:-${BRANCH_ARG:-${NEOVARCH_VERSION:-$DEFAULT_CORE_REF}}}}"
     commit=$(resolve_commit "$ref")
     url="https://codeload.github.com/$REPO/tar.gz/${commit:-$ref}"
     step "Downloading the Neovarch core ($ref)"

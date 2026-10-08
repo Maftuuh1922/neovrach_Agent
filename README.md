@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scr
 
 Memasang inti Neovarch ke `~/.neovarch/neovarch-agent` (Python + venv sendiri), perintah `neovarch` di `~/.local/bin`,
 aplikasi desktop ke `~/.local/share/neovarch-agent`, dan entri menu aplikasi. Hanya inti + CLI: tambahkan `-s -- --core-only`. Butuh GTK 3, NSS, ALSA dan libsecret (installer memberi tahu perintah `apt`/`dnf`/`pacman` bila belum ada).
-Pilih versi tertentu: `curl -fsSL …/install.sh | NEOVARCH_VERSION=v1.2.1 sh`.
+Pilih versi tertentu: `curl -fsSL …/install.sh | NEOVARCH_VERSION=v1.3.0 sh`.
 Hapus (hanya file Neovarch, termasuk `~/.neovarch`; Hermes tidak disentuh): `curl -fsSL …/install.sh | sh -s -- --uninstall`.
 
 **Windows (x64)** — PowerShell:

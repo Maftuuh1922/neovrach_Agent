@@ -21,7 +21,7 @@ Usage:
 
 Environment:
   NEOVARCH_HOME            Data home (default ${app.HOME_DIR})
-  NEOVARCH_VERSION         Desktop release tag, e.g. v1.2.1 (default: v${app.PKG_VERSION})
+  NEOVARCH_VERSION         Desktop release tag, e.g. v1.3.0 (default: v${app.PKG_VERSION})
   NEOVARCH_REF             Git ref of the repo to take the core from (default: the release tag, else main)
 `;
 

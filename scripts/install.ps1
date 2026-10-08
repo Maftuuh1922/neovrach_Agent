@@ -21,7 +21,7 @@
 # Environment:
 #   NEOVARCH_HOME      data home (default %LOCALAPPDATA%\neovarch)
 #   NEOVARCH_VERSION   desktop release tag (e.g. v1.3.0). Default: latest.
-#   NEOVARCH_REF       git ref of this repo for the core. Default: NEOVARCH_VERSION or main.
+#   NEOVARCH_REF       git ref of this repo for the core. Default: NEOVARCH_VERSION or v1.3.0.
 #   NEOVARCH_CORE_SRC  local checkout of this repo (or its core\) to install the core from.
 
 param(
@@ -54,6 +54,7 @@ $AppName      = 'Neovarch Agent'
 $ExeName      = 'Neovarch Agent.exe'
 $ProcName     = 'Neovarch Agent'
 $PyVersion    = '3.14'
+$DefaultCoreRef = 'v1.3.0'   # core ref when nothing else is asked for: this installer's release tag
 $ReceiptName  = '.neovarch-bootstrap-complete'
 
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME 'AppData\Local' }
@@ -168,7 +169,7 @@ function Install-CoreFiles {
             Copy-Item -Destination $staging -Recurse -Force
         try { $commitSha = (& git -C $src rev-parse HEAD 2>$null) } catch { $commitSha = '' }
     } else {
-        $ref = if ($Commit) { $Commit } elseif ($env:NEOVARCH_REF) { $env:NEOVARCH_REF } elseif ($Branch) { $Branch } elseif ($Version) { $Version } else { 'main' }
+        $ref = if ($Commit) { $Commit } elseif ($env:NEOVARCH_REF) { $env:NEOVARCH_REF } elseif ($Branch) { $Branch } elseif ($Version) { $Version } else { $DefaultCoreRef }
         if ($ref -match '^[0-9a-f]{40}$') { $commitSha = $ref }
         $url = "https://codeload.github.com/$Repo/zip/$ref"
         Write-Step "Downloading the Neovarch core ($ref)"

@@ -8,5 +8,5 @@ Desktop) and the Neovarch phone remote speak. The design is inspired by Hermes
 Agent (Nous Research); no Hermes Agent code is included.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.3.0"
 PRODUCT = "Neovarch Agent"
