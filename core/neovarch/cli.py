@@ -130,9 +130,18 @@ def cmd_config(args) -> int:
             value = json.loads(args.value)
         except (json.JSONDecodeError, TypeError):
             value = args.value
+        if args.key == "memory.obsidian_vault" and isinstance(value, str) and value:
+            value = str(Path(os.path.expanduser(value)).resolve())
         cfgmod.set_path(cfg, args.key, value)
         cfgmod.save_config(cfg)
         print(f"{args.key} = {json.dumps(value)}")
+        if args.key == "memory.obsidian_vault":
+            from neovarch import obsidian
+            st = obsidian.status(cfg)
+            if st["connected"]:
+                print(f"Obsidian vault terhubung: {st['note_count']} catatan")
+            elif st["configured"]:
+                print(f"peringatan: folder vault tidak ditemukan: {value}")
     else:
         print(json.dumps(cfg, indent=2, ensure_ascii=False))
     return 0

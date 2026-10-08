@@ -6,6 +6,9 @@ Behaviour (deterministic, no network):
 
 * last wire message is a tool result -> streams ``Selesai. Hasil alat: <first line>``;
 * user text contains ``tool`` / ``alat``   -> one ``shell`` tool call ``echo neovarch-tool-ok``;
+* user text contains ``lambat`` / ``slow`` -> ``shell`` ``sleep 6 && echo neovarch-slow-tool-ok``
+  (keeps the agent "working" long enough for the Office page to show it);
+* user text contains ``vault``            -> one ``obsidian_search`` call for ``neovarch``;
 * user text contains ``danger``           -> a ``shell`` call that needs approval
   (``rm -rf /tmp/neovarch-approval-probe``);
 * anything else                           -> streams ``Halo dari mock Neovarch. Kamu bilang: <text>``
@@ -38,6 +41,10 @@ def _decide(messages: list[dict]) -> dict:
     low = text.lower()
     if "danger" in low:
         return {"tool": ("shell", {"command": "rm -rf /tmp/neovarch-approval-probe"})}
+    if "lambat" in low or "slow" in low:
+        return {"tool": ("shell", {"command": "sleep 6 && echo neovarch-slow-tool-ok"})}
+    if "vault" in low:
+        return {"tool": ("obsidian_search", {"query": "neovarch"})}
     if "tool" in low or "alat" in low:
         return {"tool": ("shell", {"command": "echo neovarch-tool-ok"})}
     return {"text": f"Halo dari mock Neovarch. Kamu bilang: {text}"}

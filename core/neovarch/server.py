@@ -43,6 +43,7 @@ from neovarch import config as cfgmod
 from neovarch.agent import Agent, default_cwd
 from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
+from neovarch.office import Office
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -167,6 +168,7 @@ class LiveSession:
         finally:
             self.approvals.pop(rid, None)
             self.gw.broadcast_event("approval.cancelled", self.id, {"request_ids": [rid]})
+        self.gw.office.observe("approval.responded", self.id, {"choice": str(choice or "deny"), "request_id": rid})
         return str(choice or "deny")
 
     def answer(self, rid: str | None, choice: str) -> bool:
@@ -230,12 +232,15 @@ class Gateway:
         self.live: dict[str, LiveSession] = {}
         self.started = time.time()
         self.port = 0
+        self.office = Office(self)
 
     # ---- plumbing --------------------------------------------------------
     def conns_for(self, sid: str | None) -> list[Conn]:
         return [c for c in self.conns if sid is None or sid in c.attached or not c.attached]
 
     def broadcast_event(self, kind: str, sid: str | None, payload: dict) -> None:
+        if kind != "office.update":
+            self.office.observe(kind, sid, payload)
         frame = {"jsonrpc": "2.0", "method": "event", "params": {"type": kind, "session_id": sid, "payload": payload}}
         for conn in list(self.conns):
             if sid is None or sid in conn.attached:
@@ -347,7 +352,10 @@ class Gateway:
             cfg = cfgmod.load_config()
             cfgmod.set_path(cfg, str(p["key"]), p.get("value"))
             cfgmod.save_config(cfg)
+            self._config_changed(str(p["key"]))
             return {"ok": True}
+        if method == "office.snapshot":
+            return self.office.snapshot()
         if method == "commands.catalog":
             return {"commands": [{"name": "new", "description": "Start a new chat"},
                                  {"name": "model", "description": "Show the configured model"}], "skills": list_skills()}
@@ -406,6 +414,13 @@ class Gateway:
             return {"plugins": [], "user_count": 0, "bundled_count": 0, "ok": True}
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
+
+    def _config_changed(self, key: str = "") -> None:
+        if not key or key.startswith("memory"):
+            self.office.invalidate_vault()
+            self.office.schedule()
+        if not key or key.startswith("appearance"):
+            self.broadcast_event("appearance.changed", None, appearance_of(cfgmod.load_config()))
 
     def _live(self, p: dict) -> LiveSession:
         sid = str(p.get("session_id") or "")
@@ -543,6 +558,7 @@ def build_app(gw: Gateway) -> web.Application:
         if isinstance(data, dict):
             cfg = cfgmod._merge(cfg, data)
             cfgmod.save_config(cfg)
+            gw._config_changed()
         return web.json_response({"ok": True})
 
     async def config_defaults(_):
@@ -591,10 +607,19 @@ def build_app(gw: Gateway) -> web.Application:
         b = await _json(request)
         if not b.get("title"):
             return web.json_response({"detail": "title required"}, status=422)
-        return web.json_response(gw.kanban.create(str(b["title"]), str(b.get("body") or ""), b.get("assignee"), b.get("priority")))
+        task = gw.kanban.create(str(b["title"]), str(b.get("body") or ""), b.get("assignee"), b.get("priority"))
+        gw.office.observe("task.created", None, task)
+        return web.json_response(task)
 
     async def kanban_patch(request):
-        t = gw.kanban.update(request.match_info["tid"], await _json(request))
+        tid = request.match_info["tid"]
+        before = next((t for t in gw.kanban.board()["tasks"] if t["id"] == tid), None)
+        t = gw.kanban.update(tid, await _json(request))
+        if t:
+            if before and before.get("status") != t.get("status"):
+                gw.office.observe("task.moved", None, {**t, "from": before.get("status"), "to": t.get("status")})
+            else:
+                gw.office.observe("task.updated", None, t)
         return web.json_response(t) if t else web.json_response({"detail": "not found"}, status=404)
 
     async def kanban_comment(request):
@@ -621,6 +646,57 @@ def build_app(gw: Gateway) -> web.Application:
     async def fs_default(_):
         return web.json_response({"path": str(default_cwd())})
 
+    async def office_get(_):
+        return web.json_response(gw.office.snapshot())
+
+    async def office_events(request):
+        """Server-Sent Events: one `office.update` per change (plus the current snapshot first)."""
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache",
+                                           "X-Accel-Buffering": "no", **_cors(request)})
+        await resp.prepare(request)
+        q = gw.office.subscribe()
+        try:
+            snap = gw.office.snapshot()
+            while True:
+                data = json.dumps(snap, ensure_ascii=False, default=str)
+                await resp.write(f"event: office.update\ndata: {data}\n\n".encode())
+                while True:
+                    try:
+                        snap = await asyncio.wait_for(q.get(), 25)
+                        break
+                    except asyncio.TimeoutError:
+                        await resp.write(b": keep-alive\n\n")
+        except (ConnectionResetError, asyncio.CancelledError, RuntimeError, asyncio.TimeoutError):
+            pass
+        finally:
+            gw.office.unsubscribe(q)
+        return resp
+
+    async def obsidian_status(_):
+        from neovarch import obsidian
+        return web.json_response(obsidian.status())
+
+    async def appearance_get(_):
+        return web.json_response(appearance_of(cfgmod.load_config()))
+
+    async def appearance_put(request):
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        try:
+            new = normalize_appearance({**appearance_of(cfg), **{k: v for k, v in body.items() if k in ("accent", "base")}})
+        except ValueError as exc:
+            return web.json_response({"detail": str(exc)}, status=422)
+        cfgmod.set_path(cfg, "appearance", {"accent": new["accent"], "base": new["base"]})
+        cfgmod.save_config(cfg)
+        gw._config_changed("appearance")
+        return web.json_response(new)
+
+    r.add_get("/api/office", office_get)
+    r.add_get("/api/office/events", office_events)
+    r.add_get("/api/memory/obsidian", obsidian_status)
+    r.add_get("/api/appearance", appearance_get)
+    r.add_put("/api/appearance", appearance_put)
+    r.add_post("/api/appearance", appearance_put)
     r.add_get("/api/health", health)
     r.add_get("/api/health/idle", health)
     r.add_get("/api/status", status)
@@ -682,6 +758,39 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/fs/read", fs_read)
     r.add_get("/api/fs/default", fs_default)
     return app
+
+
+def normalize_appearance(a: dict) -> dict:
+    accent = str(a.get("accent") or "#EE1C1C").strip()
+    if not accent.startswith("#"):
+        accent = "#" + accent
+    if len(accent) == 4:
+        accent = "#" + "".join(c * 2 for c in accent[1:])
+    try:
+        int(accent[1:], 16)
+    except ValueError:
+        raise ValueError("accent must be a hex colour like #EE1C1C") from None
+    if len(accent) != 7:
+        raise ValueError("accent must be a hex colour like #EE1C1C")
+    base = str(a.get("base") or "dark").lower()
+    if base not in ("dark", "light"):
+        raise ValueError("base must be dark or light")
+    accent = accent.upper()
+    r, g, b = (int(accent[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+    lum = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    # white text while it keeps >= 4:1 contrast (the brand red stays white-on-red),
+    # otherwise whichever of white/black has the higher WCAG contrast
+    white, black = 1.05 / (lum + 0.05), (lum + 0.05) / 0.05
+    on = "#FFFFFF" if white >= 4.0 or white >= black else "#000000"
+    return {"accent": accent, "base": base, "on_accent": on}
+
+
+def appearance_of(cfg: dict) -> dict:
+    try:
+        return normalize_appearance(cfgmod.get_path(cfg, "appearance", {}) or {})
+    except ValueError:
+        return normalize_appearance({})
 
 
 def _cors(request: web.Request) -> dict:

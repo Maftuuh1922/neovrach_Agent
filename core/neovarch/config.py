@@ -16,6 +16,11 @@ Shape (all keys optional)::
     agent:
       max_turns: 30
       system_prompt: ""             # extra instructions appended to SOUL.md
+    memory:
+      obsidian_vault: ""            # folder of an Obsidian vault used as long-term memory
+    appearance:
+      accent: "#EE1C1C"             # accent colour chosen at first run (desktop + phone)
+      base: dark                    # dark | light
 
 API keys live in ``.env`` (KEY=value lines), never in config.yaml.
 """
@@ -45,6 +50,8 @@ DEFAULTS: dict[str, Any] = {
     "custom_providers": [],
     "approvals": {"mode": "ask"},
     "agent": {"max_turns": 30, "system_prompt": ""},
+    "memory": {"obsidian_vault": ""},
+    "appearance": {"accent": "#EE1C1C", "base": "dark"},
 }
 
 DEFAULT_SOUL = """You are Neovarch Agent, an AI agent from NeovarchLabs that works on the user's own computer.

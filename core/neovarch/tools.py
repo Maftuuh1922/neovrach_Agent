@@ -203,6 +203,43 @@ async def tool_skill(args: dict, ctx: ToolContext) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else f"(no skill named {name})"
 
 
+def _vault():
+    from neovarch import obsidian
+    return obsidian, obsidian.require_vault()
+
+
+async def tool_obsidian_search(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    hits = obs.search(vault, str(args.get("query") or ""), int(args.get("limit") or 10))
+    if not hits:
+        return "(no matching notes)"
+    return _clip("\n".join(
+        f"- {h['path']}" + (f"  tags: {', '.join('#' + t for t in h['tags'])}" if h["tags"] else "")
+        + f"\n  {h['snippet']}" for h in hits))
+
+
+async def tool_obsidian_read(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    note = obs.read_note(vault, str(args.get("path") or ""))
+    return _clip(f"# {note['path']}\n{note['content']}")
+
+
+async def tool_obsidian_write(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    fm = args.get("frontmatter") if isinstance(args.get("frontmatter"), dict) else None
+    res = obs.write_note(vault, str(args.get("path") or ""), str(args.get("content") or ""),
+                         str(args.get("mode") or "create"), fm)
+    return f"{res['mode']}: {res['path']} ({res['bytes']} bytes) in the Obsidian vault"
+
+
+async def tool_obsidian_links(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    res = obs.links(vault, str(args.get("path") or ""))
+    back = "\n".join(f"- {b['path']}" for b in res["backlinks"]) or "(none)"
+    out = "\n".join(f"- [[{o}]]" for o in res["outgoing"]) or "(none)"
+    return f"{res['path']}\nbacklinks:\n{back}\noutgoing links:\n{out}"
+
+
 def list_skills() -> list[dict[str, str]]:
     root = neovarch_home() / "skills"
     out = []
@@ -251,11 +288,36 @@ TOOLS: dict[str, tuple[Callable[[dict, ToolContext], Awaitable[str]], dict]] = {
     "skill": (tool_skill, {
         "description": "List installed skills (no name) or read one skill's instructions (name).",
         "parameters": {"type": "object", "properties": {"name": {"type": "string"}}}}),
+    "obsidian_search": (tool_obsidian_search, {
+        "description": "Search the user's Obsidian vault (memory) by words in the text, note filename and tags "
+                       "(#tag). Only works when an Obsidian vault is configured.",
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["query"]}}),
+    "obsidian_read": (tool_obsidian_read, {
+        "description": "Read one note from the Obsidian vault (path relative to the vault, or a note name).",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
+    "obsidian_write": (tool_obsidian_write, {
+        "description": "Create or append to a note in the Obsidian vault. mode: create | append | overwrite. "
+                       "Write markdown with [[wikilinks]] and #tags; existing frontmatter is kept. "
+                       "Paths are relative to the vault and can never leave it.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string"}, "content": {"type": "string"},
+            "mode": {"type": "string", "enum": ["create", "append", "overwrite"]},
+            "frontmatter": {"type": "object", "description": "optional YAML frontmatter keys to set"}},
+            "required": ["path", "content"]}}),
+    "obsidian_links": (tool_obsidian_links, {
+        "description": "List the backlinks (notes that [[link]] to this one) and outgoing links of a vault note.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
 }
 
 
 def tool_schemas() -> list[dict[str, Any]]:
     return [{"type": "function", "function": {"name": n, **spec}} for n, (_, spec) in TOOLS.items()]
+
+
+def _vault_error():
+    from neovarch.obsidian import VaultError
+    return VaultError
 
 
 async def run_tool(name: str, args: dict, ctx: ToolContext) -> str:
@@ -266,6 +328,8 @@ async def run_tool(name: str, args: dict, ctx: ToolContext) -> str:
         return await entry[0](args, ctx)
     except ForeignPathError as exc:
         return f"refused: {exc}"
+    except _vault_error() as exc:
+        return f"error: {exc}"
     except FileNotFoundError as exc:
         return f"error: not found: {exc.filename or exc}"
     except Exception as exc:  # tools report errors to the model instead of crashing the turn
