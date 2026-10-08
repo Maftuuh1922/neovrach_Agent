@@ -64,8 +64,20 @@ const kids = [
   spawn(PY, [mockScript, '--port', String(tlsPort), '--delay', '0.02', '--api-key', 'sk-sweep-123',
     '--header', 'X-Router-Tenant: neo', '--cert', path.join(tls, 'c.pem'), '--key', path.join(tls, 'k.pem')], { stdio: 'ignore' })
 ]
+// Fake GitHub "releases/latest" so the update banner has something newer to show.
+const releasesDir = path.join(DIR, 'releases')
+fs.mkdirSync(releasesDir)
+fs.writeFileSync(path.join(releasesDir, 'latest'), JSON.stringify({ tag_name: 'v9.9.0', html_url: 'https://example.test/v9.9.0', assets: [] }))
+const releasesPort = await freePort()
+kids.push(spawn(PY, ['-m', 'http.server', String(releasesPort), '--bind', '127.0.0.1', '--directory', releasesDir], { stdio: 'ignore' }))
+// A small Obsidian vault for the viewer.
+const VAULT = path.join(DIR, 'Kuliah')
+fs.mkdirSync(path.join(VAULT, 'Bab'), { recursive: true })
+fs.writeFileSync(path.join(VAULT, 'Skripsi.md'), '# Skripsi\nLihat [[Bab/Pendahuluan]] dan [[Metode]].\n')
+fs.writeFileSync(path.join(VAULT, 'Bab', 'Pendahuluan.md'), 'Kembali ke [[Skripsi]].\n')
+fs.writeFileSync(path.join(VAULT, 'Metode.md'), 'Metode, rujuk [[Skripsi]].\n')
 fs.writeFileSync(path.join(NV_HOME, 'config.yaml'),
-  `model:\n  provider: custom\n  default: mock-model\n  base_url: http://127.0.0.1:${basePort}/v1\n`)
+  `model:\n  provider: custom\n  default: mock-model\n  base_url: http://127.0.0.1:${basePort}/v1\nmemory:\n  obsidian_vault: ${VAULT}\n`)
 await sleep(1500)
 
 const desktopRoot = path.resolve('apps/desktop')
@@ -79,7 +91,8 @@ Object.assign(env, {
   no_proxy: '*',
   NEOVARCH_DESKTOP_CORE_ROOT: CORE,
   HERMES_DESKTOP_PYTHON: PY,
-  NEOVARCH_ACCESS_LOG: ACCESS
+  NEOVARCH_ACCESS_LOG: ACCESS,
+  NEOVARCH_RELEASES_URL: `http://127.0.0.1:${releasesPort}/latest`
 })
 for (const k of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']) delete env[k]
 
@@ -91,12 +104,51 @@ page.on('console', m => {
   if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text().slice(0, 400)}`)
 })
 const shot = (name: string) => page.screenshot({ path: path.join(SHOTS, name) }).catch(() => {})
+const HERMES_TEXT = /hermes|nousresearch/i
 const FAILED_TEXT = /failed to load|could not load|couldn['’]t load|gagal memuat|tidak dapat memuat|no such api endpoint|not found/i
 
 const composer = page.locator('[contenteditable="true"]').first()
 await composer.waitFor({ timeout: 300_000 })
 for (let i = 0; i < 120 && (await page.locator('[class*="z-(--z-onboarding)"]').count()); i++) await sleep(1000)
 await sleep(3000)
+
+// ---- first run: colour picker -> saved in the core (phone follows) -> painted
+{
+  let picker = 0
+  for (let i = 0; i < 20 && !(picker = await page.locator('[data-nv-first-run-theme]').count()); i++) await sleep(500)
+  report.firstRunPicker = picker > 0
+  if (!picker) fail('first-run theme picker not shown')
+  else {
+    await page.locator('[data-nv-first-run-theme] [data-nv-accent="Biru"]').click()
+    await sleep(1500)
+    const red = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--nv-red').trim())
+    const cfg = fs.readFileSync(path.join(NV_HOME, 'config.yaml'), 'utf8')
+    report.pickedAccent = red
+    if (red.toUpperCase() !== '#2563EB') fail(`theme: --nv-red is "${red}" after picking Biru`)
+    if (!/accent: .#2563EB/i.test(cfg)) fail('theme: accent not saved in config.yaml')
+    await shot('first-run-theme-biru.png')
+    await page.locator('[data-nv-first-run-theme] [data-nv-accent="Merah"]').click()
+    await sleep(800)
+    await page.locator('[data-nv-theme-done]').click()
+    await sleep(800)
+    if (await page.locator('[data-nv-first-run-theme]').count()) fail('theme: picker did not close')
+  }
+}
+
+// ---- v1.4 start screen: greeting + composer only; tab says "Sesi baru"; update banner
+{
+  const body: string = await page.evaluate(() => document.body.innerText)
+  report.homeGreeting = /Selamat (pagi|siang|sore|malam)/.test(body)
+  if (!report.homeGreeting) fail('home: greeting missing')
+  for (const gone of ['Obrolan baru\nMulai percakapan', 'INDEKS SESI', 'Ask a question']) if (body.includes(gone)) fail(`home: should be minimal, found "${gone}"`)
+  if (/NEW SESSION/.test(body)) fail('tab still says NEW SESSION')
+  if (!/Sesi baru/.test(body)) fail('tab "Sesi baru" missing')
+  let banner = 0
+  for (let i = 0; i < 20 && !(banner = await page.locator('[data-nv-update-banner="9.9.0"]').count()); i++) await sleep(500)
+  report.updateBanner = banner > 0
+  if (!banner) fail('update banner (v9.9.0) not shown')
+  await shot('home-minimal.png')
+}
 
 const accessMark = () => (fs.existsSync(ACCESS) ? fs.readFileSync(ACCESS, 'utf8').split('\n').length : 0)
 const badSince = (mark: number) =>
@@ -116,16 +168,59 @@ async function visit(label: string, go: () => Promise<unknown>) {
   const row = { label, failedText: m?.[0] ?? null, http: bad, console: newErrs }
   ;(report.pages as unknown[] | undefined)?.push(row) ?? (report.pages = [row])
   if (m) fail(`${label}: text "${m[0]}"`)
+  const iframes = await page.locator('iframe[src*="nousresearch"]').count()
+  if (iframes) fail(`${label}: embeds a Hermes site`)
+  const h = body.match(HERMES_TEXT)
+  if (h) (report.hermesText as string[] | undefined)?.push(`${label}: ${h[0]}`) ?? (report.hermesText = [`${label}: ${h[0]}`])
   for (const b of bad) fail(`${label}: ${b}`)
   for (const e of newErrs) fail(`${label}: ${e}`)
 }
 
-const RAIL = ['sessions', 'skills', 'kanban', 'messaging', 'artifacts', 'cron', 'office', 'vault', 'pair-phone', 'settings', 'home', 'new-chat']
+const RAIL = ['sessions', 'office', 'skills', 'kanban', 'artifacts', 'cron', 'vault', 'pair-phone', 'settings', 'home', 'new-chat']
+if (await page.locator('[data-nv-rail="messaging"]').count()) fail('rail: Messaging should be removed')
+for (const need of ['office', 'vault', 'skills', 'kanban', 'artifacts', 'cron']) {
+  if (!(await page.locator(`[data-nv-rail="${need}"]`).count())) fail(`rail: ${need} button missing`)
+}
 for (const id of RAIL) {
   const btn = page.locator(`[data-nv-rail="${id}"]`)
   if (!(await btn.count())) continue
   await visit(`rail ${id}`, () => btn.first().click())
   if (id === 'sessions') await btn.first().click()
+}
+
+// Office page opens from the rail and lists the agents (the open chat is one desk).
+await page.locator('[data-nv-rail="office"]').first().click()
+await sleep(2500)
+{
+  const body: string = await page.evaluate(() => document.body.innerText)
+  report.officePage = /Kantor/.test(body) && !/Kantor belum bisa dimuat/.test(body)
+  if (!report.officePage) fail('office page did not load')
+  await shot('office.png')
+}
+
+// Vault viewer: tree -> note with backlinks -> wikilink -> graph.
+await page.locator('[data-nv-rail="vault"]').first().click()
+await sleep(2000)
+{
+  const note = page.locator('[data-nv-vault-note="Skripsi.md"]')
+  if (!(await note.count())) fail('vault: tree did not list Skripsi.md')
+  else {
+    await note.click()
+    await sleep(1500)
+    const body: string = await page.evaluate(() => document.body.innerText)
+    if (!/Backlink \(2\)/.test(body)) fail('vault: Skripsi should show 2 backlinks')
+    if (!/Buka di Obsidian/.test(body)) fail('vault: "Buka di Obsidian" button missing')
+    await shot('vault-note.png')
+    await page.locator('.nv-vault-wikilink', { hasText: 'Metode' }).first().click()
+    await sleep(1200)
+    if (!(await page.locator('[data-nv-vault-open="Metode.md"]').count())) fail('vault: wikilink did not open Metode.md')
+  }
+  await page.locator('[data-nv-vault-tab="graph"]').click()
+  await sleep(1200)
+  const nodes = await page.locator('[data-nv-vault-graph]').getAttribute('data-nv-vault-graph').catch(() => null)
+  report.vaultGraphNodes = nodes
+  if (nodes !== '3') fail(`vault: graph should have 3 nodes, got ${nodes}`)
+  await shot('vault-graph.png')
 }
 
 const SETTINGS = ['config:model', 'providers', 'config:chat', 'config:appearance', 'config:workspace', 'notifications',

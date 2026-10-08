@@ -8,12 +8,15 @@ import { PALETTE_AREA, type PaletteContribution, paletteToggle } from '@/app/com
 import { type StatusbarItem } from '@/app/shell/statusbar-controls'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
+import { NeovarchAppearanceSync, NeovarchFirstRunTheme } from '@/components/neovarch/appearance'
 import { NeovarchCommandBar } from '@/components/neovarch/command-bar'
 import { NeovarchContextRail } from '@/components/neovarch/context-rail'
 import { NeovarchOfficePage } from '@/components/neovarch/office'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { NeovarchRail } from '@/components/neovarch/rail'
 import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
+import { NeovarchUpdateBanner } from '@/components/neovarch/update-banner'
+import { NeovarchVaultPage, VAULT_ROUTE } from '@/components/neovarch/vault'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
@@ -759,6 +762,16 @@ registry.register({
   render: () => <NeovarchOfficePage />
 })
 
+// Obsidian vault viewer (tree, note, backlinks, graph) at /vault.
+registry.register({
+  id: 'nv-vault',
+  area: ROUTES_AREA,
+  source: 'core',
+  title: 'Vault',
+  data: { path: VAULT_ROUTE },
+  render: () => <NeovarchVaultPage />
+})
+
 // YOLO (dangerous-command approval bypass) is a status-bar zap and a /yolo
 // command; ⌘K is the third door onto the SAME store function, so a user who
 // lives in the palette never has to hunt for the pill.
@@ -860,6 +873,9 @@ export function ContribController() {
                     renders nothing while none are registered. */}
                 <Butterbar />
                 <TermsButterbar />
+                <NeovarchUpdateBanner />
+                <NeovarchAppearanceSync />
+                <NeovarchFirstRunTheme />
                 {statusbarVisible && <WiredPane part="statusbar" />}
               </div>
             </ContribWiring>

@@ -12,6 +12,7 @@ import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
 import { useContextBreakdown } from '@/app/shell/hooks/use-context-breakdown'
 import { useSystemResourcesStatusbarItem } from '@/app/shell/system-resources-statusbar'
 import { $paneVisible } from '@/components/pane-shell/tree/store'
+import { $nvUpdate } from '@/components/neovarch/update-banner'
 import { Badge } from '@/components/ui/badge'
 import { Codicon } from '@/components/ui/codicon'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
@@ -167,6 +168,7 @@ export function useStatusbarItems({
   const backendUpdateStatus = useStore($backendUpdateStatus)
   const backendUpdateApply = useStore($backendUpdateApply)
   const desktopVersion = useStore($desktopVersion)
+  const nvUpdate = useStore($nvUpdate)
   const connection = useStore($connection)
 
   // The FOCUSED session (interacted tile, else the primary — the same
@@ -400,14 +402,15 @@ export function useStatusbarItems({
     const status = resolveVersionStatus({
       applying,
       applyMessage: updateApply.message,
-      behind: updateStatus?.behind ?? 0,
+      behind: 0,
       branch: updateStatus?.branch,
       copy,
       remote: connection?.mode === 'remote',
       restarting: updateApply.stage === 'restart',
       sha: updateStatus?.currentSha?.slice(0, 7) ?? null,
       target: 'client',
-      updateAvailable: updateStatus?.updateAvailable,
+      // Neovarch's only update channel is GitHub Releases (core /api/update).
+      updateAvailable: nvUpdate?.available ?? false,
       version: desktopVersion?.appVersion
     })
 
@@ -420,13 +423,20 @@ export function useStatusbarItems({
       // Update state is not a preference: hiding it is how a user misses that
       // their client is behind. Listed in the menu, but locked on.
       lockedVisible: true,
-      onSelect: () => openUpdateOverlayFor('client'),
+      onSelect: () => {
+        const url = nvUpdate?.download_url || nvUpdate?.url
+
+        if (url) {
+          void window.hermesDesktop?.openExternal?.(url)
+        }
+      },
       title: status.tooltip,
       toggleLabel: copy.toggleVersion,
       variant: 'action'
     }
   }, [
     desktopVersion?.appVersion,
+    nvUpdate,
     connection?.mode,
     copy,
     updateApply.applying,

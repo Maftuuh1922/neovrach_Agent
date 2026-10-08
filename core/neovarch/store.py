@@ -122,6 +122,19 @@ class Kanban:
 
     def __init__(self, path: Path | None = None):
         self.path = path or (neovarch_home() / "kanban.json")
+        # Called with each event after it is on disk (the gateway pushes it live).
+        self.on_event = None
+        self._pending: list[dict] = []
+
+    def _commit(self, data: dict) -> None:
+        _atomic_write(self.path, data)
+        pending, self._pending = self._pending, []
+        if self.on_event:
+            for ev in pending:
+                try:
+                    self.on_event(ev)
+                except Exception:
+                    pass
 
     def _load(self) -> dict:
         if self.path.exists():
@@ -140,7 +153,9 @@ class Kanban:
         events = data.setdefault("events", [])
         eid = int(data.get("event_seq", 0)) + 1
         data["event_seq"] = eid
-        events.append({"id": eid, "kind": kind, "task_id": task_id, "payload": payload or {}, "created_at": time.time()})
+        ev = {"id": eid, "kind": kind, "task_id": task_id, "payload": payload or {}, "created_at": time.time()}
+        events.append(ev)
+        self._pending.append(ev)
         del events[:-500]
 
     def events_since(self, since: int = 0) -> tuple[list[dict], int]:
@@ -173,7 +188,7 @@ class Kanban:
                 return False
             data["tasks"] = keep
             self._event(data, "deleted", tid)
-            _atomic_write(self.path, data)
+            self._commit(data)
             return True
 
     def create(self, title: str, body: str = "", assignee: str | None = None, priority: int | None = None) -> dict:
@@ -185,7 +200,7 @@ class Kanban:
             data["next"] += 1
             data["tasks"].append(task)
             self._event(data, "created", task["id"], {"title": title})
-            _atomic_write(self.path, data)
+            self._commit(data)
             return task
 
     def update(self, tid: str, fields: dict) -> dict | None:
@@ -203,7 +218,7 @@ class Kanban:
                                     {"from": old, "to": task.get("status")})
                     else:
                         self._event(data, "updated", tid)
-                    _atomic_write(self.path, data)
+                    self._commit(data)
                     return task
         return None
 
@@ -216,6 +231,6 @@ class Kanban:
                     task.setdefault("comments", []).append(c)
                     task["updated_at"] = time.time()
                     self._event(data, "commented", tid)
-                    _atomic_write(self.path, data)
+                    self._commit(data)
                     return c
         return None
