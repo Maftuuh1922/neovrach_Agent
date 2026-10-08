@@ -1044,6 +1044,60 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/office", office_get)
     r.add_get("/api/office/events", office_events)
     r.add_get("/api/memory/obsidian", obsidian_status)
+
+    # ---- Obsidian vault viewer (desktop page, phone read-only) ---------------
+    def _vault_or_error():
+        from neovarch import obsidian
+        try:
+            return obsidian.require_vault(), None
+        except obsidian.VaultError as exc:
+            return None, str(exc)
+
+    async def vault_tree(_):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"configured": False, "tree": None, "detail": err})
+        return web.json_response({"configured": True, "vault": vault.name, "path": str(vault), "tree": obsidian.tree(vault)})
+
+    async def vault_note(request):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"detail": err}, status=409)
+        rel = request.query.get("path") or ""
+        try:
+            note = obsidian.read_note(vault, rel)
+            lk = obsidian.links(vault, note["path"])
+        except obsidian.VaultError as exc:
+            return web.json_response({"detail": str(exc)}, status=400)
+        except FileNotFoundError:
+            return web.json_response({"detail": f"Catatan {rel} tidak ditemukan."}, status=404)
+        # outgoing links resolved to note paths so the viewer can make them clickable
+        g = {n["title"].lower(): n["id"] for n in obsidian.graph(vault)["nodes"] if n["exists"]}
+        out = [{"target": t, "path": g.get(t.rsplit("/", 1)[-1].lower())} for t in lk["outgoing"]]
+        return web.json_response({**note, "backlinks": lk["backlinks"], "outgoing": out,
+                                  "open_uri": obsidian.open_uri(vault, note["path"])})
+
+    async def vault_graph(_):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"configured": False, "nodes": [], "edges": []})
+        return web.json_response({"configured": True, **obsidian.graph(vault)})
+
+    async def vault_search(request):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"results": []})
+        q = request.query.get("q") or ""
+        return web.json_response({"results": obsidian.search(vault, q, 30) if q.strip() else []})
+
+    r.add_get("/api/obsidian/tree", vault_tree)
+    r.add_get("/api/obsidian/note", vault_note)
+    r.add_get("/api/obsidian/graph", vault_graph)
+    r.add_get("/api/obsidian/search", vault_search)
     r.add_get("/api/appearance", appearance_get)
     r.add_put("/api/appearance", appearance_put)
     r.add_post("/api/appearance", appearance_put)

@@ -45,6 +45,16 @@ class RemoteController extends ChangeNotifier {
   List<ActiveSession> active = [];
   Map<String, dynamic> serverInfo = const {};
 
+  /// Latest GitHub release as the PC core reports it (`/api/update`).
+  Map<String, dynamic> update = const {};
+  String? dismissedUpdate;
+  bool get updateAvailable =>
+      update['available'] == true && update['latest'] != null && update['latest'] != dismissedUpdate;
+  void dismissUpdate() {
+    dismissedUpdate = update['latest'] as String?;
+    notifyListeners();
+  }
+
   bool get connected => status == RemoteStatus.connected;
   List<RemoteApproval> get approvals => debugApprovals ?? gateway?.approvals ?? const [];
 
@@ -137,6 +147,7 @@ class RemoteController extends ChangeNotifier {
     boardError = null;
     active = [];
     serverInfo = const {};
+    update = const {};
     status = RemoteStatus.disconnected;
   }
 
@@ -371,6 +382,7 @@ class RemoteController extends ChangeNotifier {
       }
     } catch (_) {}
     serverInfo = await g.serverStatus();
+    update = await g.updateInfo();
     notifyListeners();
   }
 

@@ -303,3 +303,80 @@ def status(cfg: dict | None = None) -> dict[str, Any]:
     ok = vault.is_dir() and not is_foreign_path(vault)
     return {"configured": True, "connected": ok, "path": str(vault), "note_count": note_count(vault) if ok else 0,
             **({} if ok else {"error": "folder not found" if not vault.is_dir() else "refused"})}
+
+
+# ---- viewer helpers (desktop page + phone, read-only) ----------------------
+def open_uri(vault: Path, rel: str) -> str:
+    """``obsidian://open?vault=<name>&file=<path>`` — opens the note in the Obsidian app."""
+    from urllib.parse import quote
+    rel = rel[:-3] if rel.lower().endswith(".md") else rel
+    return f"obsidian://open?vault={quote(vault.resolve().name)}&file={quote(rel)}"
+
+
+def tree(vault: Path) -> dict[str, Any]:
+    """Folders and notes as a nested tree (folders first, both sorted)."""
+    root: dict[str, Any] = {"name": vault.resolve().name, "path": "", "type": "folder", "children": []}
+    index: dict[str, dict] = {"": root}
+    for p in iter_notes(vault):
+        rel = rel_of(vault, p)
+        parts = rel.split("/")
+        parent = root
+        for i in range(len(parts) - 1):
+            key = "/".join(parts[: i + 1])
+            if key not in index:
+                node = {"name": parts[i], "path": key, "type": "folder", "children": []}
+                parent["children"].append(node)
+                index[key] = node
+            parent = index[key]
+        parent["children"].append({"name": p.stem, "path": rel, "type": "note"})
+
+    def order(n: dict) -> None:
+        n["children"].sort(key=lambda c: (c["type"] != "folder", c["name"].lower()))
+        for c in n["children"]:
+            if c["type"] == "folder":
+                order(c)
+    order(root)
+    return root
+
+
+def _resolve_target(target: str, by_stem: dict[str, str], by_path: dict[str, str]) -> str | None:
+    t = target.split("#", 1)[0].strip().lower()
+    if not t:
+        return None
+    if t.endswith(".md"):
+        t = t[:-3]
+    return by_path.get(t) or by_stem.get(t.rsplit("/", 1)[-1])
+
+
+def graph(vault: Path, limit: int = 2000) -> dict[str, Any]:
+    """Nodes = notes (+ unresolved link targets), edges = wikilinks. Degree included."""
+    notes = list(iter_notes(vault))[:limit]
+    by_stem: dict[str, str] = {}
+    by_path: dict[str, str] = {}
+    for p in notes:
+        rel = rel_of(vault, p)
+        by_stem.setdefault(p.stem.lower(), rel)
+        by_path[rel[:-3].lower()] = rel
+    nodes: dict[str, dict] = {rel_of(vault, p): {"id": rel_of(vault, p), "title": p.stem, "exists": True, "degree": 0}
+                              for p in notes}
+    edges: set[tuple[str, str]] = set()
+    for p in notes:
+        src = rel_of(vault, p)
+        try:
+            text = _read(p)
+        except OSError:
+            continue
+        for raw in _WIKILINK.findall(text):
+            dst = _resolve_target(raw, by_stem, by_path)
+            if dst is None:
+                name = raw.split("#", 1)[0].strip()
+                if not name:
+                    continue
+                dst = f"?{name}"
+                nodes.setdefault(dst, {"id": dst, "title": name, "exists": False, "degree": 0})
+            if dst != src and (src, dst) not in edges:
+                edges.add((src, dst))
+    for s, d in edges:
+        nodes[s]["degree"] += 1
+        nodes[d]["degree"] += 1
+    return {"nodes": list(nodes.values()), "edges": [{"source": s, "target": d} for s, d in sorted(edges)]}

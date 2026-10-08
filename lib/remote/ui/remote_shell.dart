@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../main.dart' show previewTab;
 import '../../theme/neovarch_mobile_theme.dart';
@@ -102,6 +103,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
                   viewPadding: mq.viewPadding.copyWith(bottom: mq.viewPadding.bottom + reserve)),
               child: Column(children: [
                 if (!remote.connected) const _ConnectionStrip(),
+                if (remote.connected && remote.updateAvailable) const _UpdateStrip(),
                 Expanded(
                   // Builder: removePadding must read the MediaQuery above (the
                   // one that reserves room for the floating nav bar), not the
@@ -171,6 +173,49 @@ class _ConnectionStrip extends ConsumerWidget {
             ]),
           ),
           TextButton(onPressed: busy ? null : r.reconnect, child: const Text('Sambungkan')),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// "Update tersedia vX" — flat strip under the status bar, links to the release.
+class _UpdateStrip extends ConsumerWidget {
+  const _UpdateStrip();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final r = ref.watch(remoteProvider);
+    final u = r.update;
+    final url = '${u['download_url'] ?? u['url'] ?? ''}';
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        key: const ValueKey('nv-update-strip'),
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+        decoration: BoxDecoration(
+          color: NV.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: NV.border),
+        ),
+        child: Row(children: [
+          Container(width: 8, height: 8, decoration: const BoxDecoration(color: NV.red, shape: BoxShape.circle)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Update tersedia v${u['latest']}',
+                style: const TextStyle(color: NV.text, fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+          if (url.isNotEmpty)
+            TextButton(
+              onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+              child: const Text('Unduh'),
+            ),
+          IconButton(
+            tooltip: 'Tutup',
+            icon: const Icon(Icons.close_rounded, size: 18, color: NV.muted),
+            onPressed: r.dismissUpdate,
+          ),
         ]),
       ),
     );
