@@ -22,6 +22,18 @@ from aiohttp import web
 
 REQUESTS = web.AppKey("requests", list)
 DELAY = web.AppKey("delay", float)
+AUTH = web.AppKey("auth", dict)
+
+
+@web.middleware
+async def _auth(request: web.Request, handler):
+    need = request.app[AUTH]
+    if need.get("api_key") and request.headers.get("Authorization") != f"Bearer {need['api_key']}":
+        return web.json_response({"error": {"message": "invalid api key"}}, status=401)
+    for k, v in (need.get("headers") or {}).items():
+        if request.headers.get(k) != v:
+            return web.json_response({"error": {"message": f"missing header {k}"}}, status=403)
+    return await handler(request)
 
 
 def _decide(messages: list[dict]) -> dict:
@@ -92,12 +104,16 @@ async def models(_request: web.Request) -> web.Response:
     return web.json_response({"object": "list", "data": [{"id": "mock-model", "object": "model"}]})
 
 
-def build_app(delay: float = 0.03) -> web.Application:
-    app = web.Application()
+def build_app(delay: float = 0.03, api_key: str | None = None, headers: dict | None = None,
+              models_route: bool = True) -> web.Application:
+    """api_key / headers: require them on every request (401/403 otherwise)."""
+    app = web.Application(middlewares=[_auth])
     app[REQUESTS] = []
     app[DELAY] = delay
+    app[AUTH] = {"api_key": api_key, "headers": headers or {}}
     app.router.add_post("/v1/chat/completions", completions)
-    app.router.add_get("/v1/models", models)
+    if models_route:
+        app.router.add_get("/v1/models", models)
     return app
 
 
@@ -106,5 +122,16 @@ if __name__ == "__main__":
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=18080)
     ap.add_argument("--delay", type=float, default=0.05)
+    ap.add_argument("--api-key", default=None, help="require this Bearer key")
+    ap.add_argument("--header", action="append", default=[], help="require 'Name: value'")
+    ap.add_argument("--cert", default=None, help="serve https with this cert (and --key)")
+    ap.add_argument("--key", default=None)
     a = ap.parse_args()
-    web.run_app(build_app(a.delay), host=a.host, port=a.port, print=lambda *_: print(f"mock LLM on {a.host}:{a.port}", flush=True))
+    hdrs = dict((h.split(":", 1)[0].strip(), h.split(":", 1)[1].strip()) for h in a.header)
+    ctx = None
+    if a.cert:
+        import ssl
+        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ctx.load_cert_chain(a.cert, a.key)
+    web.run_app(build_app(a.delay, a.api_key, hdrs), host=a.host, port=a.port, ssl_context=ctx,
+                print=lambda *_: print(f"mock LLM on {'https' if ctx else 'http'}://{a.host}:{a.port}", flush=True))

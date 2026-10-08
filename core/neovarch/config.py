@@ -149,9 +149,27 @@ def provider_entries(cfg: dict) -> dict[str, dict]:
         if isinstance(spec, dict):
             entries[str(name)] = spec
     for spec in cfg.get("custom_providers") or []:
-        if isinstance(spec, dict) and spec.get("name"):
-            entries[str(spec["name"])] = spec
+        if isinstance(spec, dict) and (spec.get("id") or spec.get("name")):
+            entries[str(spec.get("id") or spec["name"])] = spec
+            if spec.get("name") and str(spec["name"]) not in entries:
+                entries[str(spec["name"])] = spec
     return entries
+
+
+def endpoint_headers(spec: dict) -> dict[str, str]:
+    """Custom HTTP headers of an endpoint. Values live in .env (they can be secrets)."""
+    import json as _json
+    env = str(spec.get("headers_env") or "")
+    raw = secret(env) if env else ""
+    out: dict[str, str] = {}
+    if raw:
+        try:
+            data = _json.loads(raw)
+            if isinstance(data, dict):
+                out = {str(k): str(v) for k, v in data.items()}
+        except ValueError:
+            pass
+    return out
 
 
 def resolve_endpoint(cfg: dict) -> dict[str, str]:
@@ -179,6 +197,8 @@ def resolve_endpoint(cfg: dict) -> dict[str, str]:
         "api_key": api_key,
         "model": str(model_cfg.get("default") or spec.get("model") or ""),
         "provider": provider or "custom",
+        "headers": endpoint_headers(spec) if spec else {},
+        "verify_ssl": not bool(spec.get("allow_insecure_tls")) if spec else True,
     }
 
 

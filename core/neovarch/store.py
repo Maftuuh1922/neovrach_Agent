@@ -106,6 +106,12 @@ def summarize(rec: dict) -> dict:
         "started_at": rec.get("created_at", 0),
         "source": rec.get("source", "cli"),
         "model": rec.get("model", ""),
+        "cwd": rec.get("cwd") or None,
+        "ended_at": None,
+        "is_active": False,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "tool_call_count": sum(len(m.get("tool_calls") or []) for m in msgs if m.get("role") == "assistant"),
     }
 
 

@@ -377,12 +377,14 @@ class Gateway:
                     "source": "config", "free_tier_route": False, "profile": "default",
                     "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
         if method == "model.options":
-            info = self.model_info()
-            name = info["provider"] or "custom"
-            return {"model": info["model"], "provider": name, "providers": [{
-                "slug": name, "name": name, "models": [info["model"]] if info["model"] else [],
-                "total_models": 1 if info["model"] else 0, "is_current": True, "is_user_defined": True,
-                "api_url": info["base_url"] or None, "authenticated": info["configured"], "source": "config"}]}
+            from neovarch import providers
+            return providers.model_options(cfgmod.load_config(), bool(p.get("include_unconfigured")))
+        if method in ("model.set", "model.switch"):
+            from neovarch import providers
+            cfg = cfgmod.load_config()
+            res = providers.set_model(cfg, {"scope": "main", **p})
+            cfgmod.save_config(cfg)
+            return res
         # ---- features the Neovarch core does not have (yet): answer "off", never an error
         if method == "pet.info":
             return {"enabled": False}
@@ -551,34 +553,183 @@ def build_app(gw: Gateway) -> web.Application:
     async def model_info(_):
         return web.json_response(gw.model_info())
 
-    async def model_options(_):
-        cfg = cfgmod.load_config()
-        info = gw.model_info()
-        providers = [{"name": n, "base_url": s.get("base_url", ""), "models": [s.get("model")] if s.get("model") else []}
-                     for n, s in cfgmod.provider_entries(cfg).items()]
-        return web.json_response({"current": info, "providers": providers,
-                                  "models": [{"id": info["model"], "provider": info["provider"]}] if info["model"] else []})
+    async def model_options(request):
+        from neovarch import providers
+        inc = request.query.get("include_unconfigured") in ("1", "true")
+        return web.json_response(providers.model_options(cfgmod.load_config(), inc))
 
     async def model_set(request):
+        from neovarch import providers
         body = await _json(request)
         cfg = cfgmod.load_config()
-        if body.get("model"):
-            cfgmod.set_path(cfg, "model.default", body["model"])
-        if body.get("provider"):
-            cfgmod.set_path(cfg, "model.provider", body["provider"])
+        try:
+            res = providers.set_model(cfg, body)
+        except providers.EndpointError as exc:
+            return web.json_response({"ok": False, "detail": str(exc), "message": str(exc)}, status=422)
         cfgmod.save_config(cfg)
-        return web.json_response({"ok": True, **gw.model_info()})
+        gw.broadcast_event("model.changed", None, {"provider": res.get("provider"), "model": res.get("model")})
+        return web.json_response(res)
+
+    async def model_recommended(request):
+        from neovarch import providers
+        prov = request.query.get("provider") or ""
+        cfg = cfgmod.load_config()
+        model = ""
+        if prov in cfgmod.PRESETS:
+            model = cfgmod.PRESETS[prov]["model"]
+        elif prov.startswith("custom:"):
+            spec = providers.find_endpoint(cfg, prov.split(":", 1)[1]) or {}
+            model = str(spec.get("model") or (spec.get("models") or [""])[0])
+        return web.json_response({"provider": prov, "model": model, "free_tier": None})
+
+    async def model_auxiliary(_):
+        info = gw.model_info()
+        return web.json_response({"main": {"model": info["model"], "provider": info["provider"]}, "tasks": []})
+
+    # ---- providers / custom endpoints --------------------------------------
+    async def custom_endpoints_get(_):
+        from neovarch import providers
+        return web.json_response(providers.endpoints_response(cfgmod.load_config()))
+
+    async def custom_endpoints_save(request):
+        from neovarch import providers
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        try:
+            eid = providers.save_endpoint(cfg, body)
+        except providers.EndpointError as exc:
+            return web.json_response({"ok": False, "detail": str(exc), "message": str(exc)}, status=422)
+        cfgmod.save_config(cfg)
+        gw.broadcast_event("model.changed", None, {})
+        return web.json_response(providers.endpoints_response(cfg, eid))
+
+    async def custom_endpoints_validate(request):
+        from neovarch import providers
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        key = str(body.get("api_key") or "")
+        headers_raw = body.get("headers")
+        insecure = bool(body.get("allow_insecure_tls"))
+        existing = providers.find_endpoint(cfg, providers.slugify(body.get("id") or body.get("name") or ""))
+        if existing is not None:
+            key = key or cfgmod.secret(str(existing.get("key_env") or ""))
+            if headers_raw is None:
+                headers_raw = cfgmod.endpoint_headers(existing)
+        try:
+            headers = providers.parse_headers(headers_raw)
+        except providers.EndpointError as exc:
+            return web.json_response({"ok": False, "reachable": False, "message": str(exc), "models": []})
+        return web.json_response(await providers.probe(str(body.get("base_url") or ""), key, headers, insecure))
+
+    async def custom_endpoint_delete(request):
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        providers.delete_endpoint(cfg, request.match_info["eid"])
+        cfgmod.save_config(cfg)
+        return web.json_response(providers.endpoints_response(cfg))
+
+    async def custom_endpoint_activate(request):
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        spec = providers.find_endpoint(cfg, request.match_info["eid"])
+        if spec is None:
+            return web.json_response({"ok": False, "detail": "endpoint tidak ditemukan"}, status=404)
+        providers.activate(cfg, f"custom:{request.match_info['eid']}", str(spec.get("model") or ""))
+        cfgmod.save_config(cfg)
+        gw.broadcast_event("model.changed", None, {})
+        return web.json_response({"ok": True, "provider": f"custom:{request.match_info['eid']}",
+                                  "model": str(spec.get("model") or "")})
+
+    async def providers_validate(request):
+        from neovarch import providers
+        body = await _json(request)
+        key, value = str(body.get("key") or ""), str(body.get("value") or "")
+        slug = providers.preset_for_env(key)
+        if not slug:
+            return web.json_response({"ok": True, "reachable": False, "message": "Disimpan tanpa uji koneksi."})
+        if not value:
+            return web.json_response({"ok": False, "reachable": False, "message": "API key kosong."})
+        return web.json_response(await providers.probe(cfgmod.PRESETS[slug]["base_url"], value))
+
+    async def env_get(_):
+        from neovarch import providers
+        return web.json_response(providers.env_vars())
+
+    async def env_put(request):
+        body = await _json(request)
+        key = str(body.get("key") or "")
+        if not key or not key.replace("_", "").isalnum():
+            return web.json_response({"ok": False, "detail": "nama variabel tidak valid"}, status=422)
+        cfgmod.write_env_value(key, str(body.get("value") or ""))
+        gw.broadcast_event("model.changed", None, {})
+        return web.json_response({"ok": True})
+
+    async def env_delete(request):
+        body = await _json(request)
+        key = str(body.get("key") or request.query.get("key") or "")
+        if key:
+            cfgmod.write_env_value(key, "")
+        return web.json_response({"ok": True})
+
+    async def env_reveal(request):
+        body = await _json(request)
+        key = str(body.get("key") or "")
+        return web.json_response({"key": key, "value": cfgmod.read_env_file().get(key, "")})
+
+    async def config_schema(_):
+        return web.json_response(config_schema_payload())
 
     async def skills(_):
-        return web.json_response({"skills": list_skills()})
+        # The renderer expects SkillInfo[]
+        return web.json_response([{"name": s["name"], "description": s["description"], "category": "neovarch",
+                                   "enabled": True, "provenance": "agent", "path": s["path"]} for s in list_skills()])
+
+    async def skill_content(request):
+        name = request.query.get("name") or ""
+        for s in list_skills():
+            if s["name"] == name:
+                return web.json_response({"name": name, "path": s["path"],
+                                          "content": Path(s["path"]).read_text(encoding="utf-8", errors="replace")})
+        return web.json_response({"name": name, "path": "", "content": ""})
 
     async def tools(_):
-        return web.json_response({"toolsets": [{"name": "core", "enabled": True,
-                                                "tools": [t["function"]["name"] for t in tool_schemas()]}]})
+        # The renderer expects ToolsetInfo[]
+        return web.json_response([{"name": "core", "label": "Neovarch core", "description": "Shell, file, web, memori, skill",
+                                   "enabled": True, "configured": True,
+                                   "tools": [t["function"]["name"] for t in tool_schemas()]}])
 
     async def profiles(_):
-        return web.json_response({"profiles": [{"name": "default", "active": True, "path": str(neovarch_home())}],
+        info = gw.model_info()
+        return web.json_response({"profiles": [{"name": "default", "display_name": "Neovarch", "active": True,
+                                                "is_default": True, "has_env": cfgmod.env_path().exists(),
+                                                "model": info["model"] or None, "provider": info["provider"] or None,
+                                                "skill_count": len(list_skills()), "path": str(neovarch_home())}],
                                   "active": "default"})
+
+    async def sessions_search(request):
+        q = (request.query.get("q") or "").strip().lower()
+        results = []
+        if q:
+            for summary in gw.store.list(limit=500):
+                rec = gw.store.load(summary["id"]) or {}
+                for m in rec.get("messages", []):
+                    text = m.get("content") if isinstance(m.get("content"), str) else ""
+                    if text and q in text.lower():
+                        i = text.lower().index(q)
+                        results.append({**summary, "session_id": summary["id"], "snippet": text[max(0, i - 60):i + 100],
+                                        "role": m.get("role")})
+                        break
+                if len(results) >= 50:
+                    break
+        return web.json_response({"results": results})
+
+    async def sessions_sidebar(request):
+        try:
+            limit = int(request.query.get("recents_limit") or request.query.get("recentsLimit") or 50)
+        except ValueError:
+            limit = 50
+        empty = {"sessions": []}
+        return web.json_response({"recents": {"sessions": gw.store.list(limit=limit)}, "cron": empty, "messaging": empty})
 
     async def empty_list(request):
         key = request.path.rstrip("/").rsplit("/", 1)[-1]
@@ -638,11 +789,30 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/model/info", model_info)
     r.add_get("/api/model/options", model_options)
     r.add_post("/api/model/set", model_set)
+    r.add_get("/api/model/recommended-default", model_recommended)
+    r.add_get("/api/model/auxiliary", model_auxiliary)
+    r.add_get("/api/config/schema", config_schema)
+    r.add_get("/api/providers/custom-endpoints", custom_endpoints_get)
+    r.add_post("/api/providers/custom-endpoints", custom_endpoints_save)
+    r.add_post("/api/providers/custom-endpoints/validate", custom_endpoints_validate)
+    r.add_post("/api/providers/custom-endpoints/{eid}/activate", custom_endpoint_activate)
+    r.add_delete("/api/providers/custom-endpoints/{eid}", custom_endpoint_delete)
+    r.add_post("/api/providers/validate", providers_validate)
+    r.add_get("/api/env", env_get)
+    r.add_put("/api/env", env_put)
+    r.add_post("/api/env", env_put)
+    r.add_delete("/api/env", env_delete)
+    r.add_post("/api/env/reveal", env_reveal)
     r.add_get("/api/skills", skills)
+    r.add_get("/api/skills/content", skill_content)
+    r.add_get("/api/sessions/search", sessions_search)
+    r.add_get("/api/profiles/sessions/sidebar", sessions_sidebar)
     r.add_get("/api/tools/toolsets", tools)
     r.add_get("/api/profiles", profiles)
-    for p in ("/api/cron/jobs", "/api/mcp/servers", "/api/webhooks", "/api/agents", "/api/plugins"):
-        r.add_get(p, empty_list)
+    async def cron_jobs(_):
+        return web.json_response([])
+
+    r.add_get("/api/cron/jobs", cron_jobs)
     r.add_get("/api/plugins/kanban/board", kanban_board)
     r.add_post("/api/plugins/kanban/tasks", kanban_create)
     r.add_patch("/api/plugins/kanban/tasks/{tid}", kanban_patch)
@@ -681,7 +851,34 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/fs/list", fs_list)
     r.add_get("/api/fs/read", fs_read)
     r.add_get("/api/fs/default", fs_default)
+    r.add_get("/api/fs/default-cwd", fs_default)
+    # Last: quiet answers for every other route the desktop calls (never 404/500).
+    from neovarch import compat
+    compat.install(r, _log_unhandled)
     return app
+
+
+def config_schema_payload() -> dict:
+    """The config fields the Neovarch core actually reads (Settings renders these)."""
+    from neovarch import providers
+    prov_opts = [""] + list(cfgmod.PRESETS) + ["custom"]
+    try:
+        prov_opts += [f"custom:{e['id']}" for e in providers.endpoints_response(cfgmod.load_config())["endpoints"]]
+    except Exception:
+        pass
+    return {"category_order": ["model", "chat", "safety", "advanced"], "fields": {
+        "model.default": {"category": "model", "type": "string", "description": "ID model yang dipakai obrolan baru."},
+        "model.provider": {"category": "model", "type": "select", "options": prov_opts,
+                           "description": "Penyedia model (preset, custom, atau custom:<endpoint>)."},
+        "model.base_url": {"category": "model", "type": "string", "clearable": True,
+                           "description": "URL OpenAI-compatible untuk provider custom."},
+        "model.context_length": {"category": "model", "type": "number", "description": "Panjang konteks model (token)."},
+        "model_context_length": {"category": "model", "type": "number", "description": "Panjang konteks model (token)."},
+        "approvals.mode": {"category": "safety", "type": "select", "options": ["ask", "off"],
+                           "description": "ask = tanya sebelum perintah berbahaya; off = jalankan tanpa bertanya."},
+        "agent.max_turns": {"category": "advanced", "type": "number", "description": "Batas panggilan model per giliran."},
+        "agent.system_prompt": {"category": "chat", "type": "text", "description": "Instruksi tambahan setelah SOUL.md."},
+    }}
 
 
 def _cors(request: web.Request) -> dict:

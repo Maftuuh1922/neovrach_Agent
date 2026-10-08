@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable
 
@@ -60,6 +61,8 @@ async def stream_chat(
     on_reasoning: Callable[[str], Any] | None = None,
     timeout_s: float = 600,
     session: aiohttp.ClientSession | None = None,
+    extra_headers: dict[str, str] | None = None,
+    verify_ssl: bool = True,
 ) -> Completion:
     """POST a streaming chat completion; call back per text/reasoning delta."""
     if not base_url:
@@ -73,13 +76,16 @@ async def stream_chat(
     headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+    for k, v in (extra_headers or {}).items():
+        if k and v is not None:
+            headers[str(k)] = str(v)
 
     out = Completion()
     calls: dict[int, ToolCall] = {}
     own = session is None
     sess = session or aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout_s))
     try:
-        async with sess.post(url, json=body, headers=headers) as resp:
+        async with sess.post(url, json=body, headers=headers, ssl=ssl.create_default_context() if verify_ssl else False) as resp:
             if resp.status >= 400:
                 detail = (await resp.text())[:800]
                 raise LLMError(f"provider returned HTTP {resp.status}: {detail}")

@@ -278,6 +278,10 @@ export interface CustomEndpoint {
   context_length?: null | number
   discover_models: boolean
   has_api_key: boolean
+  /** Names of the custom HTTP headers sent to this endpoint (values stay in the core's .env). */
+  header_names?: string[]
+  /** Accept a self-signed TLS certificate (only when the user ticked it). */
+  allow_insecure_tls?: boolean
   id: string
   is_current?: boolean
   model: string
@@ -303,6 +307,9 @@ export interface CustomEndpointUpdate {
   base_url: string
   context_length?: number
   discover_models?: boolean
+  /** Extra HTTP headers, one `Name: value` per line. Omitted = keep the saved ones. */
+  headers?: string
+  allow_insecure_tls?: boolean
   id?: string
   make_default?: boolean
   model: string
