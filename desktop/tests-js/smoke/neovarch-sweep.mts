@@ -223,6 +223,73 @@ await sleep(2000)
   await shot('vault-graph.png')
 }
 
+// Scheduled jobs: create one through the real dialog, see it listed and in the core.
+await page.locator('[data-nv-rail="cron"]').first().click()
+await sleep(2000)
+{
+  const add = page.getByRole('button', { name: /^Jadwal baru$/ }).first()
+  if (!(await add.count())) fail('cron: "Jadwal baru" button missing')
+  else {
+    await add.click()
+    await sleep(800)
+    await page.locator('#cron-name').fill('Ringkasan sweep')
+    await page.locator('#cron-prompt').fill('Rangkum berita hari ini')
+    await page.getByRole('button', { name: /^Buat jadwal$/ }).click()
+    await sleep(2000)
+    const body: string = await page.evaluate(() => document.body.innerText)
+    report.cronCreated = body.includes('Ringkasan sweep')
+    if (!report.cronCreated) fail('cron: created job not listed')
+    const jobs = JSON.parse(fs.readFileSync(path.join(NV_HOME, 'cron.json'), 'utf8') || '{}')
+    const list = Array.isArray(jobs) ? jobs : jobs.jobs ?? []
+    if (!list.some((j: { name?: string }) => j.name === 'Ringkasan sweep')) fail('cron: job not saved in ~/.neovarch/cron.json')
+    await shot('cron-created.png')
+  }
+  await page.keyboard.press('Escape')
+  await sleep(500)
+}
+
+// Document preview: a DOCX (made by Pandoc) and a PDF, rendered in the app.
+{
+  const docDir = path.join(DIR, 'docs')
+  fs.mkdirSync(docDir, { recursive: true })
+  const docx = path.join(docDir, 'laporan.docx')
+  fs.writeFileSync(path.join(docDir, 'laporan.md'), '# BAB I Pendahuluan\n\nIni laporan uji pratinjau.\n\n# BAB II Metode\n\nTeks.\n')
+  try { execFileSync('pandoc', ['laporan.md', '-o', docx], { cwd: docDir }) } catch { fail('preview: pandoc missing, cannot make a docx') }
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 6 0 R >> >> >>',
+    '<< /Length 44 >>\nstream\nBT /F1 24 Tf 72 760 Td (Halaman satu) Tj ET\nendstream',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 7 0 R /Resources << /Font << /F1 6 0 R >> >> >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Length 43 >>\nstream\nBT /F1 24 Tf 72 760 Td (Halaman dua) Tj ET\nendstream']
+  let pdf = '%PDF-1.4\n'
+  const offs: number[] = []
+  objs.forEach((o, i) => { offs.push(pdf.length); pdf += `${i + 1} 0 obj\n${o}\nendobj\n` })
+  const xref = pdf.length
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map(o => `${String(o).padStart(10, '0')} 00000 n \n`).join('')
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  const pdfPath = path.join(docDir, 'laporan.pdf')
+  fs.writeFileSync(pdfPath, pdf)
+  for (const [file, kind] of [[pdfPath, 'pdf'], [docx, 'docx']] as const) {
+    await page.evaluate(p => window.dispatchEvent(new CustomEvent('neovarch:preview-doc', { detail: { path: p } })), file)
+    let ok = false
+    for (let i = 0; i < 30 && !ok; i++) {
+      await sleep(500)
+      ok = kind === 'pdf'
+        ? (await page.locator('[data-nv-doc-preview="pdf"] canvas[data-nv-pdf-page]').count()) === 2
+        : (await page.locator('[data-nv-doc-preview="docx"] section.nv-docx').count()) > 0
+    }
+    ;(report as Record<string, unknown>)[`preview_${kind}`] = ok
+    if (!ok) fail(`preview: ${kind} did not render`)
+    if (kind === 'docx' && ok) {
+      const text = await page.locator('[data-nv-doc-preview]').innerText()
+      if (!text.includes('BAB I Pendahuluan')) fail('preview: docx text missing')
+    }
+    await shot(`preview-${kind}.png`)
+    await page.keyboard.press('Escape')
+    await sleep(500)
+  }
+}
+
 const SETTINGS = ['config:model', 'providers', 'config:chat', 'config:appearance', 'config:workspace', 'notifications',
   'keybinds', 'config:voice', 'remote', 'gateway', 'config:safety', 'vault', 'keys', 'config:memory', 'sessions', 'plugins',
   'config:advanced', 'config:browser', 'billing', 'about']
