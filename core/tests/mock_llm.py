@@ -1,0 +1,110 @@
+"""A tiny OpenAI-compatible mock provider for tests and desktop smoke runs.
+
+    python core/tests/mock_llm.py --port 18080
+
+Behaviour (deterministic, no network):
+
+* last wire message is a tool result -> streams ``Selesai. Hasil alat: <first line>``;
+* user text contains ``tool`` / ``alat``   -> one ``shell`` tool call ``echo neovarch-tool-ok``;
+* user text contains ``danger``           -> a ``shell`` call that needs approval
+  (``rm -rf /tmp/neovarch-approval-probe``);
+* anything else                           -> streams ``Halo dari mock Neovarch. Kamu bilang: <text>``
+  word by word, with usage.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+
+from aiohttp import web
+
+REQUESTS = web.AppKey("requests", list)
+DELAY = web.AppKey("delay", float)
+
+
+def _decide(messages: list[dict]) -> dict:
+    last = messages[-1] if messages else {}
+    if last.get("role") == "tool":
+        first = (last.get("content") or "").splitlines()
+        tail = next((ln for ln in first[1:] if ln.strip()), first[0] if first else "")
+        return {"text": f"Selesai. Hasil alat: {tail}"}
+    text = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            text = str(m.get("content") or "")
+            break
+    low = text.lower()
+    if "danger" in low:
+        return {"tool": ("shell", {"command": "rm -rf /tmp/neovarch-approval-probe"})}
+    if "tool" in low or "alat" in low:
+        return {"tool": ("shell", {"command": "echo neovarch-tool-ok"})}
+    return {"text": f"Halo dari mock Neovarch. Kamu bilang: {text}"}
+
+
+def _chunk(delta: dict, finish: str | None = None) -> bytes:
+    event = {"id": "mock", "object": "chat.completion.chunk", "model": "mock-model",
+             "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+    return f"data: {json.dumps(event)}\n\n".encode()
+
+
+async def completions(request: web.Request) -> web.StreamResponse:
+    body = await request.json()
+    request.app[REQUESTS].append(body)
+    plan = _decide(body.get("messages") or [])
+    delay = request.app[DELAY]
+    if not body.get("stream"):
+        if "tool" in plan:
+            name, args = plan["tool"]
+            msg = {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
+        else:
+            msg = {"role": "assistant", "content": plan["text"]}
+        return web.json_response({"choices": [{"index": 0, "message": msg, "finish_reason": "stop"}],
+                                  "usage": {"prompt_tokens": 10, "completion_tokens": 5}})
+    resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
+    await resp.prepare(request)
+    await resp.write(_chunk({"role": "assistant"}))
+    if "tool" in plan:
+        name, args = plan["tool"]
+        await resp.write(_chunk({"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+                                                 "function": {"name": name, "arguments": ""}}]}))
+        raw = json.dumps(args)
+        for i in range(0, len(raw), 8):
+            await resp.write(_chunk({"tool_calls": [{"index": 0, "function": {"arguments": raw[i:i + 8]}}]}))
+        await resp.write(_chunk({}, "tool_calls"))
+    else:
+        words = plan["text"].split(" ")
+        for i, w in enumerate(words):
+            await resp.write(_chunk({"content": (" " if i else "") + w}))
+            await asyncio.sleep(delay)
+        await resp.write(_chunk({}, "stop"))
+    usage = {"id": "mock", "object": "chat.completion.chunk", "choices": [],
+             "usage": {"prompt_tokens": 42, "completion_tokens": 12, "total_tokens": 54}}
+    await resp.write(f"data: {json.dumps(usage)}\n\n".encode())
+    await resp.write(b"data: [DONE]\n\n")
+    await resp.write_eof()
+    return resp
+
+
+async def models(_request: web.Request) -> web.Response:
+    return web.json_response({"object": "list", "data": [{"id": "mock-model", "object": "model"}]})
+
+
+def build_app(delay: float = 0.03) -> web.Application:
+    app = web.Application()
+    app[REQUESTS] = []
+    app[DELAY] = delay
+    app.router.add_post("/v1/chat/completions", completions)
+    app.router.add_get("/v1/models", models)
+    return app
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=18080)
+    ap.add_argument("--delay", type=float, default=0.05)
+    a = ap.parse_args()
+    web.run_app(build_app(a.delay), host=a.host, port=a.port, print=lambda *_: print(f"mock LLM on {a.host}:{a.port}", flush=True))
