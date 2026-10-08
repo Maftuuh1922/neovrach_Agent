@@ -106,6 +106,12 @@ def summarize(rec: dict) -> dict:
         "started_at": rec.get("created_at", 0),
         "source": rec.get("source", "cli"),
         "model": rec.get("model", ""),
+        "cwd": rec.get("cwd") or None,
+        "ended_at": None,
+        "is_active": False,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "tool_call_count": sum(len(m.get("tool_calls") or []) for m in msgs if m.get("role") == "assistant"),
     }
 
 
@@ -125,10 +131,50 @@ class Kanban:
                 pass
         return {"tasks": [], "next": 1}
 
+    @staticmethod
+    def _card(t: dict) -> dict:
+        return {**t, "comment_count": len(t.get("comments") or []), "tenant": None,
+                "link_counts": {"parents": 0, "children": 0}}
+
+    def _event(self, data: dict, kind: str, task_id: str | None, payload: dict | None = None) -> None:
+        events = data.setdefault("events", [])
+        eid = int(data.get("event_seq", 0)) + 1
+        data["event_seq"] = eid
+        events.append({"id": eid, "kind": kind, "task_id": task_id, "payload": payload or {}, "created_at": time.time()})
+        del events[:-500]
+
+    def events_since(self, since: int = 0) -> tuple[list[dict], int]:
+        data = self._load()
+        evs = [e for e in data.get("events", []) if int(e["id"]) > since]
+        return evs, int(data.get("event_seq", 0))
+
     def board(self) -> dict:
         data = self._load()
-        columns = [{"name": s, "tasks": [t for t in data["tasks"] if t["status"] == s]} for s in self.STATUSES]
-        return {"columns": columns, "tasks": data["tasks"], "statuses": self.STATUSES}
+        cards = [self._card(t) for t in data["tasks"]]
+        columns = [{"name": s, "tasks": [t for t in cards if t["status"] == s]} for s in self.STATUSES]
+        return {"columns": columns, "tasks": cards, "statuses": self.STATUSES, "tenants": [],
+                "assignees": sorted({t["assignee"] for t in cards if t.get("assignee")}),
+                "latest_event_id": int(data.get("event_seq", 0)), "now": time.time()}
+
+    def detail(self, tid: str) -> dict | None:
+        data = self._load()
+        task = next((t for t in data["tasks"] if t["id"] == tid), None)
+        if task is None:
+            return None
+        return {"task": self._card(task), "comments": task.get("comments") or [],
+                "events": [e for e in data.get("events", []) if e.get("task_id") == tid],
+                "attachments": [], "links": {"parents": [], "children": []}, "link_tasks": [], "runs": []}
+
+    def delete(self, tid: str) -> bool:
+        with _LOCK:
+            data = self._load()
+            keep = [t for t in data["tasks"] if t["id"] != tid]
+            if len(keep) == len(data["tasks"]):
+                return False
+            data["tasks"] = keep
+            self._event(data, "deleted", tid)
+            _atomic_write(self.path, data)
+            return True
 
     def create(self, title: str, body: str = "", assignee: str | None = None, priority: int | None = None) -> dict:
         with _LOCK:
@@ -138,6 +184,7 @@ class Kanban:
                     "priority": priority or 0, "status": "todo", "comments": [], "created_at": now, "updated_at": now}
             data["next"] += 1
             data["tasks"].append(task)
+            self._event(data, "created", task["id"], {"title": title})
             _atomic_write(self.path, data)
             return task
 
@@ -146,10 +193,16 @@ class Kanban:
             data = self._load()
             for task in data["tasks"]:
                 if task["id"] == tid:
+                    old = task.get("status")
                     for k in ("title", "body", "assignee", "priority", "status"):
                         if k in fields:
                             task[k] = fields[k]
                     task["updated_at"] = time.time()
+                    if old != task.get("status"):
+                        self._event(data, "completed" if task.get("status") == "done" else "status", tid,
+                                    {"from": old, "to": task.get("status")})
+                    else:
+                        self._event(data, "updated", tid)
                     _atomic_write(self.path, data)
                     return task
         return None
@@ -162,6 +215,7 @@ class Kanban:
                     c = {"id": secrets.token_hex(4), "body": body, "author": author, "created_at": time.time()}
                     task.setdefault("comments", []).append(c)
                     task["updated_at"] = time.time()
+                    self._event(data, "commented", tid)
                     _atomic_write(self.path, data)
                     return c
         return None

@@ -37,14 +37,26 @@ interface CustomEndpointsSettingsProps {
 
 interface EndpointForm {
   apiKey: string
+  allowInsecureTls: boolean
   apiMode: CustomEndpointApiMode
   baseUrl: string
   contextLength: string
   discoverModels: boolean
+  /** `Name: value` per line; null = untouched (keep the saved headers). */
+  headers: null | string
   id: string
   makeDefault: boolean
   model: string
   name: string
+}
+
+// Neovarch copy for the fields the Hermes form did not have.
+const NV_ENDPOINT_COPY = {
+  headers: 'Header tambahan (opsional)',
+  headersPlaceholder: 'X-Api-Key: rahasia\nX-Tenant: tim-saya',
+  headersSaved: (names: string[]) => `Tersimpan: ${names.join(', ')}. Isi ulang untuk mengganti.`,
+  insecureTls: 'Izinkan sertifikat self-signed',
+  urlHint: 'Endpoint OpenAI-compatible apa pun: https://gateway-online/v1 atau http://localhost:PORT/v1 (LAN/lokal, port bebas).'
 }
 
 // Same choices as `hermes model`'s custom-provider setup; '' = runtime auto-detect.
@@ -56,11 +68,13 @@ const API_MODE_OPTIONS: readonly { id: CustomEndpointApiMode; label: string }[] 
 ]
 
 const EMPTY_FORM: EndpointForm = {
+  allowInsecureTls: false,
   apiKey: '',
   apiMode: '',
   baseUrl: '',
   contextLength: '',
   discoverModels: true,
+  headers: null,
   id: '',
   makeDefault: true,
   model: '',
@@ -69,11 +83,13 @@ const EMPTY_FORM: EndpointForm = {
 
 function formFromEndpoint(endpoint: CustomEndpoint): EndpointForm {
   return {
+    allowInsecureTls: Boolean(endpoint.allow_insecure_tls),
     apiKey: '',
     apiMode: endpoint.api_mode ?? '',
     baseUrl: endpoint.base_url,
     contextLength: endpoint.context_length ? String(endpoint.context_length) : '',
     discoverModels: endpoint.discover_models,
+    headers: null,
     id: endpoint.id,
     makeDefault: Boolean(endpoint.is_current),
     model: endpoint.model,
@@ -97,6 +113,8 @@ function toPayload(
     api_mode: form.apiMode,
     context_length: Number.isFinite(contextLength) && contextLength > 0 ? contextLength : undefined,
     discover_models: form.discoverModels,
+    headers: form.headers === null ? undefined : form.headers,
+    allow_insecure_tls: form.allowInsecureTls,
     make_default: form.makeDefault,
     models: models?.length ? models : undefined,
     model_details: modelDetails?.length ? modelDetails : undefined
@@ -125,6 +143,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
   const [deleting, setDeleting] = useState<string | null>(null)
   const [endpoints, setEndpoints] = useState<CustomEndpoint[]>([])
   const [form, setForm] = useState<EndpointForm>(EMPTY_FORM)
+  const savedHeaderNames = endpoints.find(endpoint => endpoint.id === form.id)?.header_names ?? []
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
   // Alias metadata from the last Test; the backend resolves a picked alias to its
   // canonical model + reasoning effort on Save (#93622).
@@ -437,9 +456,10 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
               {ce.fields.endpointUrl}
               <Input
                 onChange={event => setForm(current => ({ ...current, baseUrl: event.target.value }))}
-                placeholder="http://127.0.0.1:8081/v1"
+                placeholder="https://router.contoh.com/v1  ·  http://127.0.0.1:20128/v1"
                 value={form.baseUrl}
               />
+              <span className="text-[0.6875rem] text-muted-foreground/80">{NV_ENDPOINT_COPY.urlHint}</span>
             </label>
             <fieldset className="grid min-w-0 gap-1.5 text-xs text-muted-foreground">
               <legend className="mb-1.5">{ce.apiMode}</legend>
@@ -479,6 +499,20 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
                 value={form.apiKey}
               />
             </label>
+            <label className="grid gap-1.5 text-xs text-muted-foreground">
+              {NV_ENDPOINT_COPY.headers}
+              <textarea
+                className="min-h-16 rounded-xl border border-input bg-transparent px-3 py-2 font-mono text-xs text-foreground outline-none focus-visible:border-ring"
+                data-nv-field="endpoint-headers"
+                onChange={event => setForm(current => ({ ...current, headers: event.target.value }))}
+                placeholder={NV_ENDPOINT_COPY.headersPlaceholder}
+                spellCheck={false}
+                value={form.headers ?? ''}
+              />
+              {form.headers === null && savedHeaderNames.length > 0 && (
+                <span className="text-[0.6875rem]">{NV_ENDPOINT_COPY.headersSaved(savedHeaderNames)}</span>
+              )}
+            </label>
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
               <label className="flex items-center gap-2">
                 <Checkbox
@@ -493,6 +527,14 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
                   onCheckedChange={checked => setForm(current => ({ ...current, discoverModels: checked === true }))}
                 />
                 {ce.fields.discoverModels}
+              </label>
+              <label className="flex items-center gap-2">
+                <Checkbox
+                  checked={form.allowInsecureTls}
+                  data-nv-field="endpoint-insecure-tls"
+                  onCheckedChange={checked => setForm(current => ({ ...current, allowInsecureTls: checked === true }))}
+                />
+                {NV_ENDPOINT_COPY.insecureTls}
               </label>
             </div>
             <div className="flex flex-wrap gap-2">

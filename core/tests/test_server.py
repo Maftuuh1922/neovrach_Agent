@@ -65,7 +65,7 @@ async def test_auth_and_public_routes(mock_provider, monkeypatch):
         assert (await c.get("/api/sessions", headers={"X-Hermes-Session-Token": "tok"})).status == 200
         assert (await c.get("/api/sessions?token=tok")).status == 200
         r = await c.get("/api/does-not-exist?token=tok")
-        assert r.status == 404
+        assert r.status == 200 and (await r.json())["available"] is False
         assert "does-not-exist" in (gw.store.root.parent / "logs" / "unhandled.log").read_text()
     finally:
         await c.close()

@@ -108,6 +108,8 @@ class Agent:
                     messages=wire, tools=tool_schemas(),
                     on_text=lambda t: self.emit("message.delta", {"text": t}),
                     on_reasoning=lambda t: self.emit("reasoning.delta", {"text": t}),
+                    extra_headers=endpoint.get("headers") or None,
+                    verify_ssl=endpoint.get("verify_ssl", True),
                 )
                 usage = comp.usage or usage
                 assistant: dict[str, Any] = {"role": "assistant", "content": comp.text, "ts": time.time()}
