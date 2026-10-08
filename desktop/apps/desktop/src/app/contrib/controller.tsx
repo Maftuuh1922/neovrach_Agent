@@ -14,6 +14,8 @@ import { NeovarchContextRail } from '@/components/neovarch/context-rail'
 import { NeovarchDocPreview } from '@/components/neovarch/doc-preview'
 import { NeovarchOfficePage } from '@/components/neovarch/office'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
+import { NeovarchSocialPage } from '@/components/neovarch/social'
+import { SOCIAL_ROUTE } from '@/components/neovarch/social-store'
 import { NeovarchRail } from '@/components/neovarch/rail'
 import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
 import { NeovarchUpdateBanner } from '@/components/neovarch/update-banner'
@@ -761,6 +763,16 @@ registry.register({
   title: 'Kantor',
   data: { path: OFFICE_ROUTE },
   render: () => <NeovarchOfficePage />
+})
+
+// Profil & Teman: GitHub-backed profile + friends (mutual follows) at /teman.
+registry.register({
+  id: 'nv-social',
+  area: ROUTES_AREA,
+  source: 'core',
+  title: 'Profil & Teman',
+  data: { path: SOCIAL_ROUTE },
+  render: () => <NeovarchSocialPage />
 })
 
 // Obsidian vault viewer (tree, note, backlinks, graph) at /vault.

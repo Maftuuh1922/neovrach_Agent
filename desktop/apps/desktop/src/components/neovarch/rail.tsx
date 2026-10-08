@@ -5,8 +5,10 @@ import { useLocation, useNavigate } from 'react-router'
 import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, navigateToWorkspacePage } from '@/app/routes'
 import { openNeovarchKanban } from '@/components/neovarch/home'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
+import { SOCIAL_ROUTE } from '@/components/neovarch/social-store'
 import { VAULT_ROUTE } from '@/components/neovarch/vault'
 import { Tip } from '@/components/ui/tooltip'
+import { NV_SOCIAL_ID } from '@/i18n/neovarch-social'
 import {
   Brain,
   Clock,
@@ -18,6 +20,7 @@ import {
   QrCode,
   Settings,
   Sun,
+  UserCircle,
   Users,
   Zap
 } from '@/lib/icons'
@@ -41,6 +44,7 @@ export const NV_COPY = {
   cron: 'Jadwal',
   office: 'Kantor',
   vault: 'Vault Obsidian',
+  social: NV_SOCIAL_ID.rail,
   pairPhone: 'Pasangkan HP',
   settings: 'Pengaturan',
   toDark: 'Tema gelap',
@@ -118,6 +122,13 @@ export function NeovarchRail() {
       id: 'office',
       label: NV_COPY.office,
       onSelect: () => navigate(OFFICE_ROUTE)
+    },
+    {
+      active: path.startsWith(SOCIAL_ROUTE),
+      icon: <UserCircle className={icon} />,
+      id: 'social',
+      label: NV_COPY.social,
+      onSelect: () => navigate(SOCIAL_ROUTE)
     },
     {
       active: path.startsWith(VAULT_ROUTE),
