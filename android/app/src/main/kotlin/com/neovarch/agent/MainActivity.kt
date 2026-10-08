@@ -6,6 +6,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -153,6 +154,25 @@ class MainActivity : FlutterActivity() {
                 Handler(Looper.getMainLooper()).post { result.success(out) }
             }.start()
             "hasClipboardImage" -> result.success(hasClipboardImage())
+            "shareImage" -> {
+                val f = java.io.File(call.argument<String>("path") ?: "")
+                val share = java.io.File(cacheDir, "share").apply { mkdirs() }
+                val target = if (f.parentFile?.canonicalPath == share.canonicalPath) f else java.io.File(share, f.name).also { f.copyTo(it, true) }
+                val uri = Uri.parse("content://$packageName.nvshare/${Uri.encode(target.name)}")
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = call.argument<String>("mime") ?: "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    call.argument<String>("text")?.let { putExtra(Intent.EXTRA_TEXT, it) }
+                    clipData = android.content.ClipData.newRawUri("profil", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(send, "Bagikan profil").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                result.success(true)
+            }
+            "saveImageToGallery" -> Thread {
+                val out = try { saveToGallery(java.io.File(call.argument<String>("path") ?: ""), call.argument<String>("name") ?: "neovarch.png") } catch (e: Exception) { null }
+                Handler(Looper.getMainLooper()).post { result.success(out) }
+            }.start()
             "openIntent" -> result.success(openIntent(call))
             "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: ""))
             "location" -> location(result)
@@ -221,6 +241,31 @@ class MainActivity : FlutterActivity() {
             }
         } ?: return mapOf("error" to "unreadable", "name" to name)
         return mapOf("path" to f.absolutePath, "name" to name, "mime" to mime, "size" to copied)
+    }
+
+    /** Copy a PNG into Pictures/Neovarch via MediaStore (no permission on API 29+). */
+    private fun saveToGallery(src: java.io.File, name: String): String? {
+        if (!src.isFile) return null
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Neovarch")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+            contentResolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+            values.clear()
+            values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            return uri.toString()
+        }
+        @Suppress("DEPRECATION")
+        val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Neovarch").apply { mkdirs() }
+        val f = java.io.File(dir, name)
+        src.copyTo(f, true)
+        android.media.MediaScannerConnection.scanFile(this, arrayOf(f.absolutePath), arrayOf("image/png"), null)
+        return f.absolutePath
     }
 
     private fun clipItemUri(): Uri? {

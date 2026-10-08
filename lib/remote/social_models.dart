@@ -79,6 +79,7 @@ class SocialProfile {
     this.status,
     this.lastPublishedAt,
     this.paused = false,
+    this.gistUrl,
   });
   final String? login, name, avatarUrl, htmlUrl;
   final String bio;
@@ -87,6 +88,9 @@ class SocialProfile {
   final CodingStatus? status;
   final DateTime? lastPublishedAt;
   final bool paused;
+
+  /// Public gist that holds the published profile (own profile only).
+  final String? gistUrl;
 
   String get displayName => name ?? login ?? '?';
 
@@ -105,6 +109,7 @@ class SocialProfile {
       status: j['status'] is Map ? CodingStatus.fromJson(_m(j['status'])) : null,
       lastPublishedAt: DateTime.tryParse('${pub['last_published_at'] ?? ''}'),
       paused: pub['paused'] == true,
+      gistUrl: _s(pub['gist_url']) ?? _s(j['gist_url']),
     );
   }
 }

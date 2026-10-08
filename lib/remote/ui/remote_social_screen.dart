@@ -12,6 +12,8 @@ import '../../ui/widgets/common.dart' show CenterLoader;
 import '../remote_controller.dart';
 import '../social_models.dart';
 import 'nv_widgets.dart';
+import 'tech_logo.dart';
+import 'profile_share_card.dart' show showProfileShareSheet;
 
 /// Test seam for avatars (network by default).
 ImageProvider? Function(String? url) socialAvatarProvider = (url) => url == null || url.isEmpty ? null : NetworkImage(url);
@@ -25,18 +27,8 @@ class RemoteSocialScreen extends ConsumerStatefulWidget {
 
 class _RemoteSocialScreenState extends ConsumerState<RemoteSocialScreen> {
   @override
-  void initState() {
-    super.initState();
-    if (widget.autoLoad) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(remoteProvider).refreshSocial());
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final r = ref.watch(remoteProvider);
-    final p = r.socialProfile;
-    final f = r.socialFriends;
     final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
       body: RefreshIndicator(
@@ -55,45 +47,85 @@ class _RemoteSocialScreenState extends ConsumerState<RemoteSocialScreen> {
             ]),
           ),
           const NvHeader(kicker: 'github · lewat pc', title: 'Profil & Teman'),
-          if (r.socialError != null)
-            Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: NvNotice(r.socialError!)),
-          if (r.socialLoading && p == null && f == null)
-            const SizedBox(height: 240, child: CenterLoader(label: 'memuat profil dari PC…'))
-          else if (!r.socialSignedIn && r.socialError == null)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: NvEmpty(
-                title: 'PC belum masuk ke GitHub',
-                body: 'Buka Neovarch di PC → Profil & Teman → "Masuk dengan GitHub". HP ini ikut membaca profil dan teman lewat PC.',
-              ),
-            )
-          else ...[
-            if (p != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SocialProfileCard(profile: p)),
-            NvSection('teman', count: f?.friends.length, trailing: (f?.codingCount ?? 0) > 0 ? NvPill('${f!.codingCount} lagi ngoding', color: NV.red) : null),
-            if (f == null || f.friends.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: NvEmpty(title: 'Belum ada teman', body: 'Teman = akun GitHub yang saling follow. Tambah teman dari Neovarch di PC.'),
-              )
-            else
-              NvList(children: [
-                for (final fr in f.friends)
-                  FriendTile(
-                    friend: fr,
-                    onTap: () => Navigator.push(context, CupertinoPageRoute(builder: (_) => RemoteFriendScreen(login: fr.login, card: fr))),
-                  ),
-              ]),
-            if (f != null && f.pending.isNotEmpty) ...[
-              const NvSection('menunggu follow balik'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(f.pending.join(' · '), style: TextStyle(fontSize: 13, color: NV.muted)),
-              ),
-            ],
-          ],
+          SocialSection(autoLoad: widget.autoLoad),
         ]),
       ),
     );
+  }
+}
+
+/// The embeddable profile + friends block (no Scaffold): the Profil tab puts it
+/// at its top; [RemoteSocialScreen] wraps it as a pushed page.
+class SocialSection extends ConsumerStatefulWidget {
+  const SocialSection({super.key, this.autoLoad = true});
+  final bool autoLoad;
+  @override
+  ConsumerState<SocialSection> createState() => _SocialSectionState();
+}
+
+class _SocialSectionState extends ConsumerState<SocialSection> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(remoteProvider).refreshSocial();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = ref.watch(remoteProvider);
+    final p = r.socialProfile;
+    final f = r.socialFriends;
+    return Column(key: const ValueKey('social-section'), crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+      if (r.socialError != null) Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: NvNotice(r.socialError!)),
+      if (r.socialLoading && p == null && f == null)
+        const SizedBox(height: 240, child: CenterLoader(label: 'memuat profil dari PC…'))
+      else if (!r.socialSignedIn && r.socialError == null)
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: NvEmpty(
+            title: 'PC belum masuk ke GitHub',
+            body: 'Buka Neovarch di PC → Profil & Teman → "Masuk dengan GitHub". HP ini ikut membaca profil dan teman lewat PC.',
+          ),
+        )
+      else ...[
+        if (p != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SocialProfileCard(profile: p)),
+        if (p != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: OutlinedButton.icon(
+              key: const ValueKey('share-profile'),
+              onPressed: () => showProfileShareSheet(context, p, gistUrl: p.gistUrl),
+              icon: const Icon(CupertinoIcons.share, size: 18),
+              label: const Text('Bagikan profil'),
+            ),
+          ),
+        NvSection('teman', count: f?.friends.length, trailing: (f?.codingCount ?? 0) > 0 ? NvPill('${f!.codingCount} lagi ngoding', color: NV.red) : null),
+        if (f == null || f.friends.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: NvEmpty(title: 'Belum ada teman', body: 'Teman = akun GitHub yang saling follow. Tambah teman dari Neovarch di PC.'),
+          )
+        else
+          NvList(children: [
+            for (final fr in f.friends)
+              FriendTile(
+                friend: fr,
+                onTap: () => Navigator.push(context, CupertinoPageRoute(builder: (_) => RemoteFriendScreen(login: fr.login, card: fr))),
+              ),
+          ]),
+        if (f != null && f.pending.isNotEmpty) ...[
+          const NvSection('menunggu follow balik'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(f.pending.join(' · '), style: TextStyle(fontSize: 13, color: NV.muted)),
+          ),
+        ],
+      ],
+    ]);
   }
 }
 
@@ -276,7 +308,7 @@ class SocialProfileCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text('STACK YANG SERING DIPAKAI', style: NV.monoLabel(size: 9.5)),
           const SizedBox(height: 8),
-          StackChips(items: p.languages.take(8).toList()),
+          TechStackChips(items: p.languages.take(8).toList()),
         ],
         if (p.tools.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -332,7 +364,7 @@ class FriendTile extends StatelessWidget {
           if (f.topStack.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: Text(f.topStack.take(2).join(' · '), style: NV.monoLabel(size: 9.5, color: NV.muted)),
+              child: TechLogoRow(names: f.topStack),
             ),
           const SizedBox(width: 4),
           Icon(CupertinoIcons.chevron_forward, size: 16, color: NV.faint),

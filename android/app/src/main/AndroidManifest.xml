@@ -55,6 +55,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Shared profile card PNGs (cache/share) for the share sheet. -->
+        <provider
+            android:name=".NvShareProvider"
+            android:authorities="${applicationId}.nvshare"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
