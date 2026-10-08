@@ -5,9 +5,9 @@ Agen AI dari NeovarchLabs dengan dua aplikasi:
 * **Desktop (Windows, Linux) — inti.** Aplikasi Electron + Vite + React/TypeScript di folder [`desktop/`](desktop/),
   turunan dari **Hermes Desktop** milik Nous Research (lisensi MIT, lihat `desktop/LICENSE` dan `desktop/NOTICE`)
   dengan identitas Neovarch (tema merah, ikon, nama). Aplikasi ini menjalankan dan mengendalikan **inti Neovarch**
-  (folder [`core/`](core/), Python, perintah `neovarch`): chat dengan alat, sesi, skill, memori, proyek, terminal,
-  Kanban, cron, dan lain-lain. Inti ini diturunkan dari Hermes Agent (Nous Research, MIT; lihat `core/NOTICE`), tetapi
-  berdiri sendiri: data di `~/.neovarch`, tanpa perintah `hermes`, persona Neovarch Agent, telemetri Nous mati.
+  (folder [`core/`](core/), Python, perintah `neovarch`): chat dengan alat, sesi, skill, dan memori. Inti ini ditulis
+  sendiri untuk Neovarch dan tidak berisi kode Hermes Agent; desain dan protokolnya terinspirasi Hermes Agent
+  (Nous Research, MIT; lihat `NOTICE`). Data di `~/.neovarch`, tanpa perintah `hermes`. Voice, MCP, dan cron belum ada.
   Saat pertama dibuka, aplikasi memasang inti Neovarch dari repo ini bila belum ada.
 * **Berdampingan dengan Hermes Agent.** Neovarch tidak pernah membaca atau mengubah `~/.hermes`, perintah `hermes`,
   atau gateway Hermes yang sedang berjalan. Gateway remote Neovarch memakai port **9319** (9119 milik Hermes).
@@ -85,9 +85,8 @@ Token memberi kendali penuh atas agen di PC. Di Wi‑Fi umum gunakan VPN; jangan
 desktop/                      aplikasi desktop (Electron), workspace npm (npm 11)
   apps/desktop/               Electron main (electron/), renderer React (src/), electron-builder
   apps/desktop/electron/neovarch-remote.ts   gateway LAN + token untuk HP
-  HERMES_CORE_COMMIT          revisi Hermes Agent asal inti (provenance)
-core/                         inti Neovarch (Python, perintah `neovarch`), turunan Hermes Agent 61b7f957
-scripts/core-vendor/          skrip yang menghasilkan core/ dari Hermes Agent upstream
+  HERMES_CORE_COMMIT          revisi Hermes Desktop asal folder desktop/ (provenance)
+core/                         inti Neovarch (Python, perintah `neovarch`, gateway `neovarch serve`), kode sendiri
 scripts/isolation-test/       tes isolasi Neovarch ↔ Hermes (Linux)
 lib/                          aplikasi HP (Flutter)
   remote/                     pairing (QR/manual), klien gateway, transkrip, UI remote
@@ -130,5 +129,5 @@ APK dibuat oleh `.github/workflows/build-release.yml` pada tag `v*`. iOS butuh m
 
 ## Lisensi
 
-Aplikasi desktop dan inti (`core/`) diturunkan dari Hermes Desktop / Hermes Agent © Nous Research, lisensi MIT
-(lihat `desktop/LICENSE`, `desktop/NOTICE`, `core/LICENSE`, `core/NOTICE`).
+MIT (lihat `LICENSE` dan `NOTICE`). Inti (`core/`) adalah kode sendiri; desainnya terinspirasi Hermes Agent © Nous Research.
+Aplikasi desktop diturunkan dari Hermes Desktop © Nous Research, lisensi MIT (lihat `desktop/LICENSE`, `desktop/NOTICE`).
