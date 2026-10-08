@@ -26,7 +26,7 @@ async def test_update_endpoint(home, monkeypatch, aiohttp_unused_port=None):
     gh = TestServer(fake)
     await gh.start_server()
     monkeypatch.setenv("NEOVARCH_RELEASES_URL", str(gh.make_url("/latest")))
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     updates._cache.update(at=0.0, data=None)
     c = TestClient(TestServer(build_app(Gateway(isolated=False))))
     await c.start_server()

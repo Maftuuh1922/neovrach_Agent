@@ -1,4 +1,4 @@
-"""Where Neovarch keeps its data, and the guard that keeps it away from Hermes.
+"""Where Neovarch keeps its data, and the guard that keeps it away from other agents' data.
 
 Neovarch's home is ``$NEOVARCH_HOME`` or ``~/.neovarch`` (``%LOCALAPPDATA%\\neovarch``
 on Windows). Everything the core writes lives below it::
@@ -56,7 +56,7 @@ _DIRS, _FILES = _foreign_roots()
 
 
 def is_foreign_path(path) -> bool:
-    """True when ``path`` belongs to a Hermes Agent install (never ours)."""
+    """True when ``path`` belongs to a foreign agent install (never ours)."""
     try:
         raw = os.fsdecode(path)
     except TypeError:
@@ -101,7 +101,7 @@ def _audit(event: str, args) -> None:
 
 
 def install_guard() -> None:
-    """Refuse every file operation on Hermes paths for the rest of this process."""
+    """Refuse every file operation on foreign paths for the rest of this process."""
     global _GUARDED
     if _GUARDED:
         return

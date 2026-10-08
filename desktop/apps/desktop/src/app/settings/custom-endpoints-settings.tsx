@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -143,6 +143,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
   const [deleting, setDeleting] = useState<string | null>(null)
   const [endpoints, setEndpoints] = useState<CustomEndpoint[]>([])
   const [form, setForm] = useState<EndpointForm>(EMPTY_FORM)
+  const urlHintId = useId()
   const savedHeaderNames = endpoints.find(endpoint => endpoint.id === form.id)?.header_names ?? []
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
   // Alias metadata from the last Test; the backend resolves a picked alias to its
@@ -452,15 +453,21 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
                 />
               </label>
             </div>
-            <label className="grid gap-1.5 text-xs text-muted-foreground">
-              {ce.fields.endpointUrl}
-              <Input
-                onChange={event => setForm(current => ({ ...current, baseUrl: event.target.value }))}
-                placeholder="https://router.contoh.com/v1  ·  http://127.0.0.1:20128/v1"
-                value={form.baseUrl}
-              />
-              <span className="text-[0.6875rem] text-muted-foreground/80">{NV_ENDPOINT_COPY.urlHint}</span>
-            </label>
+            <div className="grid gap-1.5 text-xs text-muted-foreground">
+              {/* The hint sits outside the label so the field's accessible name stays "Endpoint URL". */}
+              <label className="grid gap-1.5">
+                {ce.fields.endpointUrl}
+                <Input
+                  aria-describedby={urlHintId}
+                  onChange={event => setForm(current => ({ ...current, baseUrl: event.target.value }))}
+                  placeholder="https://router.contoh.com/v1 · http://127.0.0.1:20128/v1"
+                  value={form.baseUrl}
+                />
+              </label>
+              <span className="text-[0.6875rem] text-muted-foreground/80" id={urlHintId}>
+                {NV_ENDPOINT_COPY.urlHint}
+              </span>
+            </div>
             <fieldset className="grid min-w-0 gap-1.5 text-xs text-muted-foreground">
               <legend className="mb-1.5">{ce.apiMode}</legend>
               <SegmentedControl

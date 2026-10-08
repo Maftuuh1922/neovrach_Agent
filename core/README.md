@@ -54,7 +54,7 @@ neovarch --version
   desktop session-protocol level this core speaks).
 * REST: `/api/health`, `/api/status`, sessions, config, model info/options/set, skills, toolsets, profiles,
   Kanban (`/api/plugins/kanban/*`), a small read-only file browser (`/api/fs/*`).
-* Features of Hermes Agent the core does not implement (voice, image generation, OAuth providers, MCP, cron,
+* Features the core does not implement (voice, image generation, OAuth providers, MCP,
   webhooks, plugins, messaging platforms) answer with empty lists, so the desktop shows them empty instead of
   failing. Any other unknown call is answered with 404 / JSON-RPC `-32601` and logged to `logs/unhandled.log`.
 

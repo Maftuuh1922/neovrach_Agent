@@ -15,7 +15,7 @@ from test_server import WS
 
 
 async def _client(monkeypatch):
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     gw = Gateway(isolated=False)
     client = TestClient(TestServer(build_app(gw)))
     await client.start_server()

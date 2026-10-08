@@ -8,7 +8,7 @@
   ``config.yaml``; the API key and any custom headers live in ``.env``.
   ``allow_insecure_tls`` (off by default) accepts a self-signed certificate.
 
-Everything is written under the Neovarch home, never under ~/.hermes.
+Everything is written under the Neovarch home, never in another agent's home.
 """
 
 from __future__ import annotations

@@ -34,7 +34,7 @@ def test_tree_and_graph(tmp_path):
 
 
 async def test_viewer_routes(home, tmp_path, monkeypatch):
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     c = TestClient(TestServer(build_app(Gateway(isolated=False))))
     await c.start_server()
     try:

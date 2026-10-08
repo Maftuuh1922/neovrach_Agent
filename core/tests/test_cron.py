@@ -59,7 +59,7 @@ def test_store_roundtrip_and_next_run(home):
 
 
 async def _client(monkeypatch):
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     monkeypatch.setenv("NEOVARCH_CRON_TICK", "0.2")
     gw = Gateway(isolated=False)
     c = TestClient(TestServer(build_app(gw)))

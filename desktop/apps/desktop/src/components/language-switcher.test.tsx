@@ -72,7 +72,8 @@ describe('LanguageSwitcher', () => {
       // Endonym only — no flag, and the option list is bundled ∪ registered.
       const options = screen.getAllByRole('option').map(option => option.textContent)
       expect(options.some(text => text?.includes('Polski'))).toBe(true)
-      expect(options.some(text => text?.includes('English'))).toBe(true)
+      // The base catalog ('en' id) is labelled as Neovarch's Indonesian base.
+      expect(options.some(text => text?.includes('Bahasa Indonesia'))).toBe(true)
 
       fireEvent.click(screen.getByRole('option', { name: /Polski/ }))
 

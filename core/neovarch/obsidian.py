@@ -3,8 +3,8 @@
 The vault is a plain folder of markdown notes (``memory.obsidian_vault`` in
 config.yaml). The agent can search, read, write and follow links in it. Every
 path is resolved and must stay inside the vault: ``..``, absolute paths and
-symlinks that point outside are refused, and so is anything that belongs to a
-Hermes Agent install.
+symlinks that point outside are refused, and so is any foreign path (see
+``paths.is_foreign_path``).
 """
 
 from __future__ import annotations

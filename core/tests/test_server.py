@@ -72,7 +72,7 @@ async def test_auth_and_public_routes(mock_provider, monkeypatch):
 
 
 async def test_ws_chat_stream_and_tool(mock_provider, monkeypatch):
-    gw, c = await _client(monkeypatch, HERMES_DASHBOARD_SESSION_TOKEN="tok")
+    gw, c = await _client(monkeypatch, NEOVARCH_SESSION_TOKEN="tok")
     try:
         ws = WS(await c.ws_connect("/api/ws?token=tok"))
         assert (await ws.pump())["params"]["type"] == "gateway.ready"
@@ -104,7 +104,7 @@ async def test_ws_chat_stream_and_tool(mock_provider, monkeypatch):
 
 async def test_approval_server_request(mock_provider, monkeypatch, tmp_path):
     monkeypatch.setenv("NEOVARCH_CWD", str(tmp_path))
-    gw, c = await _client(monkeypatch, HERMES_DASHBOARD_SESSION_TOKEN="tok")
+    gw, c = await _client(monkeypatch, NEOVARCH_SESSION_TOKEN="tok")
     try:
         ws = WS(await c.ws_connect("/api/ws?token=tok"))
         await ws.call("client.capabilities", {"server_requests": True})
@@ -152,7 +152,7 @@ async def test_remote_mode_signed_token_and_kanban(home, monkeypatch):
 
 
 async def test_boot_endpoints_answer_quietly(mock_provider, monkeypatch):
-    gw, c = await _client(monkeypatch, HERMES_DASHBOARD_SESSION_TOKEN="tok")
+    gw, c = await _client(monkeypatch, NEOVARCH_SESSION_TOKEN="tok")
     try:
         ws = WS(await c.ws_connect("/api/ws?token=tok"))
         await ws.pump()

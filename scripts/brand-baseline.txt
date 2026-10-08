@@ -1,2 +1,2 @@
-core=86
+core=71
 bundle=4715
