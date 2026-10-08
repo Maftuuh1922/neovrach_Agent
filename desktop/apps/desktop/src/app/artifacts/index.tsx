@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
+import { isPreviewableDocument, openDocPreview } from '@/components/neovarch/doc-preview'
 
 import { TitlebarIcon } from '@/app/shell/titlebar-icon'
 import { ZoomableImage } from '@/components/chat/zoomable-image'
@@ -285,6 +286,13 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         // expanding them on the client would target the wrong home or cwd.
         if (isRemoteGateway() && isArtifactFilePath(artifact.value)) {
           await downloadGatewayMediaFile(artifact.value, { sessionId: artifact.sessionId, profile: artifact.profile })
+
+          return
+        }
+
+        // PDF and DOCX open in the in-app preview, rendered as they print.
+        if (!isRemoteGateway() && isArtifactFilePath(artifact.value) && isPreviewableDocument(artifact.value)) {
+          openDocPreview(artifact.value)
 
           return
         }

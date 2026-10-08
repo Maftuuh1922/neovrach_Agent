@@ -11,6 +11,7 @@ import { IdleMount } from '@/components/idle-mount'
 import { NeovarchAppearanceSync, NeovarchFirstRunTheme } from '@/components/neovarch/appearance'
 import { NeovarchCommandBar } from '@/components/neovarch/command-bar'
 import { NeovarchContextRail } from '@/components/neovarch/context-rail'
+import { NeovarchDocPreview } from '@/components/neovarch/doc-preview'
 import { NeovarchOfficePage } from '@/components/neovarch/office'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { NeovarchRail } from '@/components/neovarch/rail'
@@ -876,6 +877,7 @@ export function ContribController() {
                 <NeovarchUpdateBanner />
                 <NeovarchAppearanceSync />
                 <NeovarchFirstRunTheme />
+                <NeovarchDocPreview />
                 {statusbarVisible && <WiredPane part="statusbar" />}
               </div>
             </ContribWiring>
