@@ -1540,3 +1540,394 @@
 .nv-home-minimal .nv-home-greeting {
   font-size: clamp(2rem, 4.5cqi, 3rem);
 }
+
+/* Update banner (GitHub Releases) — flat, rounded, no glow. */
+.nv-update-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.4rem 0.6rem 0;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 12px;
+  background: var(--nv-red-wash);
+  color: var(--nv-text);
+  font-size: 0.8rem;
+}
+.nv-update-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--nv-red);
+}
+.nv-update-muted {
+  color: var(--nv-text-3);
+}
+.nv-update-link {
+  margin-left: auto;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: var(--nv-red);
+  color: #fff;
+  font-weight: 600;
+}
+.nv-update-close {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 999px;
+  color: var(--nv-text-3);
+}
+.nv-update-close:hover {
+  color: var(--nv-text);
+}
+
+/* ── v1.4: everything rounded; session tabs read as normal words ───────── */
+:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border-radius: 999px;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] *,
+:root[data-hermes-theme='neovarch'] [data-slot='pane-tab']::before,
+:root[data-hermes-theme='neovarch'] [data-slot='pane-tab']::after {
+  border-radius: 999px;
+}
+:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'],
+:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+  border-radius: 16px !important;
+}
+:root[data-hermes-theme='neovarch'] .composer-human-message {
+  border-radius: 0 12px 12px 0;
+}
+:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+  border-radius: var(--nv-r-panel);
+}
+:root[data-hermes-theme='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
+  border-radius: var(--nv-r-panel);
+}
+
+/* ── Obsidian vault viewer ─────────────────────────────────────────────── */
+.nv-vault {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  color: var(--nv-text);
+}
+.nv-vault-unset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 2rem;
+}
+.nv-vault-side {
+  border-right: 1px solid var(--nv-line);
+  overflow: auto;
+  padding: 0.9rem 0.6rem;
+}
+.nv-vault-side-head {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.4rem 0.6rem;
+}
+.nv-vault-kicker {
+  margin: 0;
+  font-family: var(--nv-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--nv-text-3);
+}
+.nv-vault-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 0.3rem 0.6rem;
+}
+.nv-vault-tabs button {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--nv-line);
+  font-size: 0.75rem;
+  color: var(--nv-text-2);
+}
+.nv-vault-tabs .nv-vault-tab-on {
+  background: var(--nv-red);
+  border-color: var(--nv-red);
+  color: #fff;
+}
+.nv-vault-tree,
+.nv-vault-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.6rem;
+}
+.nv-vault-tree {
+  padding-left: 0;
+}
+.nv-vault-tree button {
+  display: block;
+  width: 100%;
+  padding: 0.22rem 0.5rem;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--nv-text-2);
+}
+.nv-vault-tree button:hover {
+  background: var(--nv-ink-3);
+  color: var(--nv-text);
+}
+.nv-vault-tree .nv-vault-tree-on {
+  background: var(--nv-red-wash);
+  color: var(--nv-text);
+}
+.nv-vault-tree-folder {
+  font-weight: 600;
+}
+.nv-vault-main {
+  min-width: 0;
+  overflow: auto;
+  padding: 1.25rem 1.75rem;
+}
+.nv-vault-note-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.nv-vault-title {
+  margin: 0.15rem 0 0;
+  font-family: var(--nv-font-display);
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+.nv-vault-tags {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: var(--nv-red-text);
+}
+.nv-vault-btn {
+  flex: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--nv-red);
+  color: var(--nv-text);
+  font-size: 0.8rem;
+}
+.nv-vault-btn:hover {
+  background: var(--nv-red);
+  color: #fff;
+}
+.nv-vault-md {
+  max-width: 46rem;
+  line-height: 1.6;
+  font-size: 0.92rem;
+}
+.nv-vault-md h2,
+.nv-vault-md h3,
+.nv-vault-md h4 {
+  margin: 1.2rem 0 0.4rem;
+}
+.nv-vault-md pre {
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: var(--nv-ink-2);
+  overflow: auto;
+  font-family: var(--nv-font-mono);
+  font-size: 0.8rem;
+}
+.nv-vault-md code {
+  padding: 0 0.25rem;
+  border-radius: 6px;
+  background: var(--nv-ink-3);
+  font-family: var(--nv-font-mono);
+}
+.nv-vault-wikilink {
+  color: var(--nv-red-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nv-vault-backlinks {
+  max-width: 46rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--nv-line);
+}
+.nv-vault-backlinks h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+}
+.nv-vault-backlink {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  margin-bottom: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 12px;
+  text-align: left;
+  font-size: 0.8rem;
+}
+.nv-vault-backlink span {
+  color: var(--nv-text-3);
+}
+.nv-vault-empty {
+  color: var(--nv-text-3);
+  font-size: 0.85rem;
+}
+.nv-vault-graph {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--nv-line);
+  border-radius: 14px;
+  background: var(--nv-ink-2);
+}
+.nv-vault-edge {
+  stroke: var(--nv-line);
+  stroke-width: 1;
+}
+.nv-vault-node {
+  cursor: pointer;
+}
+.nv-vault-node circle {
+  fill: var(--nv-red);
+}
+.nv-vault-node text {
+  fill: var(--nv-text-2);
+  font-size: 10px;
+}
+.nv-vault-node-ghost circle {
+  fill: var(--nv-text-3);
+}
+.nv-vault-node-on circle {
+  stroke: var(--nv-text);
+  stroke-width: 2;
+}
+
+/* ── Theme picker (first run + Settings ▸ Tampilan) ────────────────────── */
+.nv-theme-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.nv-theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.nv-theme-picker-compact .nv-theme-swatches {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.nv-theme-swatch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 12px;
+  font-size: 0.8rem;
+  color: var(--nv-text);
+}
+.nv-theme-swatch span {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  flex: none;
+}
+.nv-theme-swatch[aria-pressed='true'] {
+  border-color: var(--nv-red);
+  background: var(--nv-red-wash);
+}
+.nv-theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nv-theme-hex {
+  flex: 1;
+  min-width: 10rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--nv-text);
+  font-family: var(--nv-font-mono);
+  font-size: 0.8rem;
+}
+.nv-theme-apply,
+.nv-theme-done {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: var(--nv-red);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.nv-theme-apply:disabled {
+  opacity: 0.4;
+}
+.nv-theme-mode {
+  display: inline-flex;
+  padding: 0.15rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 999px;
+}
+.nv-theme-mode button {
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--nv-text-2);
+}
+.nv-theme-mode button[aria-pressed='true'] {
+  background: var(--nv-ink-3);
+  color: var(--nv-text);
+}
+.nv-theme-error {
+  color: var(--nv-red-text);
+  font-size: 0.78rem;
+}
+.nv-theme-firstrun {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.6);
+}
+.nv-theme-card {
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 20px;
+  background: var(--nv-ink);
+  color: var(--nv-text);
+}
+.nv-theme-card h2 {
+  margin: 0.2rem 0 0.3rem;
+  font-family: var(--nv-font-display);
+  font-size: 1.6rem;
+}
+.nv-theme-kicker {
+  margin: 0;
+  font-family: var(--nv-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--nv-text-3);
+}
+.nv-theme-sub {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--nv-text-2);
+}
+.nv-theme-done {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 0.6rem;
+}

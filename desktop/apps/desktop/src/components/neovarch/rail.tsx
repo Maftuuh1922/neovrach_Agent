@@ -5,8 +5,10 @@ import { useLocation, useNavigate } from 'react-router'
 import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, navigateToWorkspacePage } from '@/app/routes'
 import { openNeovarchKanban } from '@/components/neovarch/home'
 import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
+import { VAULT_ROUTE } from '@/components/neovarch/vault'
 import { Tip } from '@/components/ui/tooltip'
 import {
+  Brain,
   Clock,
   FileText,
   LayoutDashboard,
@@ -38,6 +40,7 @@ export const NV_COPY = {
   artifacts: 'Artefak',
   cron: 'Jadwal',
   office: 'Kantor',
+  vault: 'Vault Obsidian',
   pairPhone: 'Pasangkan HP',
   settings: 'Pengaturan',
   toDark: 'Tema gelap',
@@ -115,6 +118,13 @@ export function NeovarchRail() {
       id: 'office',
       label: NV_COPY.office,
       onSelect: () => navigate(OFFICE_ROUTE)
+    },
+    {
+      active: path.startsWith(VAULT_ROUTE),
+      icon: <Brain className={icon} />,
+      id: 'vault',
+      label: NV_COPY.vault,
+      onSelect: () => navigate(VAULT_ROUTE)
     },
     {
       active: path.startsWith(CAPABILITIES_ROUTE),

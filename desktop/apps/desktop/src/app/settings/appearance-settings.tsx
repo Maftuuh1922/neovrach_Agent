@@ -9,6 +9,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Slider } from '@/components/ui/slider'
 import type { DesktopMarketplaceSearchItem } from '@/global'
 import { saveHermesConfig } from '@/hermes'
+import { NeovarchThemePicker } from '@/components/neovarch/appearance'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { Check, Download, Loader2, Palette, Trash2 } from '@/lib/icons'
@@ -561,6 +562,12 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
         )}
 
         <div className={subpage === undefined ? 'mt-2' : undefined}>
+          {(show('theme') || show('general')) && (
+            <div className="mb-4" data-nv-settings-accent="">
+              <p className="mb-2 text-sm font-medium">Warna Neovarch</p>
+              <NeovarchThemePicker compact />
+            </div>
+          )}
           {show('general') && (
             <ListRow
               action={<LanguageSwitcher />}

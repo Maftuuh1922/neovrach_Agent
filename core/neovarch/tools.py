@@ -229,7 +229,10 @@ async def tool_obsidian_write(args: dict, ctx: ToolContext) -> str:
     fm = args.get("frontmatter") if isinstance(args.get("frontmatter"), dict) else None
     res = obs.write_note(vault, str(args.get("path") or ""), str(args.get("content") or ""),
                          str(args.get("mode") or "create"), fm)
-    return f"{res['mode']}: {res['path']} ({res['bytes']} bytes) in the Obsidian vault"
+    # The obsidian:// link lets the user open the note straight in the Obsidian app
+    # (the chat renders it as a clickable "Buka di Obsidian" link).
+    return (f"{res['mode']}: {res['path']} ({res['bytes']} bytes) in the Obsidian vault\n"
+            f"Buka di Obsidian: {obs.open_uri(vault, res['path'])}")
 
 
 async def tool_obsidian_links(args: dict, ctx: ToolContext) -> str:
