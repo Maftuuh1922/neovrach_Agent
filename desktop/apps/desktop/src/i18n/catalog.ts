@@ -13,7 +13,12 @@ import { zh } from './zh'
 import { zhHant } from './zh-hant'
 
 /** Neovarch's base catalog: upstream English with the Indonesian strings on top. */
-const en: Translations = mergeTranslations<Translations>(enUpstream, NEOVARCH_ID)
+export const NEOVARCH_BASE: Translations = mergeTranslations<Translations>(enUpstream, NEOVARCH_ID)
+
+/** Unit tests run against the upstream English copy (the component tests assert
+ *  those strings); `neovarch-id.test.ts` checks the Indonesian layer itself. The
+ *  app — dev and production builds — always ships the Indonesian base. */
+const en: Translations = import.meta.env.MODE === 'test' ? enUpstream : NEOVARCH_BASE
 
 /** The catalogs compiled into the app. Runtime-registered languages (plugin
  *  packs, backend `.desktop.yaml` packs) are NOT here — resolve through
