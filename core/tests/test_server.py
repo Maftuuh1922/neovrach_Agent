@@ -147,3 +147,29 @@ async def test_remote_mode_signed_token_and_kanban(home, monkeypatch):
         await ws.close()
     finally:
         await c.close()
+
+
+async def test_boot_endpoints_answer_quietly(mock_provider, monkeypatch):
+    gw, c = await _client(monkeypatch, HERMES_DASHBOARD_SESSION_TOKEN="tok")
+    try:
+        ws = WS(await c.ws_connect("/api/ws?token=tok"))
+        await ws.pump()
+        setup = (await ws.call("setup.status", {}))["result"]
+        assert setup["provider_configured"] is True and setup["ready"] is True
+        check = (await ws.call("setup.runtime_check", {}))["result"]
+        assert check["ok"] is True and check["model"] == "mock-model"
+        opts = (await ws.call("model.options", {}))["result"]
+        assert opts["model"] == "mock-model" and opts["providers"][0]["is_current"] is True
+        for method, key, value in (("pet.info", "enabled", False), ("free_tier.status", "enabled", False),
+                                   ("wake.status", "available", False), ("projects.tree", "projects", []),
+                                   ("bot_relay.roster.sync", "count", 0)):
+            assert (await ws.call(method, {}))["result"][key] == value
+        for path in ("/api/profiles/active", "/api/local-models/status", "/api/local-models/jobs",
+                     "/api/audio/voice-live/status", "/api/tools/terminal/backends"):
+            assert (await c.get(path + "?token=tok")).status == 200, path
+        r = await c.post("/api/sessions/owner-backfill?token=tok", json={})
+        assert (await r.json())["stamped"] == 0
+        log = gw.store.root.parent / "logs" / "unhandled.log"
+        assert not log.exists() or "setup.status" not in log.read_text()
+    finally:
+        await c.close()

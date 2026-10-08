@@ -359,6 +359,39 @@ class Gateway:
             return {"items": []}
         if method == "reload.mcp":
             return {"ok": True, "servers": []}
+        # ---- boot / readiness: the renderer asks these before it shows the composer
+        if method == "setup.status":
+            info = self.model_info()
+            return {"provider_configured": info["configured"], "ready": info["configured"], "ok": True,
+                    "other_providers": info["configured"], "free_tier_account": False, "free_tier_route": False,
+                    "inference_provider": info["provider"] or None, "profile": "default"}
+        if method == "setup.runtime_check":
+            info = self.model_info()
+            return {"ok": info["configured"], "provider": info["provider"] or None, "model": info["model"] or None,
+                    "source": "config", "free_tier_route": False, "profile": "default",
+                    "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
+        if method == "model.options":
+            info = self.model_info()
+            name = info["provider"] or "custom"
+            return {"model": info["model"], "provider": name, "providers": [{
+                "slug": name, "name": name, "models": [info["model"]] if info["model"] else [],
+                "total_models": 1 if info["model"] else 0, "is_current": True, "is_user_defined": True,
+                "api_url": info["base_url"] or None, "authenticated": info["configured"], "source": "config"}]}
+        # ---- features the Neovarch core does not have (yet): answer "off", never an error
+        if method == "pet.info":
+            return {"enabled": False}
+        if method == "free_tier.status":
+            return {"has_guest": False, "enabled": False, "available": False, "notice_pending": False,
+                    "model": "", "label": ""}
+        if method == "wake.status":
+            return {"listening": False, "owned_by_caller": False, "phrase": "", "provider": "",
+                    "configured_surface": "", "input_device": {}, "available": False,
+                    "hint": "Not available in the Neovarch core.", "enabled": False, "audio_silent": False,
+                    "capture": "", "local_input_available": False, "sample_rate": 0, "frame_length": 0}
+        if method == "projects.tree":
+            return {"projects": [], "active_id": None, "scoped_session_ids": []}
+        if method == "bot_relay.roster.sync":
+            return {"count": 0}
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
 
@@ -602,6 +635,37 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_post("/api/plugins/kanban/tasks", kanban_create)
     r.add_patch("/api/plugins/kanban/tasks/{tid}", kanban_patch)
     r.add_post("/api/plugins/kanban/tasks/{tid}/comments", kanban_comment)
+    # Boot-time REST reads for features the core does not have: valid "off" answers.
+    async def profiles_active(_):
+        return web.json_response({"active": "default", "current": "default"})
+
+    async def local_models_status(_):
+        return web.json_response({"enabled": False, "tag": "", "configured_tag": "", "update_available": False,
+                                  "runtime_installed": False, "runtime_backend": None, "server_running": False,
+                                  "server_base_url": None, "active_model_id": None, "loaded_models": {},
+                                  "models": [], "models_dir": ""})
+
+    async def local_models_jobs(_):
+        return web.json_response({"jobs": []})
+
+    async def voice_live_status(_):
+        return web.json_response({"ok": False, "available": False, "reason": "Not available in the Neovarch core."})
+
+    async def terminal_backends(_):
+        return web.json_response({"active": "local", "backends": [{
+            "name": "local", "label": "Local", "description": "Commands run on this computer.",
+            "active": True, "status": "ready", "detail": ""}]})
+
+    async def owner_backfill(request):
+        body = await _json(request)
+        return web.json_response({"ok": True, "profile": body.get("profile") or "default", "stamped": 0})
+
+    r.add_get("/api/profiles/active", profiles_active)
+    r.add_get("/api/local-models/status", local_models_status)
+    r.add_get("/api/local-models/jobs", local_models_jobs)
+    r.add_get("/api/audio/voice-live/status", voice_live_status)
+    r.add_get("/api/tools/terminal/backends", terminal_backends)
+    r.add_post("/api/sessions/owner-backfill", owner_backfill)
     r.add_get("/api/fs/list", fs_list)
     r.add_get("/api/fs/read", fs_read)
     r.add_get("/api/fs/default", fs_default)
