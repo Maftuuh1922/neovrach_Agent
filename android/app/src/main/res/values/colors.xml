@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Neovarch identity: flat red base, bone type, near-black ink -->
-    <color name="brand_bg">#FFC8101A</color>
+    <color name="brand_bg">#FF0D0606</color>
     <color name="brand_red">#FFC8101A</color>
     <color name="brand_paper">#FFF2EDE4</color>
     <color name="brand_ink">#FF140607</color>

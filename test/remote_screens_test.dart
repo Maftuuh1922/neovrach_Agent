@@ -25,6 +25,7 @@ import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
 import 'package:neovarch_agent/theme/neovarch_mobile_theme.dart';
 import 'package:neovarch_agent/remote/ui/remote_intro_screen.dart';
+import 'package:neovarch_agent/ui/screens/startup_splash.dart';
 
 final _shotsDir = Platform.environment['NV_SHOTS_DIR'] ?? 'build/screenshots/remote';
 
@@ -283,5 +284,11 @@ void main() {
 
   testWidgets('12 intro start', (tester) async {
     await run(tester, '12_intro_start', () => const RemoteIntroScreen(initialPage: 2), remote: _controller(prefs, demo: false));
+  });
+
+  testWidgets('13 startup splash', (tester) async {
+    await run(tester, '13_splash',
+        () => const StartupSplash(background: NV.bg, foreground: NV.text, accent: NV.red, child: ConnectScreen(onboarding: true)),
+        remote: _controller(prefs, demo: false));
   });
 }

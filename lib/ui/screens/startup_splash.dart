@@ -10,9 +10,20 @@ import '../widgets/brand.dart';
 import '../widgets/motion.dart';
 
 class StartupSplash extends StatefulWidget {
-  const StartupSplash({super.key, required this.child, this.enabled = true});
+  const StartupSplash({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.background = brandRed,
+    this.foreground = brandPaper,
+    this.accent = brandInk,
+  });
   final Widget child;
   final bool enabled;
+  /// Plate colour (matches the native splash), logo colour, halo colour.
+  final Color background;
+  final Color foreground;
+  final Color accent;
   @override
   State<StartupSplash> createState() => _StartupSplashState();
 }
@@ -57,7 +68,7 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
   Widget build(BuildContext context) {
     if (_done) return widget.child;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: brandRed, systemNavigationBarColor: brandRed),
+      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: widget.background, systemNavigationBarColor: widget.background),
       child: AnimatedBuilder(
         animation: _c,
         builder: (context, _) {
@@ -79,10 +90,10 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
                   child: Transform.translate(
                     offset: Offset(0, -MediaQuery.sizeOf(context).height * out),
                     child: ColoredBox(
-                      color: brandRed,
+                      color: widget.background,
                       child: Stack(children: [
                         Positioned.fill(
-                          child: CustomPaint(painter: StarFramePainter(color: brandPaper.withValues(alpha: 0.8), inset: 14, cell: 34, progress: seg(0, 0.4))),
+                          child: CustomPaint(painter: StarFramePainter(color: widget.foreground.withValues(alpha: 0.35), inset: 14, cell: 34, progress: seg(0, 0.4))),
                         ),
                         Center(
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -90,7 +101,7 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
                               width: 96,
                               height: 110,
                               child: Stack(clipBehavior: Clip.none, alignment: Alignment.bottomCenter, children: [
-                                const BrandBadge(height: 92, color: brandPaper),
+                                BrandBadge(height: 92, color: widget.foreground),
                                 Positioned(
                                   top: -34 + 30 * haloIn,
                                   left: 14,
@@ -100,7 +111,7 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
                                     opacity: haloIn.clamp(0.0, 1.0),
                                     child: AnimatedBuilder(
                                       animation: _halo,
-                                      builder: (context, _) => CustomPaint(painter: HaloPainter(t: _halo.value, color: brandInk, glow: 0)),
+                                      builder: (context, _) => CustomPaint(painter: HaloPainter(t: _halo.value, color: widget.accent, glow: 0)),
                                     ),
                                   ),
                                 ),
@@ -111,12 +122,12 @@ class _StartupSplashState extends State<StartupSplash> with TickerProviderStateM
                               width: w,
                               height: wmH,
                               child: Stack(children: [
-                                ClipRect(clipper: _LeftReveal(wipe), child: Wordmark(height: wmH, color: brandPaper, haloColor: brandInk)),
-                                if (wipe > 0 && wipe < 1) Positioned(left: w * wipe, top: 0, bottom: 0, child: Container(width: 2, color: brandPaper)),
+                                ClipRect(clipper: _LeftReveal(wipe), child: Wordmark(height: wmH, color: widget.foreground, haloColor: widget.accent)),
+                                if (wipe > 0 && wipe < 1) Positioned(left: w * wipe, top: 0, bottom: 0, child: Container(width: 2, color: widget.foreground)),
                               ]),
                             ),
                             const SizedBox(height: 14),
-                            Opacity(opacity: seg(0.55, 0.75), child: const MetaLabel('neovarchlabs · agen ai', color: brandPaper, size: 10)),
+                            Opacity(opacity: seg(0.55, 0.75), child: MetaLabel('neovarchlabs · agen ai', color: widget.foreground, size: 10)),
                           ]),
                         ),
                       ]),

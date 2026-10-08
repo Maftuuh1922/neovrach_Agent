@@ -54,6 +54,9 @@ class RemoteNeovarchApp extends ConsumerWidget {
           ? const RemoteIntroScreen()
           : StartupSplash(
               enabled: !skipSplash,
+              background: NV.bg,
+              foreground: NV.text,
+              accent: NV.red,
               child: paired ? const RemoteShell() : const ConnectScreen(onboarding: true),
             ),
     );
