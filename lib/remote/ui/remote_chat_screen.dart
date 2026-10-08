@@ -1,5 +1,6 @@
 // Chat with the agent on the PC: streamed replies, thinking, live tool rows
 // and inline approval cards — the same transcript widgets as Desktop.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,6 +14,7 @@ import '../../ui/widgets/common.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'nv_widgets.dart';
+import 'remote_attachments.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
   const RemoteChatScreen({super.key, required this.onOpenApprovals});
@@ -43,7 +45,9 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
 
   Future<void> _send([String? preset]) async {
     final text = (preset ?? _input.text).trim();
-    if (text.isEmpty) return;
+    final r = ref.read(remoteProvider);
+    if (text.isEmpty && preset == null && r.pendingAttachments.isEmpty) return;
+    if (text.isEmpty && preset != null) return;
     _input.clear();
     final err = await ref.read(remoteProvider).send(text);
     if (err != null && mounted) toast(context, err);
@@ -151,7 +155,12 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 18),
                           child: m.role == 'user'
-                              ? NvUserMessage(msg: m, scale: s.chatScale)
+                              ? (m.attachments.isEmpty
+                                  ? NvUserMessage(msg: m, scale: s.chatScale)
+                                  : Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                      MessageAttachments(attachments: m.attachments, gateway: r.gateway),
+                                      if (m.content.isNotEmpty) ...[const SizedBox(height: 6), NvUserMessage(msg: m, scale: s.chatScale)],
+                                    ]))
                               : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                                   NvAgentLabel('neovarch · $pc', live: m.streaming),
                                   AssistantMessage(
@@ -227,7 +236,20 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
       child: NvGlass(
         key: const ValueKey('chat-composer'),
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        AttachmentStrip(items: r.pendingAttachments, onRemove: r.removeAttachment),
+        if (r.attachNotice != null && r.attachNotice!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+            child: Text(r.attachNotice!, key: const ValueKey('attach-notice'), style: TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
+          ),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          NvIconButton(
+            key: const ValueKey('attach-button'),
+            tooltip: 'Lampirkan foto atau file',
+            icon: CupertinoIcons.paperclip,
+            onPressed: r.connected ? () => showAttachSheet(context, r) : null,
+          ),
           if (canDictate)
             NvIconButton(
               tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah',
@@ -243,6 +265,25 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
               enabled: r.connected,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _send(),
+              // Keyboard image insertion (Gboard paste of a screenshot / GIF).
+              contentInsertionConfiguration: ContentInsertionConfiguration(
+                allowedMimeTypes: kInsertableImageMimes,
+                onContentInserted: (c) => attachInserted(context, r, c),
+              ),
+              // Long-press menu: "Tempel gambar" next to the usual paste.
+              contextMenuBuilder: (context, editable) => AdaptiveTextSelectionToolbar.buttonItems(
+                anchors: editable.contextMenuAnchors,
+                buttonItems: [
+                  ...editable.contextMenuButtonItems,
+                  ContextMenuButtonItem(
+                    label: 'Tempel gambar',
+                    onPressed: () {
+                      ContextMenuController.removeAny();
+                      pasteClipboardImage(context, r);
+                    },
+                  ),
+                ],
+              ),
               style: TextStyle(fontSize: 15, color: NV.text, height: 1.4),
               decoration: InputDecoration(
                 hintText: r.connected ? 'Ketik perintah untuk agen di PC…' : 'Menunggu koneksi ke PC…',
@@ -260,6 +301,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             NvIconButton(tooltip: 'Hentikan', icon: Icons.stop_rounded, accent: true, onPressed: r.stop)
           else
             NvIconButton(tooltip: 'Kirim', icon: Icons.arrow_upward_rounded, accent: true, onPressed: r.connected ? _send : null),
+        ]),
         ]),
       ),
     );

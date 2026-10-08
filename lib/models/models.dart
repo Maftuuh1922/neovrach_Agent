@@ -727,6 +727,10 @@ class ChatMsg {
   final List<String> images; // data: URLs
   final List<ToolActivity> tools;
 
+  /// Files sent with a user message (phone remote: PC uploads
+  /// `{id, name, mime, size, kind, url}`).
+  final List<Map<String, dynamic>> attachments;
+
   /// Raw OpenAI tool_calls of an assistant message (local runtime only).
   List<Map<String, dynamic>>? toolCalls;
   final String? toolCallId;
@@ -741,12 +745,14 @@ class ChatMsg {
     required this.ts,
     List<String>? images,
     List<ToolActivity>? tools,
+    List<Map<String, dynamic>>? attachments,
     this.toolCalls,
     this.toolCallId,
     this.streaming = false,
     this.error,
   })  : images = images ?? [],
-        tools = tools ?? [];
+        tools = tools ?? [],
+        attachments = attachments ?? [];
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) => ChatMsg(
         id: '${j['id'] ?? j['ts'] ?? DateTime.now().microsecondsSinceEpoch}',

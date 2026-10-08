@@ -22,16 +22,19 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../data/gateway_client.dart';
 import '../models/models.dart';
+import 'attachments.dart';
 import 'office_models.dart';
 import 'pairing.dart';
 import 'vault_models.dart';
 import 'remote_transcript.dart';
+import 'social_models.dart';
 
 enum RemoteStatus { disconnected, connecting, connected, reconnecting, failed }
 
@@ -582,8 +585,13 @@ class RemoteGateway implements VaultApi {
     if (changed) _approvalsChanged.add(null);
   }
 
-  Future<void> submit(String runtimeId, String text) =>
-      client.call('prompt.submit', {..._p, 'session_id': runtimeId, 'text': text, 'surface': 'mobile'});
+  Future<dynamic> submit(String runtimeId, String text, {List<String> attachments = const []}) => client.call('prompt.submit', {
+        ..._p,
+        'session_id': runtimeId,
+        'text': text,
+        'surface': 'mobile',
+        if (attachments.isNotEmpty) 'attachments': attachments,
+      });
 
   Future<void> interrupt(String runtimeId) => client.call('session.interrupt', {..._p, 'session_id': runtimeId});
 
@@ -710,6 +718,74 @@ class RemoteGateway implements VaultApi {
         if (assignee != null && assignee.isNotEmpty) 'assignee': assignee,
         'priority': ?priority,
       });
+}
+
+extension RemoteGatewayExtras on RemoteGateway {
+  // ------------------------------------------------------------ attachments --
+  /// Headers for authenticated image loads (`Image.network(headers: …)`).
+  Map<String, String> get restHeaders => _restHeaders;
+
+  /// Absolute URL of a core path such as `/api/uploads/<id>`.
+  Uri restUri(String path, [Map<String, String>? query]) => _rest(path, query);
+
+  /// A URL a browser / download manager can open on its own (`?token=`).
+  Uri downloadUri(RemoteAttachment a) =>
+      _rest(a.url ?? '/api/uploads/${a.id}', {'download': '1', if (token.isNotEmpty) 'token': token});
+
+  /// `POST /api/uploads` (multipart). [onProgress] gets 0..1 as bytes go out.
+  Future<RemoteAttachment> uploadAttachment({
+    required String sessionId,
+    required String name,
+    required String mime,
+    required Uint8List bytes,
+    void Function(double progress)? onProgress,
+  }) async {
+    if (bytes.length > kMaxAttachmentBytes) throw const RemoteRestError(413, 'File terlalu besar (maks 25 MB).');
+    final req = http.MultipartRequest('POST', _rest('/api/uploads'))
+      ..headers.addAll(_restHeaders)
+      ..fields['session_id'] = sessionId;
+    const chunk = 64 * 1024;
+    var sent = 0;
+    Stream<List<int>> stream() async* {
+      for (var i = 0; i < bytes.length; i += chunk) {
+        final end = i + chunk < bytes.length ? i + chunk : bytes.length;
+        yield bytes.sublist(i, end);
+        sent = end;
+        onProgress?.call(bytes.isEmpty ? 1 : sent / bytes.length);
+      }
+    }
+
+    // The core sniffs images and maps the file name to a MIME type itself.
+    req.files.add(http.MultipartFile('file', stream(), bytes.length, filename: name));
+    final res = await _http.send(req).timeout(const Duration(minutes: 5));
+    final text = await res.stream.bytesToString();
+    if (res.statusCode == 404) throw const RemoteRestError(404, 'PC belum mendukung lampiran — perbarui Neovarch di PC');
+    if (res.statusCode == 401 || res.statusCode == 403) throw RemoteRestError(res.statusCode, 'token ditolak oleh PC — pasangkan ulang');
+    if (res.statusCode == 413) throw const RemoteRestError(413, 'File terlalu besar (maks 25 MB).');
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      String msg = 'Unggah gagal (HTTP ${res.statusCode})';
+      try {
+        final j = jsonDecode(text);
+        if (j is Map && j['detail'] != null) msg = '${j['detail']}';
+      } catch (_) {}
+      throw RemoteRestError(res.statusCode, msg);
+    }
+    onProgress?.call(1);
+    return RemoteAttachment.fromJson(Map<String, dynamic>.from(jsonDecode(text) as Map));
+  }
+
+  Future<void> deleteAttachment(String id) => _json('DELETE', '/api/uploads/${Uri.encodeComponent(id)}');
+
+  // ----------------------------------------------------------------- social --
+  /// `GET /api/social/status`: `{signed_in, login, client_id_configured, …}`.
+  Future<Map<String, dynamic>> socialStatus() async => Map<String, dynamic>.from(await _json('GET', '/api/social/status') as Map);
+
+  Future<SocialProfile> socialProfile() async => SocialProfile.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/social/profile') as Map));
+
+  Future<FriendsSnapshot> socialFriends() async => FriendsSnapshot.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/social/friends') as Map));
+
+  Future<FriendDetail> socialFriend(String login) async =>
+      FriendDetail.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/social/friends/${Uri.encodeComponent(login)}') as Map));
 }
 
 class RemoteRestError implements Exception {

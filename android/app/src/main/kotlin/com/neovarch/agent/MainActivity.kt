@@ -45,6 +45,7 @@ class MainActivity : FlutterActivity() {
     private val channelName = "neovarch/device"
     private val permRequests = HashMap<Int, MethodChannel.Result>()
     private val docRequests = HashMap<Int, MethodChannel.Result>()
+    private val uploadRequests = HashMap<Int, MethodChannel.Result>()
     private var nextCode = 4100
 
     /**
@@ -134,6 +135,24 @@ class MainActivity : FlutterActivity() {
                 @Suppress("DEPRECATION")
                 startActivityForResult(i, code)
             }
+            // Chat attachments: copy a picked document into the app cache (no size
+            // clipping below the 25 MB upload limit) and hand Dart its path.
+            "pickFileForUpload" -> {
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = call.argument<String>("mime") ?: "*/*"
+                }
+                val code = nextCode++
+                uploadRequests[code] = result
+                @Suppress("DEPRECATION")
+                startActivityForResult(i, code)
+            }
+            // An image on the clipboard (copied from a browser / gallery / screenshot).
+            "clipboardImage" -> Thread {
+                val out = try { clipboardImage() } catch (e: Exception) { null }
+                Handler(Looper.getMainLooper()).post { result.success(out) }
+            }.start()
+            "hasClipboardImage" -> result.success(hasClipboardImage())
             "openIntent" -> result.success(openIntent(call))
             "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: ""))
             "location" -> location(result)
@@ -166,9 +185,84 @@ class MainActivity : FlutterActivity() {
         r.success(out)
     }
 
+    private val uploadLimit = 25L * 1024 * 1024
+
+    /** Copy a content:// URI into cache/uploads; {path, name, mime, size} or {error, size}. */
+    private fun copyForUpload(uri: Uri, fallbackName: String): Map<String, Any?> {
+        var name = uri.lastPathSegment?.substringAfterLast('/') ?: fallbackName
+        var size = -1L
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val ni = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val si = c.getColumnIndex(OpenableColumns.SIZE)
+                if (ni >= 0) name = c.getString(ni) ?: name
+                if (si >= 0 && !c.isNull(si)) size = c.getLong(si)
+            }
+        }
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+        if (size > uploadLimit) return mapOf("error" to "too_big", "size" to size, "name" to name)
+        val dir = java.io.File(cacheDir, "uploads").apply { mkdirs() }
+        val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").ifEmpty { fallbackName }
+        val f = java.io.File(dir, "${System.currentTimeMillis()}-$safe")
+        var copied = 0L
+        contentResolver.openInputStream(uri)?.use { input ->
+            f.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    copied += n
+                    if (copied > uploadLimit) {
+                        out.close(); f.delete()
+                        return mapOf("error" to "too_big", "size" to copied, "name" to name)
+                    }
+                    out.write(buf, 0, n)
+                }
+            }
+        } ?: return mapOf("error" to "unreadable", "name" to name)
+        return mapOf("path" to f.absolutePath, "name" to name, "mime" to mime, "size" to copied)
+    }
+
+    private fun clipItemUri(): Uri? {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = cm.primaryClip ?: return null
+        for (i in 0 until clip.itemCount) {
+            val uri = clip.getItemAt(i).uri ?: continue
+            val type = contentResolver.getType(uri) ?: ""
+            if (type.startsWith("image/")) return uri
+        }
+        return null
+    }
+
+    private fun hasClipboardImage(): Boolean {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val d = cm.primaryClipDescription ?: return false
+        for (i in 0 until d.mimeTypeCount) if (d.getMimeType(i).startsWith("image/")) return true
+        return false
+    }
+
+    private fun clipboardImage(): Map<String, Any?>? {
+        val uri = clipItemUri() ?: return null
+        return copyForUpload(uri, "tempel.png")
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val up = uploadRequests.remove(requestCode)
+        if (up != null) {
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) { up.success(null); return }
+            Thread {
+                try {
+                    val out = copyForUpload(uri, "berkas")
+                    Handler(Looper.getMainLooper()).post { up.success(out) }
+                } catch (e: Exception) {
+                    Handler(Looper.getMainLooper()).post { up.error("failed", e.message, null) }
+                }
+            }.start()
+            return
+        }
         val r = docRequests.remove(requestCode) ?: return
         val uri = data?.data
         if (resultCode != Activity.RESULT_OK || uri == null) {
