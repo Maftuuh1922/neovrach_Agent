@@ -3198,3 +3198,9 @@
 .nv-context[data-cards-collapsed] .nv-office-mini3d {
   display: none;
 }
+
+/* WCAG AA (light): the upstream tertiary grey (54% ink, ~4.0:1 on paper) is
+   used for timestamps and the status bar; lift it to ≥4.5:1. */
+:root[data-nv-skin='neovarch'][data-nv-scheme='light'] {
+  --ui-text-tertiary: color-mix(in srgb, var(--ui-base) 66%, transparent);
+}

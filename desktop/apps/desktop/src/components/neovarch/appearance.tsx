@@ -95,7 +95,7 @@ export function applyAccent(accent: string, base: 'dark' | 'light'): void {
   root.style.setProperty('--nv-red', accent)
   root.style.setProperty('--nv-on-accent', onAccentColor(accent))
   root.style.setProperty('--nv-red-deep', mix(accent, '#000000', 0.45))
-  root.style.setProperty('--nv-red-text', base === 'dark' ? mix(accent, '#ffffff', 0.2) : mix(accent, '#000000', 0.35))
+  root.style.setProperty('--nv-red-text', base === 'dark' ? mix(accent, '#ffffff', 0.2) : mix(accent, '#000000', 0.42))
   root.style.setProperty('--nv-red-wash', base === 'dark' ? mix(accent, '#0d0606', 0.82) : mix(accent, '#ffffff', 0.82))
 }
 
