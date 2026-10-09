@@ -1,5 +1,7 @@
 // Chat with the agent on the PC: streamed replies, thinking, live tool rows
 // and inline approval cards — the same transcript widgets as Desktop.
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +13,7 @@ import '../../state/voice_service.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/screens/chat/message_widgets.dart';
 import '../../ui/widgets/common.dart';
+import '../composer.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'nv_glass_text.dart';
@@ -19,6 +22,7 @@ import 'glass/glass_chat.dart';
 import 'glass/liquid_glass.dart';
 import 'nv_widgets.dart';
 import 'remote_attachments.dart';
+import 'remote_composer.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
   const RemoteChatScreen({super.key, required this.onOpenApprovals});
@@ -57,11 +61,110 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     }
   }
 
+  final _focus = FocusNode();
+
+  // "/" and "@" suggestions (only when the PC serves the composer catalog)
+  ComposerTrigger? _trigger;
+  List<ComposerSuggestion> _suggestions = const [];
+  bool _sugLoading = false;
+  int _sugSeq = 0;
+  bool _menuOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _input.addListener(_onInput);
+  }
+
   @override
   void dispose() {
+    _input.removeListener(_onInput);
     _input.dispose();
     _scroll.dispose();
+    _focus.dispose();
     super.dispose();
+  }
+
+  void _onInput() {
+    final r = ref.read(remoteProvider);
+    final c = r.composer;
+    final sel = _input.selection;
+    final t = c == null || !sel.isValid || !sel.isCollapsed ? null : detectTrigger(_input.text, sel.baseOffset);
+    if (t == _trigger) return;
+    if (t == null) {
+      if (_trigger != null) setState(() => _trigger = null);
+      return;
+    }
+    final seq = ++_sugSeq;
+    if (t.kind == '/') {
+      setState(() {
+        _trigger = t;
+        _suggestions = slashSuggestions(c!, t.query);
+        _sugLoading = false;
+      });
+      return;
+    }
+    setState(() {
+      _trigger = t;
+      _sugLoading = true;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 140), () async {
+      if (seq != _sugSeq || !mounted) return;
+      final items = await r.completeMentions(t.query);
+      if (seq != _sugSeq || !mounted) return;
+      setState(() {
+        _suggestions = items;
+        _sugLoading = false;
+      });
+    });
+  }
+
+  void _setText(String text, int cursor) {
+    _input.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
+  }
+
+  void _pick(ComposerSuggestion s) {
+    final t = _trigger;
+    if (t == null) return;
+    final r = ref.read(remoteProvider);
+    if (s.kind == 'skill' || s.kind == 'command') {
+      // The token becomes a chip (skill) or an action (command), not text.
+      final text = _input.text.replaceRange(t.start, t.end, '').replaceFirst(RegExp(r'^ '), '');
+      _sugSeq++;
+      setState(() => _trigger = null);
+      _setText(text, math.min(t.start, text.length));
+      if (s.kind == 'skill') {
+        final name = s.text.substring(1);
+        if (!r.selectedSkills.contains(name)) r.toggleSkill(name);
+      } else if (s.text == '/new') {
+        r.newChat();
+      } else if (s.text == '/model') {
+        showModelSheet(context, r);
+      }
+      return;
+    }
+    final next = applySuggestion(_input.text, t, s.text);
+    _setText(next.text, next.cursor);
+    _focus.requestFocus();
+  }
+
+  /// Insert at the cursor with a separating space.
+  void _insertText(String text) {
+    final v = _input.value;
+    final at = v.selection.isValid ? v.selection.baseOffset : v.text.length;
+    final before = v.text.substring(0, at);
+    final sep = before.isEmpty || before.endsWith(' ') || before.endsWith('\n') ? '' : ' ';
+    final next = '$before$sep$text${v.text.substring(at)}';
+    _setText(next, at + sep.length + text.length);
+    _focus.requestFocus();
+  }
+
+  void _startMention() => _insertText('@');
+
+  Future<void> _openMenu(RemoteController r) async {
+    setState(() => _menuOpen = true);
+    await showComposerMenu(context, r, ComposerActions(insertText: _insertText, startMention: _startMention));
+    if (mounted) setState(() => _menuOpen = false);
   }
 
   void _toBottom() {
@@ -282,18 +385,28 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
         padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         AttachmentStrip(items: r.pendingAttachments, onRemove: r.removeAttachment),
+        ComposerChipsRow(
+          r: r,
+          onModel: () => showModelSheet(context, r),
+          onReasoning: () => showReasoningSheet(context, r),
+          onSkills: () => showSkillPicker(context, r),
+        ),
+        if (_trigger != null && r.composer != null)
+          ComposerSuggestionList(items: _suggestions, kind: _trigger!.kind, loading: _sugLoading, onPick: _pick),
         if (r.attachNotice != null && r.attachNotice!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
             child: Text(r.attachNotice!, key: const ValueKey('attach-notice'), style: TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
           ),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          NvIconButton(
+          // "+": uploads, and on a PC with the composer catalog also skills,
+          // model, reasoning, mentions, URL and snippets (desktop parity).
+          ComposerPlusButton(
             key: const ValueKey('attach-button'),
-            tooltip: 'Lampirkan foto atau file',
-            icon: CupertinoIcons.paperclip,
-            onPressed: r.connected ? () => showAttachSheet(context, r) : null,
+            open: _menuOpen,
+            onPressed: r.connected ? () => _openMenu(r) : null,
           ),
+          const SizedBox(width: 4),
           if (canDictate)
             NvIconButton(
               tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah',
@@ -304,6 +417,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
           Expanded(
             child: TextField(
               controller: _input,
+              focusNode: _focus,
               minLines: 1,
               maxLines: 5,
               enabled: r.connected,
@@ -342,9 +456,9 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             ),
           ),
           if (r.running)
-            NvIconButton(tooltip: 'Hentikan', icon: CupertinoIcons.stop_fill, accent: true, onPressed: r.stop)
+            ComposerSendButton(key: const ValueKey('composer-stop'), stop: true, onPressed: r.stop)
           else
-            NvIconButton(tooltip: 'Kirim', icon: CupertinoIcons.arrow_up, accent: true, onPressed: r.connected ? _send : null),
+            ComposerSendButton(key: const ValueKey('composer-send'), onPressed: r.connected ? _send : null),
         ]),
         ]),
       ),
