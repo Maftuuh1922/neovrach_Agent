@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
+import { Router9MenuRow } from '@/components/neovarch/router9-status'
 import { Codicon } from '@/components/ui/codicon'
 import { DropdownMenuItem, dropdownMenuRow } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
@@ -102,7 +103,12 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
         </>
       }
       gateway={gateway}
-      header={<LocalSetupMenuRow />}
+      header={
+        <>
+          <Router9MenuRow />
+          <LocalSetupMenuRow />
+        </>
+      }
       includeMoa
       ownerConnectionId={ownerConnectionId}
       profile={profile}
