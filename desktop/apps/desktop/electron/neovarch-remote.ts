@@ -86,6 +86,83 @@ export interface RemoteControllerDeps {
   currentProfile: () => string | null
   log: (line: string) => void
   onChanged?: (status: RemoteStatus) => void
+  /** Where the running LAN gateway's PID is recorded (default: next to settings). */
+  pidFilePath?: string
+  /** Test seams for stale-gateway recovery. */
+  processCommandLine?: (pid: number) => string | null
+  killProcessGroup?: (pid: number, signal: NodeJS.Signals) => void
+  portInUse?: (port: number) => Promise<boolean>
+}
+
+// ---- stale LAN gateway recovery ------------------------------------------
+//
+// The LAN gateway runs in its own process group (detached) so stop() reaches a
+// python child behind a shell shim. That also means a desktop that died hard
+// (SIGKILL, power loss, a crash before before-quit) leaves the gateway running,
+// and the next launch's autostart found its port busy and gave up with
+// "Port 9319 sudah dipakai" while the orphan kept serving: two core processes
+// and a remote page stuck in an error. The PID is now recorded, and a recorded
+// PID whose command line is still our `serve --port <port>` gateway is stopped
+// before the port check. Anything else on the port is never touched.
+
+/** argv of a live process, NUL-separated args joined by spaces; null when unknown. */
+export function readProcessCommandLine(pid: number): string | null {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return null
+  }
+
+  if (process.platform === 'linux') {
+    try {
+      const raw = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+
+      return raw ? raw.split('\0').join(' ').trim() : null
+    } catch {
+      return null
+    }
+  }
+
+  // macOS/Windows: no cheap, dependable argv probe here; never judge.
+  return null
+}
+
+/** Is this command line our own LAN gateway (`serve ... --port <port> ... --isolated`)? */
+export function isOwnRemoteGatewayCommand(commandLine: string | null | undefined, port: number): boolean {
+  if (typeof commandLine !== 'string' || !commandLine) {
+    return false
+  }
+
+  const args = commandLine.split(/\s+/)
+  const portAt = args.indexOf('--port')
+
+  return (
+    args.includes('serve') &&
+    args.includes('--isolated') &&
+    args.includes('0.0.0.0') &&
+    portAt !== -1 &&
+    args[portAt + 1] === String(port)
+  )
+}
+
+export function readRemotePid(pidFilePath: string): number | null {
+  try {
+    const pid = Number.parseInt(fs.readFileSync(pidFilePath, 'utf8').trim(), 10)
+
+    return Number.isInteger(pid) && pid > 0 ? pid : null
+  } catch {
+    return null
+  }
+}
+
+function defaultKillProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal)
+  } catch {
+    try {
+      process.kill(pid, signal)
+    } catch {
+      // already gone
+    }
+  }
 }
 
 // ---- token minting (mirrors plugins/dashboard_auth/basic `_sign`) ----------
@@ -296,6 +373,73 @@ export function createRemoteController(deps: RemoteControllerDeps) {
   let generation = 0
   let tailscale: TailscaleInfo | null = null
   let tailscaleAt = 0
+  // Set once the app is quitting: a late autostart/rotate must not spawn a
+  // gateway that outlives the desktop.
+  let closed = false
+  const pidFilePath = deps.pidFilePath ?? path.join(path.dirname(deps.settingsPath), 'neovarch-remote.pid')
+  const commandLineOf = deps.processCommandLine ?? readProcessCommandLine
+  const killGroup = deps.killProcessGroup ?? defaultKillProcessGroup
+  const probePort = deps.portInUse ?? ((port: number) => portInUse(port))
+
+  function writePid(pid: number | undefined) {
+    if (!pid) {
+      return
+    }
+
+    try {
+      fs.mkdirSync(path.dirname(pidFilePath), { recursive: true })
+      fs.writeFileSync(pidFilePath, `${pid}\n`, 'utf8')
+    } catch {
+      // Best effort: without it only hard-crash recovery is lost.
+    }
+  }
+
+  function clearPid(pid?: number) {
+    if (pid !== undefined && readRemotePid(pidFilePath) !== pid) {
+      return
+    }
+
+    try {
+      fs.unlinkSync(pidFilePath)
+    } catch {
+      // not there
+    }
+  }
+
+  /** Stop a gateway a previous (crashed) desktop left behind. Returns its PID. */
+  async function reapStaleGateway(): Promise<number | null> {
+    const pid = readRemotePid(pidFilePath)
+
+    if (pid === null) {
+      return null
+    }
+
+    if (!isOwnRemoteGatewayCommand(commandLineOf(pid), settings.port)) {
+      // Dead, reused by another program, or unverifiable: just forget it.
+      clearPid()
+
+      return null
+    }
+
+    deps.log(`[remote] stopping stale LAN gateway pid=${pid} left by an earlier run`)
+    killGroup(pid, 'SIGTERM')
+
+    for (let i = 0; i < 20; i++) {
+      if (!isOwnRemoteGatewayCommand(commandLineOf(pid), settings.port)) {
+        break
+      }
+
+      await new Promise(r => setTimeout(r, 150))
+    }
+
+    if (isOwnRemoteGatewayCommand(commandLineOf(pid), settings.port)) {
+      killGroup(pid, 'SIGKILL')
+    }
+
+    clearPid()
+
+    return pid
+  }
 
   // Tailscale is optional: read it lazily (at most once a minute) and re-emit
   // when the MagicDNS name or tailnet IPs change.
@@ -407,7 +551,7 @@ export function createRemoteController(deps: RemoteControllerDeps) {
   }
 
   async function start() {
-    if (child || starting) {
+    if (child || starting || closed) {
       return
     }
 
@@ -421,7 +565,13 @@ export function createRemoteController(deps: RemoteControllerDeps) {
       // Never fight another program (a co-installed Hermes on 9119, anything
       // else) for the port: refuse up front instead of spawning and probing a
       // server that is not ours.
-      if (await portInUse(settings.port)) {
+      await reapStaleGateway()
+
+      if (gen !== generation || closed) {
+        return
+      }
+
+      if (await probePort(settings.port)) {
         error =
           settings.port === HERMES_DEFAULT_PORT
             ? `Port ${settings.port} dipakai Hermes Agent. Pilih port lain untuk Neovarch (bawaan ${REMOTE_DEFAULT_PORT}).`
@@ -433,7 +583,7 @@ export function createRemoteController(deps: RemoteControllerDeps) {
 
       const spec = await deps.resolveSpawn(['serve', '--host', '0.0.0.0', '--port', String(settings.port), '--isolated'])
 
-      if (gen !== generation) {
+      if (gen !== generation || closed) {
         return
       }
 
@@ -461,6 +611,7 @@ export function createRemoteController(deps: RemoteControllerDeps) {
       })
 
       child = proc
+      writePid(proc.pid)
 
       const onData = (chunk: Buffer) => {
         logTail = (logTail + chunk.toString('utf8')).slice(-8000)
@@ -472,6 +623,8 @@ export function createRemoteController(deps: RemoteControllerDeps) {
         error = `Gagal menjalankan gateway remote: ${err.message}`
       })
       proc.once('exit', (code, signal) => {
+        clearPid(proc.pid)
+
         if (child === proc) {
           child = null
           running = false
@@ -642,10 +795,21 @@ export function createRemoteController(deps: RemoteControllerDeps) {
     stop,
     /** Start at boot when the user left remote access on. */
     autostart() {
-      if (settings.enabled) {
+      if (settings.enabled && !closed) {
         void start()
       }
-    }
+    },
+    /** Quit path: no new gateway from here on, and the running one is stopped. */
+    shutdown() {
+      closed = true
+
+      return stop()
+    },
+    /** Whether a gateway process is attached (quit must wait for it). */
+    hasProcess() {
+      return child !== null && child.exitCode === null
+    },
+    reapStaleGateway
   }
 }
 

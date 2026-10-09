@@ -6,6 +6,8 @@ import path from 'node:path'
 import { test } from 'vitest'
 
 import {
+  executableName,
+  isForeignSingletonLockOwner,
   isStaleSingletonLockOwner,
   parseProcStateField,
   parseSingletonLockPid,
@@ -50,7 +52,13 @@ test('removeStaleSingletonLock unlinks only a provably-dead owner', () => {
     // Live owner (state S): lock stays, nothing reported.
     fs.symlinkSync('myhost-4711', lockPath, 'file')
     assert.equal(
-      removeStaleSingletonLock(root, { platform: 'linux', hostname: 'myhost', readProcState: () => 'S' }),
+      removeStaleSingletonLock(root, {
+        platform: 'linux',
+        hostname: 'myhost',
+        readProcState: () => 'S',
+        readProcExe: () => '/tmp/.mount_NeovaX/neovarch-agent',
+        selfExe: '/tmp/.mount_NeovaY/neovarch-agent'
+      }),
       null
     )
     assert.equal(fs.readlinkSync(lockPath), 'myhost-4711')
@@ -83,6 +91,74 @@ test('removeStaleSingletonLock unlinks only a provably-dead owner', () => {
       removeStaleSingletonLock(root, { platform: 'linux', hostname: 'myhost', readProcState: () => null }),
       null
     )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('executableName ignores the kernel (deleted) suffix of an unmounted AppImage', () => {
+  assert.equal(executableName('/tmp/.mount_NeovaX/neovarch-agent (deleted)'), 'neovarch-agent')
+  assert.equal(executableName('/opt/Neovarch/neovarch-agent'), 'neovarch-agent')
+  assert.equal(executableName(''), null)
+  assert.equal(executableName(null), null)
+})
+
+test('a live owner running another program (reused PID) is foreign; unknown is never judged', () => {
+  assert.equal(isForeignSingletonLockOwner('/usr/bin/bash', '/tmp/.mount_A/neovarch-agent'), true)
+  assert.equal(isForeignSingletonLockOwner('/tmp/.mount_B/neovarch-agent (deleted)', '/tmp/.mount_A/neovarch-agent'), false)
+  assert.equal(isForeignSingletonLockOwner(null, '/tmp/.mount_A/neovarch-agent'), false)
+  assert.equal(isForeignSingletonLockOwner('/usr/bin/bash', null), false)
+})
+
+test('stale lock recovery: a reused PID is cleared, our own live app and our own PID are kept', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neovarch-singleton-lock-'))
+  const lockPath = path.join(root, 'SingletonLock')
+
+  try {
+    // After a reboot PID 4711 belongs to a shell: every launch would exit silently.
+    fs.symlinkSync('myhost-4711', lockPath, 'file')
+    assert.equal(
+      removeStaleSingletonLock(root, {
+        platform: 'linux',
+        hostname: 'myhost',
+        readProcState: () => 'S',
+        readProcExe: () => '/usr/bin/bash',
+        selfExe: '/opt/Neovarch/neovarch-agent'
+      }),
+      4711
+    )
+    assert.equal(fs.existsSync(lockPath), false)
+
+    // A really running Neovarch keeps its lock: the second launch must focus it.
+    fs.symlinkSync('myhost-4711', lockPath, 'file')
+    assert.equal(
+      removeStaleSingletonLock(root, {
+        platform: 'linux',
+        hostname: 'myhost',
+        readProcState: () => 'S',
+        readProcExe: () => '/opt/Neovarch/neovarch-agent',
+        selfExe: '/opt/Neovarch/neovarch-agent'
+      }),
+      null
+    )
+    assert.equal(fs.readlinkSync(lockPath), 'myhost-4711')
+    fs.unlinkSync(lockPath)
+
+    // Our own PID is never treated as stale.
+    fs.symlinkSync(`myhost-${process.pid}`, lockPath, 'file')
+    assert.equal(
+      removeStaleSingletonLock(root, {
+        platform: 'linux',
+        hostname: 'myhost',
+        readProcState: () => 'S',
+        readProcExe: () => '/usr/bin/bash',
+        selfExe: '/opt/Neovarch/neovarch-agent'
+      }),
+      null
+    )
+
+    // Non-Linux platforms rely on Chromium's own lock.
+    assert.equal(removeStaleSingletonLock(root, { platform: 'darwin', hostname: 'myhost' }), null)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

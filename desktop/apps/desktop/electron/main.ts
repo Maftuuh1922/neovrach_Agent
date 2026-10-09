@@ -19817,6 +19817,9 @@ function quitIfNoSurfaceLeft() {
   }
 }
 
+// The LAN gateway's quit stop, started on the first before-quit that proceeds.
+let remoteQuitStop: { wait: boolean; done: Promise<void> } | null = null
+
 app.on('before-quit', event => {
   // Runs ahead of every teardown below, so "Keep Running" leaves the app
   // exactly as it was: a held quit is not a quit in progress, and the
@@ -19836,7 +19839,10 @@ app.on('before-quit', event => {
   quitInProgress = true
 
   minimizeToTray.beginQuit()
-  void neovarchRemote.stop()
+  // The LAN gateway is a second core process in its own process group, so it
+  // does not die with Electron: stop it now (no late autostart may respawn it)
+  // and let the teardown below wait for it, once, across before-quit re-entries.
+  remoteQuitStop ??= { wait: neovarchRemote.hasProcess(), done: neovarchRemote.shutdown() }
   mainProcessLagWatchdog.stop()
 
   // A detached remote updater can outlive this Electron process. Do not tear
@@ -19882,7 +19888,8 @@ app.on('before-quit', event => {
     sshConnections.size > 0 || sshBootstrapCoordinator.promises().length > 0 || sshTeardowns.hasPending()
 
   const teardownTasks: QuitTeardownTask[] = [
-    { run: (): Promise<void> => backendShutdown.run(), waitForCompletion: backendNeedsWait }
+    { run: (): Promise<void> => backendShutdown.run(), waitForCompletion: backendNeedsWait },
+    { run: (): Promise<void> => remoteQuitStop?.done ?? Promise.resolve(), waitForCompletion: Boolean(remoteQuitStop?.wait) }
   ]
 
   if (sshNeedsWait) {
