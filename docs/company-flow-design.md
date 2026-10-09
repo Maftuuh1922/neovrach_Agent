@@ -90,7 +90,15 @@ Event: `company.changed` `{entity, id, action}` (coalesced) and `office.update` 
   last activity) and the company tools; "lagi apa kamu" is answered in character from real data.
 
 ## 8. UI
-- **Desktop** Kantor tabs: `Ruang` (existing 3D/list) · `Organisasi` · `Tiket` (kanban) · `Persetujuan` · `Biaya` · `Aktivitas`.
-  Hidden behind an empty state ("Buat perusahaan") until a company exists.
+- **Desktop** Kantor tabs: `Ruang` (existing 3D/list) · `Organisasi` · `Tiket` (kanban) · `Tujuan` · `Rutinitas` ·
+  `Persetujuan` · `Biaya` · `Aktivitas`. Hidden behind an empty state ("Buat perusahaan") until a company exists;
+  "Jalan otomatis" (autorun) stays off until the user turns it on.
+  - Organisasi: each agent has "Ubah" → profile, manager (own reports excluded), heartbeat, monthly budget
+    (cents/tokens), model (from `model.options`, empty = PC default; stored as `model`+`provider` on the agent and
+    applied to its persona session at once), "Berhentikan" (terminate, two-click confirm).
+  - Tiket detail: blockers list with "Lepas" and "Tambah hambatan" (open tickets only; cycles rejected by core).
+  - Tujuan: mission editor, goal tree (create/edit/status/delete), projects with goal + monthly budget.
+  - Rutinitas: list/create/edit/enable/delete, "Jalankan sekarang" (creates the ticket now).
+  - The Kantor desk model popover on a company desk (`PUT /api/agents/company:<id>/model`) changes that agent only.
 - **Android remote**: "Perusahaan" screen with tabs Organisasi / Tiket / Persetujuan / Biaya; approve/reject, pause/resume,
   wake, assign, move — all through the same RPCs over the paired gateway.

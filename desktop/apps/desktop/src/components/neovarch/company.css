@@ -389,3 +389,61 @@
     width: 100%;
   }
 }
+
+/* Tujuan / Rutinitas tabs, agent editor, blockers */
+.nv-co-plan {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.nv-co-plan-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.nv-co-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--nv-line);
+}
+.nv-co-item:last-child {
+  border-bottom: none;
+}
+.nv-co-spacer {
+  flex: 1;
+}
+.nv-co-editor {
+  margin-top: 0.6rem;
+}
+.nv-co-editor label,
+.nv-co-plan label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+}
+.nv-co-plan .nv-co-switch {
+  flex-direction: row;
+  align-items: center;
+}
+.nv-co-model select {
+  width: 100%;
+}
+.nv-co-node-meta {
+  font-size: 0.72rem;
+}
+.nv-co-blockers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.nv-co-btn[data-variant='danger'] {
+  border-color: var(--nv-red);
+  color: var(--nv-red);
+}
+@media (max-width: 960px) {
+  .nv-co-plan {
+    grid-template-columns: 1fr;
+  }
+}

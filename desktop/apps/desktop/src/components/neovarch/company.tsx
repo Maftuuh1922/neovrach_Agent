@@ -29,52 +29,23 @@ import {
   type TicketDetail,
   type TicketStatus
 } from './company-store'
+import { AgentEditor, GoalsAndProjects, Routines, TicketBlockers } from './company-plan'
+import { ErrorLine, useAction } from './company-ui'
 import { relativeTime } from './office-store'
 
-export type CompanyTab = 'activity' | 'approvals' | 'costs' | 'org' | 'tickets'
+export type CompanyTab = 'activity' | 'approvals' | 'costs' | 'goals' | 'org' | 'routines' | 'tickets'
 
 export const COMPANY_TABS: { label: string; value: CompanyTab }[] = [
   { label: 'Organisasi', value: 'org' },
   { label: 'Tiket', value: 'tickets' },
+  { label: 'Tujuan', value: 'goals' },
+  { label: 'Rutinitas', value: 'routines' },
   { label: 'Persetujuan', value: 'approvals' },
   { label: 'Biaya', value: 'costs' },
   { label: 'Aktivitas', value: 'activity' }
 ]
 
 const now = () => Date.now() / 1000
-
-/** Runs an action, shows its error inline instead of throwing into React. */
-function useAction(): [null | string, (fn: () => Promise<unknown>) => Promise<boolean>, boolean] {
-  const [error, setError] = useState<null | string>(null)
-  const [busy, setBusy] = useState(false)
-
-  const run = useCallback(async (fn: () => Promise<unknown>) => {
-    setBusy(true)
-    setError(null)
-
-    try {
-      await fn()
-
-      return true
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-
-      return false
-    } finally {
-      setBusy(false)
-    }
-  }, [])
-
-  return [error, run, busy]
-}
-
-function ErrorLine({ error }: { error: null | string }) {
-  return error ? (
-    <p className="nv-co-error" role="alert">
-      {error}
-    </p>
-  ) : null
-}
 
 // ------------------------------------------------------------------ setup --
 
@@ -161,9 +132,20 @@ function CompanyBar({ snap }: { snap: CompanySnapshot }) {
 
 // -------------------------------------------------------------------- org --
 
-function AgentNode({ agent, depth, running }: { agent: CompanyAgent; depth: number; running: boolean }) {
+function AgentNode({
+  agent,
+  agents,
+  depth,
+  running
+}: {
+  agent: CompanyAgent
+  agents: CompanyAgent[]
+  depth: number
+  running: boolean
+}) {
   const navigate = useNavigate()
   const [error, run, busy] = useAction()
+  const [editing, setEditing] = useState(false)
   const status = running ? 'running' : agent.status
 
   return (
@@ -180,6 +162,11 @@ function AgentNode({ agent, depth, running }: { agent: CompanyAgent; depth: numb
         {agent.current_ticket
           ? `${agent.current_ticket.key} · ${agent.current_ticket.title} (${TICKET_LABEL[agent.current_ticket.status]})`
           : 'Tidak memegang tiket'}
+      </p>
+      <p className="nv-co-muted nv-co-node-meta">
+        Model: {agent.model || 'bawaan PC'}
+        {agent.budget_monthly_cents > 0 ? ` · anggaran ${formatCents(agent.budget_monthly_cents)}/bln` : ''}
+        {agent.budget_monthly_tokens > 0 ? ` · ${formatTokens(agent.budget_monthly_tokens)}/bln` : ''}
       </p>
       {agent.budget.pct !== null && (
         <div
@@ -245,8 +232,18 @@ function AgentNode({ agent, depth, running }: { agent: CompanyAgent; depth: numb
         >
           Ngobrol
         </button>
+        <button
+          aria-expanded={editing}
+          className="nv-co-btn"
+          disabled={busy}
+          onClick={() => setEditing(v => !v)}
+          type="button"
+        >
+          Ubah
+        </button>
       </div>
       <ErrorLine error={error} />
+      {editing && <AgentEditor agent={agent} agents={agents} onClose={() => setEditing(false)} />}
     </li>
   )
 }
@@ -313,6 +310,7 @@ export function OrgChart({ snap }: { snap: CompanySnapshot }) {
         {orgTree(snap.agents).map(({ agent, depth }) => (
           <AgentNode
             agent={agent}
+            agents={snap.agents}
             depth={depth}
             key={agent.id}
             running={active.has(agent.id) || agent.status === 'running'}
@@ -410,10 +408,21 @@ function NewTicket({ snap }: { snap: CompanySnapshot }) {
   )
 }
 
-export function TicketDetailPanel({ id, onClose, snap }: { id: number; onClose: () => void; snap: CompanySnapshot }) {
+export function TicketDetailPanel({
+  id,
+  onClose,
+  snap,
+  tickets = []
+}: {
+  id: number
+  onClose: () => void
+  snap: CompanySnapshot
+  tickets?: CompanyTicket[]
+}) {
   const rev = useStore($companyRev)
   const [detail, setDetail] = useState<null | TicketDetail>(null)
   const [comment, setComment] = useState('')
+  const [loadError, setLoadError] = useState<null | string>(null)
   const [error, run, busy] = useAction()
 
   useEffect(() => {
@@ -423,11 +432,13 @@ export function TicketDetailPanel({ id, onClose, snap }: { id: number; onClose: 
       .then(d => {
         if (alive) {
           setDetail(d)
+          setLoadError(null)
         }
       })
-      .catch(() => {
+      .catch(e => {
         if (alive) {
           setDetail(null)
+          setLoadError(e instanceof Error ? e.message : String(e))
         }
       })
 
@@ -439,7 +450,16 @@ export function TicketDetailPanel({ id, onClose, snap }: { id: number; onClose: 
   if (!detail) {
     return (
       <aside className="nv-co-detail">
-        <p className="nv-co-empty">Memuat tiket…</p>
+        {loadError ? (
+          <div className="nv-co-empty" role="alert">
+            <p>Tiket belum bisa dimuat: {loadError}</p>
+            <button className="nv-co-btn" onClick={onClose} type="button">
+              Tutup
+            </button>
+          </div>
+        ) : (
+          <p className="nv-co-empty">Memuat tiket…</p>
+        )}
       </aside>
     )
   }
@@ -508,11 +528,7 @@ export function TicketDetailPanel({ id, onClose, snap }: { id: number; onClose: 
         ))}
       </div>
       <ErrorLine error={error} />
-      {detail.blockers.length > 0 && (
-        <p className="nv-co-desc">
-          Terhambat oleh: {detail.blockers.map(b => `${b.key} (${TICKET_LABEL[b.status]})`).join(', ')}
-        </p>
-      )}
+      <TicketBlockers detail={detail} onChanged={reload} tickets={tickets} />
       {detail.children.length > 0 && (
         <p className="nv-co-desc">
           Subtiket: {detail.children.map(c => `${c.key} (${TICKET_LABEL[c.status]})`).join(', ')}
@@ -597,7 +613,7 @@ export function TicketBoard({ snap }: { snap: CompanySnapshot }) {
             </section>
           ))}
         </div>
-        {open !== null && <TicketDetailPanel id={open} onClose={() => setOpen(null)} snap={snap} />}
+        {open !== null && <TicketDetailPanel id={open} onClose={() => setOpen(null)} snap={snap} tickets={tickets} />}
       </div>
     </div>
   )
@@ -620,8 +636,12 @@ export function Approvals() {
     setItems(Array.isArray(res?.approvals) ? res.approvals : [])
   }, [history])
 
+  const [loadError, setLoadError] = useState<null | string>(null)
+
   useEffect(() => {
-    void load().catch(() => undefined)
+    load()
+      .then(() => setLoadError(null))
+      .catch(e => setLoadError(e instanceof Error ? e.message : String(e)))
   }, [load, rev])
 
   const decide = (id: number, decision: 'approve' | 'reject') =>
@@ -640,8 +660,10 @@ export function Approvals() {
         <input checked={history} onChange={e => setHistory(e.target.checked)} type="checkbox" />
         <span>Tampilkan riwayat</span>
       </label>
-      <ErrorLine error={error} />
-      {items.length === 0 && <p className="nv-co-empty">Tidak ada yang menunggu persetujuanmu.</p>}
+      <ErrorLine error={error ?? (loadError ? `Persetujuan belum bisa dimuat: ${loadError}` : null)} />
+      {items.length === 0 && !loadError && (
+        <p className="nv-co-empty">{history ? 'Belum ada riwayat persetujuan.' : 'Tidak ada yang menunggu persetujuanmu.'}</p>
+      )}
       <ul className="nv-co-list">
         {items.map(ap => (
           <li className="nv-co-card" data-status={ap.status} key={ap.id}>
@@ -707,11 +729,14 @@ export function Costs() {
   const rev = useStore($companyRev)
   const [costs, setCosts] = useState<CompanyCosts | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
+  const [loadError, setLoadError] = useState<null | string>(null)
+  const [retry, setRetry] = useState(0)
   const [error, run, busy] = useAction()
 
   useEffect(() => {
     companyCall<CompanyCosts>('costs')
       .then(c => {
+        setLoadError(null)
         setCosts(c)
         setForm({
           budget_monthly_cents: String(c.budget_monthly_cents),
@@ -721,8 +746,19 @@ export function Costs() {
           warn_pct: String(c.warn_pct)
         })
       })
-      .catch(() => undefined)
-  }, [rev])
+      .catch(e => setLoadError(e instanceof Error ? e.message : String(e)))
+  }, [rev, retry])
+
+  if (loadError && !costs) {
+    return (
+      <div className="nv-co-empty" role="alert">
+        <p>Biaya belum bisa dimuat: {loadError}</p>
+        <button className="nv-co-btn" onClick={() => setRetry(n => n + 1)} type="button">
+          Coba lagi
+        </button>
+      </div>
+    )
+  }
 
   if (!costs || !Array.isArray(costs.by_agent) || !costs.total) {
     return <p className="nv-co-empty">Memuat biaya…</p>
@@ -754,6 +790,13 @@ export function Costs() {
           </tr>
         </thead>
         <tbody>
+          {costs.by_agent.length === 0 && (
+            <tr>
+              <td className="nv-co-muted" colSpan={4}>
+                Belum ada pegawai.
+              </td>
+            </tr>
+          )}
           {costs.by_agent.map(r => (
             <tr key={r.id}>
               <td>{r.name}</td>
@@ -814,7 +857,7 @@ export function Costs() {
           {field('warn_pct', 'Peringatan di (%)')}
         </div>
         <p className="nv-co-muted">
-          Saat anggaran pegawai habis, pegawai itu otomatis dijeda sampai kamu menaikkan anggarannya.
+          Anggaran per pegawai diatur lewat “Ubah” di tab Organisasi; anggaran proyek di tab Tujuan. Saat anggaran pegawai habis, pegawai itu otomatis dijeda sampai kamu menaikkan anggarannya.
         </p>
         <button className="nv-co-btn" data-variant="primary" disabled={busy} type="submit">
           Simpan
@@ -830,16 +873,25 @@ export function Costs() {
 export function ActivityLog() {
   const rev = useStore($companyRev)
   const [items, setItems] = useState<CompanyActivity[]>([])
+  const [loadError, setLoadError] = useState<null | string>(null)
 
   useEffect(() => {
     companyCall<{ items: CompanyActivity[] }>('activity', { limit: 150 })
-      .then(res => setItems(Array.isArray(res?.items) ? res.items : []))
-      .catch(() => undefined)
+      .then(res => {
+        setItems(Array.isArray(res?.items) ? res.items : [])
+        setLoadError(null)
+      })
+      .catch(e => setLoadError(e instanceof Error ? e.message : String(e)))
   }, [rev])
 
   return (
     <ol className="nv-co-activity" data-slot="nv-company-activity">
-      {items.length === 0 && <li className="nv-co-empty">Belum ada aktivitas.</li>}
+      {loadError && (
+        <li className="nv-co-error" role="alert">
+          Aktivitas belum bisa dimuat: {loadError}
+        </li>
+      )}
+      {items.length === 0 && !loadError && <li className="nv-co-empty">Belum ada aktivitas.</li>}
       {items.map(item => (
         <li data-action={item.action} key={item.id}>
           <span className="nv-co-who">{item.actor_name}</span>
@@ -875,6 +927,8 @@ export function CompanyPanel({ tab }: { tab: CompanyTab }) {
       <CompanyBar snap={snap} />
       {tab === 'org' && <OrgChart snap={snap} />}
       {tab === 'tickets' && <TicketBoard snap={snap} />}
+      {tab === 'goals' && <GoalsAndProjects snap={snap} />}
+      {tab === 'routines' && <Routines snap={snap} />}
       {tab === 'approvals' && <Approvals />}
       {tab === 'costs' && <Costs />}
       {tab === 'activity' && <ActivityLog />}

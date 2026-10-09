@@ -47,6 +47,8 @@ export interface CompanyAgent {
   name: string
   pause_reason: null | string
   pending_approvals: number
+  /** Provider of the agent's own model pick ('' = the PC default). */
+  provider?: string
   reports_to: null | number
   reports_to_name: null | string
   role: string
@@ -70,6 +72,20 @@ export interface CompanyProject {
   goal_id: null | number
   id: number
   name: string
+  status?: string
+}
+
+export interface CompanyRoutine {
+  agent_id: null | number
+  description?: string
+  enabled: boolean | number
+  id: number
+  last_run_at?: null | number
+  name: string
+  next_run_at: null | number
+  project_id?: null | number
+  schedule: string
+  title?: string
 }
 
 export interface CompanySnapshot {
@@ -81,13 +97,7 @@ export interface CompanySnapshot {
   goals: CompanyGoal[]
   pending_approvals: number
   projects: CompanyProject[]
-  routines: {
-    enabled: number
-    id: number
-    name: string
-    next_run_at: null | number
-    schedule: string
-  }[]
+  routines: CompanyRoutine[]
   ticket_counts: Record<TicketStatus, number>
 }
 
@@ -208,6 +218,12 @@ export const AGENT_STATUS_LABEL: Record<CompanyAgentStatus, string> = {
   pending_approval: 'Menunggu persetujuan',
   running: 'Bekerja',
   terminated: 'Diberhentikan'
+}
+
+export const GOAL_STATUS_LABEL: Record<string, string> = {
+  active: 'Aktif',
+  done: 'Tercapai',
+  paused: 'Ditunda'
 }
 
 export const APPROVAL_KIND_LABEL: Record<CompanyApproval['kind'], string> = {
