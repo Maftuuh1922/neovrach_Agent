@@ -354,6 +354,7 @@ export function sceneAgentsFromSnapshot(snapshot: null | OfficeSnapshot): SceneA
   return snapshot.agents.map((agent, i) => {
     const status = sceneStatusOf(agent, snapshot.feed)
     const statusText = OFFICE3D_STATUS[status].text
+
     const detail =
       status === 'waiting'
         ? agent.pending_approval?.command || agent.current_task

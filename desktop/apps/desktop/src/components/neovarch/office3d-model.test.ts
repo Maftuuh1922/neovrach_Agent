@@ -109,6 +109,7 @@ describe('sceneStatusOf', () => {
       session_id: null,
       tasks: [{ id: 't1', status: 'blocked', title: 'Deploy' }]
     })
+
     expect(sceneStatusOf(kanban)).toBe('error')
     expect(sceneStatusOf({ ...kanban, status: 'working' })).toBe('working')
   })
@@ -132,6 +133,7 @@ describe('sceneAgentsFromSnapshot', () => {
       }),
       agent({ id: 'session:c', name: 'Citra', session_id: 'c' })
     ])
+
     const [a, b, c] = sceneAgentsFromSnapshot(snap)
     const desks = layoutDesks(3).desks
 
@@ -154,9 +156,11 @@ describe('sceneAgentsFromSnapshot', () => {
     const first = sceneAgentsFromSnapshot(
       snapshot([agent({ id: 'session:a' }), agent({ id: 'session:b', session_id: 'b' })])
     )
+
     const next = sceneAgentsFromSnapshot(
       snapshot([agent({ id: 'session:a', status: 'working' }), agent({ id: 'session:b', session_id: 'b' })])
     )
+
     expect(next.map(s => s.status)).toEqual(['working', 'idle'])
     expect(next.map(s => [s.x, s.z])).toEqual(first.map(s => [s.x, s.z]))
   })
