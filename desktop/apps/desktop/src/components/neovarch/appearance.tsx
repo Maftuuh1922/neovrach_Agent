@@ -49,6 +49,35 @@ function mix(hex: string, other: string, t: number): string {
   return `#${[16, 8, 0].map(s => ch(s).toString(16).padStart(2, '0')).join('')}`
 }
 
+function luminance(hex: string): number {
+  const n = parseInt(hex.replace('#', ''), 16)
+
+  const lin = (c: number) => {
+    const v = c / 255
+
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
+
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+export const ON_ACCENT_LIGHT = '#FFFFFF'
+export const ON_ACCENT_DARK = '#1A1210'
+
+/** Text colour on an accent fill: white unless dark ink reads clearly better
+ *  (orange, amber, light greys…), so labels on accent buttons keep WCAG AA. */
+export function onAccentColor(accent: string): string {
+  const white = contrastRatio(ON_ACCENT_LIGHT, accent)
+
+  return white >= 4.5 || white >= contrastRatio(ON_ACCENT_DARK, accent) ? ON_ACCENT_LIGHT : ON_ACCENT_DARK
+}
+
 /** Paint the accent: retint the active skin and the Neovarch brand tokens. */
 export function applyAccent(accent: string, base: 'dark' | 'light'): void {
   const root = document.documentElement
@@ -56,7 +85,7 @@ export function applyAccent(accent: string, base: 'dark' | 'light'): void {
   setAccentOverride(isDefault ? null : accent)
 
   if (isDefault) {
-    for (const k of ['--nv-red', '--nv-red-deep', '--nv-red-text', '--nv-red-wash']) {
+    for (const k of ['--nv-red', '--nv-red-deep', '--nv-red-text', '--nv-red-wash', '--nv-on-accent']) {
       root.style.removeProperty(k)
     }
 
@@ -64,6 +93,7 @@ export function applyAccent(accent: string, base: 'dark' | 'light'): void {
   }
 
   root.style.setProperty('--nv-red', accent)
+  root.style.setProperty('--nv-on-accent', onAccentColor(accent))
   root.style.setProperty('--nv-red-deep', mix(accent, '#000000', 0.45))
   root.style.setProperty('--nv-red-text', base === 'dark' ? mix(accent, '#ffffff', 0.2) : mix(accent, '#000000', 0.35))
   root.style.setProperty('--nv-red-wash', base === 'dark' ? mix(accent, '#0d0606', 0.82) : mix(accent, '#ffffff', 0.82))
@@ -79,6 +109,7 @@ async function refresh(): Promise<void> {
 
 onMount($nvAppearance, () => {
   void refresh()
+
   const off = onGatewayEvent('appearance.changed', event => {
     const p = event.payload as NeovarchAppearance | undefined
 
@@ -86,6 +117,7 @@ onMount($nvAppearance, () => {
       $nvAppearance.set(p)
     }
   })
+
   const offGw = $gateway.listen(() => void refresh())
 
   return () => {
@@ -100,6 +132,7 @@ export async function saveAppearance(next: NeovarchAppearance): Promise<Neovarch
     method: 'PUT',
     body: { accent: next.accent, base: next.base }
   })
+
   $nvAppearance.set(saved)
 
   return saved
