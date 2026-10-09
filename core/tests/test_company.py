@@ -232,3 +232,83 @@ def test_change_listener_never_breaks_writes(store):
     store.on_change = boom
     store.setup("Studio")
     assert store.company()["name"] == "Studio"
+
+
+def test_goal_project_edit_and_validation(store):
+    store.setup("Studio", "Misi")
+    assert store.company()["autorun"] is False  # nothing runs on its own until the user says so
+    g = store.save_goal({"title": "Rilis 1.4.5"})
+    sub = store.save_goal({"title": "Stabil di Windows", "parent_id": g["id"]})
+    store.save_goal({"id": sub["id"], "title": "Stabil di Windows & Linux", "description": "tanpa crash"})
+    assert store.q1("SELECT title FROM goals WHERE id=?", (sub["id"],))["title"] == "Stabil di Windows & Linux"
+    with pytest.raises(CompanyError, match="induk"):
+        store.save_goal({"id": g["id"], "parent_id": sub["id"]})
+    p = store.save_project({"name": "Desktop", "goal_id": g["id"], "budget_monthly_cents": 500})
+    store.save_project({"id": p["id"], "goal_id": None, "budget_monthly_cents": 0})
+    assert store.q1("SELECT goal_id FROM projects WHERE id=?", (p["id"],))["goal_id"] is None
+    with pytest.raises(CompanyError) as e:
+        store.save_project({"id": p["id"], "budget_monthly_cents": -5})
+    assert e.value.code == "invalid"
+    store.delete_goal(g["id"])
+    assert store.q1("SELECT parent_id FROM goals WHERE id=?", (sub["id"],))["parent_id"] is None
+
+
+def test_agent_model_provider_and_budget_fields(store):
+    dimas, _hana, _raka = org(store)
+    a = store.save_agent({"id": dimas["id"], "model": "gpt-x", "provider": "custom:lab",
+                          "budget_monthly_cents": 250, "budget_monthly_tokens": 10000, "heartbeat_s": 600})
+    assert (a["model"], a["provider"], a["budget_monthly_cents"], a["budget_monthly_tokens"], a["heartbeat_s"]) == \
+        ("gpt-x", "custom:lab", 250, 10000, 600)
+    with pytest.raises(CompanyError) as e:
+        store.save_agent({"id": dimas["id"], "budget_monthly_tokens": -1})
+    assert e.value.code == "invalid"
+    store.save_agent({"id": dimas["id"], "model": "", "provider": ""})
+    assert store.agent(dimas["id"])["model"] == ""
+
+
+def test_old_company_db_gets_provider_column(home):
+    import sqlite3
+    path = home / "company.db"
+    db = sqlite3.connect(str(path))
+    db.execute("CREATE TABLE agents (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, title TEXT NOT NULL "
+               "DEFAULT '', role TEXT NOT NULL DEFAULT 'pegawai', reports_to INTEGER, job_description TEXT NOT NULL "
+               "DEFAULT '', model TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'idle', pause_reason TEXT, "
+               "heartbeat_s INTEGER NOT NULL DEFAULT 0, budget_monthly_cents INTEGER NOT NULL DEFAULT 0, "
+               "budget_monthly_tokens INTEGER NOT NULL DEFAULT 0, session_id TEXT, last_heartbeat_at REAL, "
+               "created_at REAL NOT NULL, updated_at REAL NOT NULL)")
+    db.commit()
+    db.close()
+    s = CompanyStore(clock=Clock())
+    try:
+        s.setup("Studio")
+        a = s.save_agent({"name": "Dimas", "provider": "openai", "skip_approval": True})
+        assert a["provider"] == "openai"
+    finally:
+        s.close()
+
+
+def test_blocker_add_remove_and_cycle(store):
+    dimas, _h, _r = org(store)
+    a = store.create_ticket({"title": "A", "assignee_id": dimas["id"]})
+    b = store.create_ticket({"title": "B"})
+    store.add_blocker(a["id"], b["id"])
+    assert [x["key"] for x in store.ticket_detail(a["id"])["blockers"]] == [b["key"]]
+    with pytest.raises(CompanyError, match="melingkar"):
+        store.add_blocker(b["id"], a["id"])
+    with pytest.raises(CompanyError):
+        store.add_blocker(a["id"], a["id"])
+    store.remove_blocker(a["id"], b["id"])
+    assert store.ticket_detail(a["id"])["blockers"] == []
+
+
+def test_routine_edit_disable_and_bad_schedule(store):
+    dimas, _h, _r = org(store)
+    r = store.save_routine({"name": "Ringkasan", "schedule": "every 1d", "agent_id": dimas["id"]})
+    store.save_routine({"id": r["id"], "enabled": False, "agent_id": None, "schedule": "every 7d"})
+    row = store.q1("SELECT * FROM routines WHERE id=?", (r["id"],))
+    assert row["enabled"] == 0 and row["agent_id"] is None and row["schedule"] == "every 7d"
+    assert store.due_routines() == []
+    with pytest.raises(CompanyError, match="Jadwal"):
+        store.save_routine({"id": r["id"], "schedule": "kapan-kapan"})
+    store.delete_routine(r["id"])
+    assert store.q1("SELECT id FROM routines WHERE id=?", (r["id"],)) is None

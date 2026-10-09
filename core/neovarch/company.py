@@ -144,7 +144,14 @@ class CompanyStore:
         except sqlite3.DatabaseError:
             pass
         self.db.executescript(SCHEMA)
+        self._migrate()
         self.on_change: Callable[[str, int | None, str], None] | None = None
+
+    def _migrate(self) -> None:
+        """Columns added after the first release of company.db (old files keep working)."""
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(agents)").fetchall()}
+        if "provider" not in cols:
+            self.db.execute("ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT ''")
 
     # ------------------------------------------------------------ plumbing --
     def close(self) -> None:
@@ -313,6 +320,7 @@ class CompanyStore:
     # ------------------------------------------------------------ projects --
     def save_project(self, body: dict, actor: str = "user") -> dict:
         self.require_company()
+        self._non_negative(body, ("budget_monthly_cents",))
         now = self.clock()
         pid = body.get("id")
         if body.get("goal_id") and not self.q1("SELECT id FROM goals WHERE id=?", (int(body["goal_id"]),)):
@@ -374,11 +382,24 @@ class CompanyStore:
                     stack.append(r["id"])
         return out
 
-    AGENT_FIELDS = {"name": str, "title": str, "role": str, "job_description": str, "model": str,
+    AGENT_FIELDS = {"name": str, "title": str, "role": str, "job_description": str, "model": str, "provider": str,
                     "heartbeat_s": int, "budget_monthly_cents": int, "budget_monthly_tokens": int}
+
+    @staticmethod
+    def _non_negative(body: dict, keys: tuple[str, ...]) -> None:
+        for k in keys:
+            if body.get(k) in (None, ""):
+                continue
+            try:
+                ok = float(body[k]) >= 0
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                raise CompanyError("invalid", f"nilai {k} harus angka 0 atau lebih")
 
     def save_agent(self, body: dict, actor: str = "user", actor_id: int | None = None) -> dict:
         c = self.require_company()
+        self._non_negative(body, ("heartbeat_s", "budget_monthly_cents", "budget_monthly_tokens"))
         now = self.clock()
         aid = body.get("id")
         reports_to = body.get("reports_to")
@@ -409,10 +430,11 @@ class CompanyStore:
             raise CompanyError("conflict", f"Sudah ada pegawai bernama {name}")
         needs_ok = bool(c["require_hire_approval"]) and not body.get("skip_approval")
         status = "pending_approval" if needs_ok else "idle"
-        aid = self.x("INSERT INTO agents (name, title, role, reports_to, job_description, model, status, heartbeat_s, "
-                     "budget_monthly_cents, budget_monthly_tokens, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        aid = self.x("INSERT INTO agents (name, title, role, reports_to, job_description, model, provider, status, heartbeat_s, "
+                     "budget_monthly_cents, budget_monthly_tokens, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      (name, str(body.get("title") or ""), str(body.get("role") or "pegawai"), reports_to,
-                      str(body.get("job_description") or ""), str(body.get("model") or ""), status,
+                      str(body.get("job_description") or ""), str(body.get("model") or ""),
+                      str(body.get("provider") or ""), status,
                       int(body.get("heartbeat_s") or 0), int(body.get("budget_monthly_cents") or 0),
                       int(body.get("budget_monthly_tokens") or 0), now, now)).lastrowid
         if needs_ok:

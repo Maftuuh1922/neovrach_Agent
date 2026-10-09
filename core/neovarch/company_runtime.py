@@ -204,6 +204,36 @@ class CompanyRuntime:
         live.ctx.company = b  # type: ignore[attr-defined]
         live.ctx.persona = b.persona  # type: ignore[attr-defined]
 
+    @staticmethod
+    def _apply_model(rec: dict, a: dict) -> None:
+        """The agent's own model pick (empty = the PC's default) rides on its session."""
+        if a.get("model") or a.get("provider"):
+            rec["model_override"] = {"model": a.get("model") or "", "provider": a.get("provider") or ""}
+        else:
+            rec.pop("model_override", None)
+
+    def sync_session_model(self, a: dict) -> None:
+        """After agent.save: an open persona session follows a new model pick at once."""
+        sid = a.get("session_id")
+        gw = self.gw
+        if not sid:
+            return
+        rec = gw.live[sid].rec if sid in gw.live else gw.store.find(sid)
+        if not rec:
+            return
+        before = rec.get("model_override")
+        self._apply_model(rec, a)
+        if rec.get("model_override") == before:
+            return
+        try:
+            from neovarch import config as cfgmod, session_settings
+            rec["model"] = session_settings.effective_endpoint(cfgmod.load_config(), rec)["model"]
+        except Exception:  # noqa: BLE001 - a bad pick falls back to the default at turn time
+            pass
+        gw.store.save(rec)
+        if sid in gw.live:
+            gw.broadcast_event("session.info", sid, gw.live[sid].info())
+
     def agent_session(self, a: dict) -> "LiveSession":
         gw = self.gw
         rec = None
@@ -213,10 +243,7 @@ class CompanyRuntime:
             rec = gw.store.create(source="company", title=f"Kantor · {a['name']}", model=gw.model_info()["model"])
             self.store.x("UPDATE agents SET session_id=? WHERE id=?", (rec["id"], a["id"]))
         rec["company_agent_id"] = a["id"]
-        if a.get("model"):
-            rec["model_override"] = {"model": a["model"], "provider": ""}
-        else:
-            rec.pop("model_override", None)
+        self._apply_model(rec, a)
         gw.store.save(rec)
         live = gw.open(rec)
         self.bind_session(live)
@@ -656,7 +683,10 @@ class CompanyRuntime:
             s.delete_project(int(p.get("id") or 0))
             return {"ok": True}
         if m == "agent.save":
-            return s.save_agent(p)
+            a = s.save_agent(p)
+            if p.get("id") and ("model" in p or "provider" in p):
+                self.sync_session_model(a)
+            return a
         if m == "agent.pause":
             return s.set_agent_status(p.get("id"), "paused", reason=str(p.get("reason") or "dijeda pengguna"))
         if m == "agent.resume":

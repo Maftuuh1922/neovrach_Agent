@@ -7,7 +7,8 @@ GETs the REST routes behind each rail page and Settings tab, calls the gateway
 RPCs those pages use, runs one chat turn and checks the Kantor snapshot and the
 chat's persona, then the routes behind the Kantor desk model switch, thread
 timeline/around, logs level filter, skills toggle + learning node edit,
-memory panel and the GitHub account page. Prints a JSON report (one row per check) and exits non-zero if
+memory panel, the GitHub account page and every company.* route behind the
+Kantor → Perusahaan tabs. Prints a JSON report (one row per check) and exits non-zero if
 any check fails. A route "fails" when it answers non-2xx or, for a list route,
 returns no list where the page reads one.
 """
@@ -240,10 +241,93 @@ async def drive(port: int, token: str) -> list[dict]:
                      "ok": status == 200 and acct.get("ok") is False and bool(acct.get("error")),
                      "status": status})
 
+        # Kantor → Perusahaan: every company.* route the desktop tabs call (autorun stays off: no LLM turns).
+        rows += await company_checks(http, base)
+
     from neovarch.agent import persona_prompt
     persona = persona_prompt(sid, snap)
     rows.append({"page": "chat", "check": "persona names the desk", "ok": bool(desk.get("name"))
                  and f"**{desk.get('name')}**" in persona, "name": desk.get("name")})
+    return rows
+
+
+async def company_checks(http, base: str) -> list[dict]:
+    rows: list[dict] = []
+
+    async def co(method: str, body: dict | None = None, want: int = 200, check=None, label: str = ""):
+        status, res = await rest(http, "POST", f"{base}/api/company/{method}", body or {})
+        ok = status == want and (check(res) if check else True)
+        rows.append({"page": "kantor:perusahaan", "check": f"company.{method}{label}", "ok": bool(ok), "status": status,
+                     **({} if ok else {"body": str(res)[:300]})})
+        return res if isinstance(res, dict) else {}
+
+    status, snap = await rest(http, "GET", f"{base}/api/company")
+    rows.append({"page": "kantor:perusahaan", "check": "GET /api/company (no company yet)",
+                 "ok": status == 200 and snap == {"exists": False}, "status": status})
+    await co("ticket.save", {"title": "x"}, 400, label=" without company -> 400")
+    await co("setup", {"name": "Smoke Studio", "mission": "Uji rute"},
+             check=lambda r: r.get("autorun") is False, label=" (autorun off by default)")
+    snap = await co("seed_demo", check=lambda r: r.get("exists") is True and len(r.get("agents") or []) == 4)
+    agents = {a["name"]: a for a in snap.get("agents") or []}
+    dimas, hana = agents.get("Dimas", {}).get("id"), agents.get("Hana", {}).get("id")
+    goal = await co("goal.save", {"title": "Rilis stabil"}, check=lambda r: bool(r.get("id")))
+    sub = await co("goal.save", {"title": "Windows", "parent_id": goal.get("id")}, check=lambda r: bool(r.get("id")))
+    await co("goal.save", {"id": goal.get("id"), "parent_id": sub.get("id")}, 400, label=" cycle -> 400")
+    await co("goal.save", {"id": sub.get("id"), "title": "Windows & Linux"},
+             check=lambda r: r.get("title") == "Windows & Linux", label=" (edit)")
+    proj = await co("project.save", {"name": "Desktop", "goal_id": goal.get("id"), "budget_monthly_cents": 300},
+                    check=lambda r: r.get("budget_monthly_cents") == 300)
+    await co("project.save", {"id": proj.get("id"), "budget_monthly_cents": -1}, 400, label=" negative budget -> 400")
+    await co("agent.save", {"id": hana, "budget_monthly_cents": 150, "budget_monthly_tokens": 20000,
+                            "model": "mock-model", "provider": "custom"},
+             check=lambda r: r.get("budget_monthly_cents") == 150 and r.get("model") == "mock-model",
+             label=" (budget + model)")
+    await co("agent.save", {"id": hana, "reports_to": hana}, 400, label=" self-report -> 400")
+    t1 = await co("ticket.save", {"title": "Rancang sinkronisasi", "assignee_id": hana, "project_id": proj.get("id")},
+                  check=lambda r: str(r.get("key", "")).startswith("NV-"))
+    t2 = await co("ticket.save", {"title": "Siapkan API"}, check=lambda r: bool(r.get("id")))
+    await co("ticket.block", {"id": t1.get("id"), "blocker_id": t2.get("id")})
+    await co("ticket.get", {"id": t1.get("id")}, check=lambda r: [b["id"] for b in r.get("blockers") or []]
+             == [t2.get("id")], label=" (blocker listed)")
+    await co("ticket.block", {"id": t2.get("id"), "blocker_id": t1.get("id")}, 400, label=" cycle -> 400")
+    await co("ticket.unblock", {"id": t1.get("id"), "blocker_id": t2.get("id")})
+    await co("ticket.list", check=lambda r: isinstance(r.get("tickets"), list) and len(r["tickets"]) >= 3)
+    await co("ticket.move", {"id": t2.get("id"), "status": "backlog"}, check=lambda r: r.get("status") == "backlog")
+    await co("ticket.move", {"id": t2.get("id"), "status": "done"}, 409, label=" illegal transition -> 409")
+    await co("ticket.comment", {"id": t1.get("id"), "body": "Halo dari smoke"}, check=lambda r: bool(r.get("id")))
+    rt = await co("routine.save", {"name": "Ringkasan mingguan", "schedule": "every 7d", "agent_id": dimas},
+                  check=lambda r: bool(r.get("next_run_at")))
+    await co("routine.save", {"id": rt.get("id"), "schedule": "kapan-kapan"}, 400, label=" bad schedule -> 400")
+    await co("routine.save", {"id": rt.get("id"), "enabled": False}, check=lambda r: r.get("enabled") == 0,
+             label=" (disable)")
+    await co("routine.trigger", {"id": rt.get("id")}, check=lambda r: r.get("assignee_id") == dimas)
+    await co("routine.delete", {"id": rt.get("id")}, check=lambda r: r.get("ok") is True)
+    await co("approval.list", {"status": None}, check=lambda r: isinstance(r.get("approvals"), list))
+    await co("costs", check=lambda r: isinstance(r.get("by_agent"), list) and "total" in r)
+    await co("activity", {"limit": 50}, check=lambda r: isinstance(r.get("items"), list) and len(r["items"]) > 5)
+    await co("agent.pause", {"id": hana}, check=lambda r: r.get("status") == "paused")
+    await co("agent.resume", {"id": hana}, check=lambda r: r.get("status") == "idle")
+    await co("no.such", {}, 404, label=" unknown method -> 404")
+    await co("project.delete", {"id": proj.get("id")}, check=lambda r: r.get("ok") is True)
+    await co("goal.delete", {"id": sub.get("id")}, check=lambda r: r.get("ok") is True)
+    status, snap = await rest(http, "GET", f"{base}/api/company")
+    rows.append({"page": "kantor:perusahaan", "check": "GET /api/company snapshot after edits",
+                 "ok": status == 200 and snap.get("exists") is True and len(snap.get("goals") or []) == 2
+                 and snap["company"]["autorun"] is False, "status": status})
+
+    # Kantor desk model popover on a company desk: that agent only, never the PC default.
+    _, info_before = await rest(http, "GET", f"{base}/api/model/info")
+    status, res = await rest(http, "PUT", f"{base}/api/agents/company:{dimas}/model", {"model": "mock-model"})
+    _, info_after = await rest(http, "GET", f"{base}/api/model/info")
+    rows.append({"page": "kantor:perusahaan", "check": "PUT /api/agents/company:<id>/model (agent scope)",
+                 "ok": status == 200 and res.get("scope") == "agent" and info_before == info_after, "status": status})
+    status, _ = await rest(http, "PUT", f"{base}/api/agents/company:99999/model", {"model": "mock-model"})
+    rows.append({"page": "kantor:perusahaan", "check": "PUT /api/agents/company:<unknown>/model -> 404",
+                 "ok": status == 404, "status": status})
+    status, office = await rest(http, "GET", f"{base}/api/office")
+    desks = [a for a in (office.get("agents") or []) if a.get("kind") == "company"] if isinstance(office, dict) else []
+    rows.append({"page": "kantor:perusahaan", "check": "GET /api/office has the company desks",
+                 "ok": status == 200 and len(desks) == 4, "status": status, "desks": len(desks)})
     return rows
 
 

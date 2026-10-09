@@ -1464,6 +1464,17 @@ def build_app(gw: Gateway) -> web.Application:
         if not model:
             return web.json_response({"ok": False, "detail": "model wajib diisi"}, status=422)
         aid = request.match_info["aid"]
+        if aid.startswith("company:"):
+            # A Perusahaan desk: the pick belongs to that agent (never the PC default).
+            try:
+                a = await gw.company.call("company.agent.save", {"id": int(aid.split(":", 1)[1] or 0),
+                                                                 "model": model, "provider": provider})
+            except (CompanyError, ValueError) as exc:
+                code = getattr(exc, "code", "invalid")
+                return web.json_response({"ok": False, "detail": str(exc)}, status=404 if code == "not_found" else 422)
+            gw.office.schedule()
+            return web.json_response({"ok": True, "model": a["model"], "provider": a.get("provider") or "",
+                                      "scope": "agent", "agent_id": aid})
         sid = aid.split(":", 1)[1] if aid.startswith("session:") else ""
         if sid and not (sid in gw.live or gw.store.find(sid)):
             return web.json_response({"ok": False, "detail": f"agen tidak ditemukan: {aid}"}, status=404)

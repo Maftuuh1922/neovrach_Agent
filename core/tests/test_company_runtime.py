@@ -249,3 +249,29 @@ async def test_routine_trigger_and_comment_wakes(mock_provider, monkeypatch):
         assert s.q1("SELECT reason FROM wakeups WHERE agent_id=?", (sari["id"],))["reason"] == "comment"
     finally:
         await c.close()
+
+
+async def test_agent_model_pick_follows_session_and_desk_put(mock_provider, monkeypatch):
+    gw, c = await _gw(monkeypatch)
+    try:
+        await post(c, "seed_demo")
+        s = gw.company.store
+        hana = next(a for a in s.agents_public() if a["name"] == "Hana")
+        chat = await post(c, "agent.chat", {"id": hana["id"]})
+        sid = chat["session_id"]
+        assert not gw.live[sid].rec.get("model_override")
+        await post(c, "agent.save", {"id": hana["id"], "model": "mock-model-2", "provider": "custom"})
+        assert gw.live[sid].rec["model_override"] == {"model": "mock-model-2", "provider": "custom"}
+        await post(c, "agent.save", {"id": hana["id"], "model": "", "provider": ""})
+        assert not gw.live[sid].rec.get("model_override")
+        default_before = gw.model_info()["model"]
+        # Kantor desk popover on a company desk changes that agent only, never the PC default
+        r = await c.put(f"/api/agents/company:{hana['id']}/model", json={"model": "mock-model-3"}, headers=H)
+        body = await r.json()
+        assert r.status == 200 and body["scope"] == "agent", body
+        assert s.agent(hana["id"])["model"] == "mock-model-3"
+        assert gw.model_info()["model"] == default_before
+        r = await c.put("/api/agents/company:9999/model", json={"model": "x"}, headers=H)
+        assert r.status == 404
+    finally:
+        await c.close()
