@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Neovarch · Aksi cepat" (compact: icon beside label).
+     Generated layout; NvQuickViews.kt fills it. Root id = @android:id/background
+     so Android 12+ launchers clip it to the widget shape. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/nvw_bg"
+    android:clipToOutline="true"
+    android:padding="@dimen/nvw_pad">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+    <LinearLayout
+        android:id="@+id/nvq_left"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <LinearLayout
+            android:id="@+id/nvq_header"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@null"
+                android:src="@mipmap/ic_launcher" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Neovarch"
+                android:textColor="@color/nvw_text"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:id="@+id/nvq_pcchip"
+                android:layout_width="wrap_content"
+                android:layout_height="22dp"
+                android:background="@drawable/nvw_chip"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="9dp">
+                <ImageView
+                    android:id="@+id/nvq_dot"
+                    android:layout_width="7dp"
+                    android:layout_height="7dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/nvw_circle"
+                    android:tint="@color/nvw_ok" />
+                <TextView
+                    android:id="@+id/nvq_pc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:maxWidth="96dp"
+                    android:text="PC online"
+                    android:textColor="@color/nvw_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+            <FrameLayout
+                android:id="@+id/nvq_t1"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/nvw_tile">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="7dp"
+                    android:paddingEnd="6dp">
+                    <FrameLayout android:layout_width="26dp" android:layout_height="26dp">
+                        <ImageView android:id="@+id/nvq_t1_wash" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0.16" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_accent" />
+                        <ImageView android:id="@+id/nvq_t1_ic" android:layout_width="14dp" android:layout_height="14dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_ic_chat" android:tint="@color/nvw_accent" />
+                    </FrameLayout>
+                    <TextView android:id="@+id/nvq_t1_label" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:text="Chat" android:textColor="@color/nvw_text" android:textSize="12sp" android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+            <FrameLayout
+                android:id="@+id/nvq_t2"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/nvw_tile">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="7dp"
+                    android:paddingEnd="6dp">
+                    <FrameLayout android:layout_width="26dp" android:layout_height="26dp">
+                        <ImageView android:id="@+id/nvq_t2_wash" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0.16" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_accent" />
+                        <ImageView android:id="@+id/nvq_t2_ic" android:layout_width="14dp" android:layout_height="14dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_ic_mic" android:tint="@color/nvw_accent" />
+                    </FrameLayout>
+                    <TextView android:id="@+id/nvq_t2_label" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:text="Suara" android:textColor="@color/nvw_text" android:textSize="12sp" android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginTop="6dp" android:layout_weight="1" android:orientation="horizontal">
+            <FrameLayout
+                android:id="@+id/nvq_t3"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/nvw_tile">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="7dp"
+                    android:paddingEnd="6dp">
+                    <FrameLayout android:layout_width="26dp" android:layout_height="26dp">
+                        <ImageView android:id="@+id/nvq_t3_wash" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="1.0" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_accent" />
+                        <ImageView android:id="@+id/nvq_t3_ic" android:layout_width="14dp" android:layout_height="14dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_ic_plus" android:tint="@color/nvw_on_accent" />
+                    </FrameLayout>
+                    <TextView android:id="@+id/nvq_t3_label" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:text="+ Tugas" android:textColor="@color/nvw_text" android:textSize="12sp" android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+            <FrameLayout
+                android:id="@+id/nvq_t4"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/nvw_tile">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="7dp"
+                    android:paddingEnd="6dp">
+                    <FrameLayout android:layout_width="26dp" android:layout_height="26dp">
+                        <ImageView android:id="@+id/nvq_t4_wash" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0.16" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_accent" />
+                        <ImageView android:id="@+id/nvq_t4_ic" android:layout_width="14dp" android:layout_height="14dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_ic_office" android:tint="@color/nvw_accent" />
+                    </FrameLayout>
+                    <TextView android:id="@+id/nvq_t4_label" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="7dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:text="Kantor" android:textColor="@color/nvw_text" android:textSize="12sp" android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+    <FrameLayout
+        android:id="@+id/nvq_panel"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_weight="0.92"
+        android:background="@drawable/nvw_panel"
+        android:clipToOutline="true">
+        <ImageView
+            android:id="@+id/nvq_img"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="Kantor"
+            android:scaleType="centerCrop"
+            android:src="@drawable/nvw_kantor_art" />
+        <TextView
+            android:id="@+id/nvq_age"
+            android:layout_width="wrap_content"
+            android:layout_height="20dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:background="@drawable/nvw_scrim_chip"
+            android:gravity="center"
+            android:maxLines="1"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="3D"
+            android:textColor="@color/nvw_on_scrim"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+        <LinearLayout
+            android:id="@+id/nvq_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="@drawable/nvw_scrim"
+            android:orientation="vertical"
+            android:paddingStart="11dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="9dp">
+            <TextView
+                android:id="@+id/nvq_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Kantor · 2 bekerja"
+                android:textColor="@color/nvw_on_scrim"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/nvq_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Raka: Rapikan folder Unduhan"
+                android:textColor="@color/nvw_on_scrim_muted"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

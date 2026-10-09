@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Neovarch · Status" (NvStatusWidget.kt). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="100dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/nv_status_widget"
+    android:previewLayout="@layout/nv_status_widget"
+    android:previewImage="@drawable/nvw_preview_status"
+    android:description="@string/nvw_status_description"
+    android:widgetCategory="home_screen" />

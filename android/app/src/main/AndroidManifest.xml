@@ -162,7 +162,7 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Home-screen widget (NvHomeWidget.kt): data pushed by the app. -->
+        <!-- "Neovarch · Aksi cepat" widget (NvHomeWidget.kt): data pushed by the app. -->
         <receiver
             android:name=".NvHomeWidget"
             android:exported="false"
@@ -174,6 +174,33 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/nv_home_widget_info" />
         </receiver>
+        <!-- "Neovarch · Status" and "Neovarch · Agen" widgets (NvStatusWidget.kt, NvAgentsWidget.kt). -->
+        <receiver
+            android:name=".NvStatusWidget"
+            android:exported="false"
+            android:label="@string/nvw_status_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nv_status_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".NvAgentsWidget"
+            android:exported="false"
+            android:label="@string/nvw_agents_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nv_agents_widget_info" />
+        </receiver>
+        <service
+            android:name=".NvAgentsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
         <!-- "Hey Neo" wake word (NvWakeService.kt), opt-in from Profil. -->
         <service
             android:name=".NvWakeService"

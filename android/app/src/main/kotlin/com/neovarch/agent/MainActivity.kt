@@ -226,6 +226,8 @@ class MainActivity : FlutterActivity() {
             "calendar" -> result.success(calendar(call.argument<Int>("days") ?: 7, call.argument<Int>("limit") ?: 40))
             "apps" -> result.success(apps(call.argument<String>("query") ?: ""))
             "launcherIcon" -> result.success(launcherIcon())
+            // home-screen widgets: Kantor snapshot + "is one placed" (NvWidgets.kt)
+            "saveWidgetSnapshot", "widgetsPlaced" -> result.success(NvWidgets.handle(this, call.method, call.arguments))
             "setLauncherIcon" -> result.success(setLauncherIcon(call.argument<String>("id") ?: ""))
             "takeRoute" -> { result.success(pendingRoute); pendingRoute = null }
             "wakeWord" -> {

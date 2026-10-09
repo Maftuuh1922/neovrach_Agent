@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Data is pushed by the app (no periodic update). -->
+<!-- "Neovarch · Aksi cepat" (NvHomeWidget.kt, same provider as 1.4.4's widget).
+     Data is pushed by the app; the 30-min update only refreshes "… lalu" times.
+     previewLayout (Android 12+) is the real layout; previewImage is a render of it. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="110dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
-    android:minResizeWidth="180dp"
+    android:minResizeWidth="110dp"
     android:minResizeHeight="110dp"
+    android:maxResizeWidth="530dp"
+    android:maxResizeHeight="330dp"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="0"
-    android:initialLayout="@layout/nv_home_widget"
-    android:previewLayout="@layout/nv_home_widget"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/nv_quick_widget"
+    android:previewLayout="@layout/nv_quick_widget"
+    android:previewImage="@drawable/nvw_preview_quick"
     android:description="@string/nvw_description"
     android:widgetCategory="home_screen" />

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Widget picker ("Tambah widget") labels and descriptions, Indonesian. -->
 <resources>
-    <string name="nvw_label">Neovarch</string>
-    <string name="nvw_description">Status PC, agen yang bekerja, dan tombol Chat, Suara, Tugas baru</string>
+    <string name="nvw_label">Neovarch · Aksi cepat</string>
+    <string name="nvw_description">Chat, Suara, Tugas baru dan Kantor sekali ketuk, plus potret Kantor 3D terbaru</string>
+    <string name="nvw_status_label">Neovarch · Status</string>
+    <string name="nvw_status_description">PC online atau tidak, agen yang bekerja dan menunggu, aktivitas terakhir</string>
+    <string name="nvw_agents_label">Neovarch · Agen</string>
+    <string name="nvw_agents_description">Daftar agen dengan status dan tugasnya; ketuk untuk membuka, atau kasih tugas baru</string>
 </resources>
