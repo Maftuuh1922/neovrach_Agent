@@ -98,6 +98,12 @@ Full guide (model setup, phone pairing, building from source): <https://maftuuh1
 
 ---
 
+## Acknowledgements
+
+Inspired by [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research.
+
+---
+
 ## License
 
 MIT, © 2026 Maftuuh1922 / NeovarchLabs. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
