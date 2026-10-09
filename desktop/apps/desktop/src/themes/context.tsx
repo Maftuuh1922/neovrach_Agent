@@ -283,6 +283,9 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily 
 
   root.style.setProperty('color-scheme', rendered)
   root.dataset.hermesTheme = skinName
+  // Brand-neutral mirror for the Neovarch stylesheet (keeps the bundle's
+  // upstream-name count from growing).
+  root.dataset.nvSkin = skinName
   root.dataset.hermesMode = rendered
   root.classList.toggle('dark', isDark)
 

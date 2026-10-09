@@ -40,14 +40,14 @@
   --nv-line: #d4cec4;
   --nv-text: #120d0d;
   --nv-text-2: #4a4240;
-  --nv-text-3: #857c78;
+  --nv-text-3: #665e5a; /* WCAG AA: ≥4.5:1 on ink, ink-2 and ink-3 */
   --nv-red-text: #8f0a0a;
   --nv-red-wash: #f6dcd8;
 }
 
 /* Brand surface tokens for the Neovarch skin: flat chrome, red accents, no
    blue, red-tinted selection. */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --ui-blue: var(--nv-red-deep);
   --ui-selection-background: color-mix(in srgb, var(--nv-red) 34%, transparent);
   --ui-bg-chrome: var(--nv-ink);
@@ -149,7 +149,7 @@
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.32em;
-  color: var(--nv-paper);
+  color: var(--nv-on-accent, var(--nv-paper));
   background: var(--nv-red);
   padding: 0.18rem 0.3rem 0.14rem 0.4rem;
   transform: translateY(-0.1rem);
@@ -192,35 +192,6 @@
   color: var(--nv-text-3);
 }
 
-.nv-command-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 1.875rem;
-  max-width: 18rem;
-  padding: 0 0.6rem;
-  border: 1px solid var(--nv-line);
-  background: transparent;
-  color: var(--nv-text);
-  font-size: 0.78rem;
-}
-.nv-command-model:hover {
-  border-color: var(--nv-red);
-}
-.nv-command-model-label {
-  font-family: var(--nv-font-mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.24em;
-  color: var(--nv-red-text);
-}
-.nv-command-model-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: var(--nv-font-mono);
-  font-size: 0.72rem;
-}
 
 .nv-rail {
   display: flex;
@@ -285,7 +256,7 @@
 }
 
 /* ── Panes: tab strips + sessions panel ─────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] {
   font-family: var(--nv-font-mono);
   font-size: 0.64rem;
   letter-spacing: 0.14em;
@@ -498,7 +469,7 @@
 }
 
 /* ── Conversation: no boxed user bubbles ────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   border: 0;
   border-left: 2px solid var(--nv-red);
   border-radius: 0;
@@ -507,7 +478,7 @@
   padding: 0.15rem 2.25rem 0.15rem 0.9rem;
   backdrop-filter: none;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message::before {
+:root[data-nv-skin='neovarch'] .composer-human-message::before {
   content: 'ANDA';
   display: block;
   margin-bottom: 0.15rem;
@@ -517,16 +488,16 @@
   letter-spacing: 0.28em;
   color: var(--nv-red-text);
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+:root[data-nv-skin='neovarch'] .composer-human-message:hover {
   background: color-mix(in srgb, var(--nv-red) 5%, transparent);
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-content'] {
   position: relative;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root'] {
   position: relative;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root']::before {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root']::before {
   content: 'NEOVARCH';
   display: block;
   margin: 0.25rem 0 0.35rem;
@@ -538,23 +509,23 @@
 }
 
 /* ── Composer ───────────────────────────────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface'] {
   border-radius: 0 !important;
   border-color: var(--nv-line) !important;
   border-top: 2px solid var(--nv-red) !important;
   background: var(--nv-ink-2);
   box-shadow: none !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface']:focus-within {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface']:focus-within {
   border-color: var(--nv-text-3) !important;
   border-top-color: var(--nv-red) !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-root'] {
   border-radius: 0;
 }
 
 /* ── Overlay / Settings navigation ──────────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-glass-raised] {
   border-radius: 0;
   box-shadow: none;
   border-color: var(--nv-line);
@@ -676,7 +647,7 @@
    Tailwind composes box-shadow from ring + shadow vars; zeroing only the
    shadow vars keeps focus rings (a 1px ring is a flat line) but drops every
    elevation shadow. Theme `--shadow-*` tokens used by raw CSS go flat too. */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --shadow-xs: 0 0 #0000;
   --shadow-sm: 0 0 #0000;
   --shadow-md: 0 0 #0000;
@@ -684,16 +655,16 @@
   --shadow-xl: 0 0 #0000;
   --shadow-2xl: 0 0 #0000;
 }
-:root[data-hermes-theme='neovarch'] *,
-:root[data-hermes-theme='neovarch'] *::before,
-:root[data-hermes-theme='neovarch'] *::after {
+:root[data-nv-skin='neovarch'] *,
+:root[data-nv-skin='neovarch'] *::before,
+:root[data-nv-skin='neovarch'] *::after {
   --tw-shadow: 0 0 #0000 !important;
   --tw-inset-shadow: 0 0 #0000 !important;
   --tw-drop-shadow: drop-shadow(0 0 #0000) !important;
 }
 .btn-arc {
   background-color: var(--nv-red);
-  color: var(--nv-paper);
+  color: var(--nv-on-accent, var(--nv-paper));
 }
 .btn-arc:hover:not(:disabled) {
   filter: none;
@@ -721,7 +692,7 @@
    Radii: panels/cards 14px · buttons/inputs/menus/popovers/chips 10px ·
    rail active item 12px · composer 16px. Flat colours, no shadows/gradients.
    ═════════════════════════════════════════════════════════════════════════ */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --nv-r-panel: 14px;
   --nv-r-control: 10px;
   --nv-r-rail: 12px;
@@ -767,9 +738,6 @@
 
 /* Command bar */
 .nv-command-search,
-.nv-command-model {
-  border-radius: var(--nv-r-control);
-}
 .nv-command-kbd {
   border-radius: 6px;
 }
@@ -832,7 +800,7 @@
   padding: 0.45rem 0.7rem;
   border-radius: var(--nv-r-control);
   background: var(--nv-red);
-  color: var(--nv-paper);
+  color: var(--nv-on-accent, var(--nv-paper));
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -1016,17 +984,17 @@
 }
 
 /* ── Conversation: left-aligned reading column ──────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-slot='aui_thread-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] {
   margin-left: 0;
   margin-right: auto;
   padding-left: 2rem;
   padding-right: 1.5rem;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-dock'].absolute {
+:root[data-nv-skin='neovarch'] [data-slot='composer-dock'].absolute {
   left: calc(2rem - 5px);
   translate: none;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_intro'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_intro'] {
   align-items: flex-start;
   text-align: left;
 }
@@ -1036,32 +1004,32 @@
 }
 
 /* User turns: a rounded card instead of a ruled bubble */
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   border: 1px solid var(--nv-line);
   border-radius: var(--nv-r-panel);
   background: var(--nv-ink-2);
   padding: 0.55rem 2.25rem 0.6rem 0.9rem;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+:root[data-nv-skin='neovarch'] .composer-human-message:hover {
   background: var(--nv-ink-3);
 }
 
 /* Composer: one rounded surface, 1px line, red on focus */
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface'] {
   border-radius: var(--nv-r-composer) !important;
   border: 1px solid var(--nv-line) !important;
   border-top: 1px solid var(--nv-line) !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface']:focus-within {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface']:focus-within {
   border-color: var(--nv-red) !important;
   border-top-color: var(--nv-red) !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-root'] {
   border-radius: var(--nv-r-composer);
 }
 
 /* Pane tabs */
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] {
   border-radius: var(--nv-r-control);
 }
 
@@ -1136,27 +1104,27 @@
 }
 
 /* Floating chrome: menus, popovers, tooltips, selects at 10px; dialogs 14px */
-:root[data-hermes-theme='neovarch'] [data-slot='tooltip-content'],
-:root[data-hermes-theme='neovarch'] [role='tooltip'],
-:root[data-hermes-theme='neovarch'] [role='menu'],
-:root[data-hermes-theme='neovarch'] [role='listbox'],
-:root[data-hermes-theme='neovarch'] [data-slot='popover-content'],
-:root[data-hermes-theme='neovarch'] [data-slot='dropdown-menu-content'],
-:root[data-hermes-theme='neovarch'] [data-slot='context-menu-content'],
-:root[data-hermes-theme='neovarch'] [data-slot='select-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='tooltip-content'],
+:root[data-nv-skin='neovarch'] [role='tooltip'],
+:root[data-nv-skin='neovarch'] [role='menu'],
+:root[data-nv-skin='neovarch'] [role='listbox'],
+:root[data-nv-skin='neovarch'] [data-slot='popover-content'],
+:root[data-nv-skin='neovarch'] [data-slot='dropdown-menu-content'],
+:root[data-nv-skin='neovarch'] [data-slot='context-menu-content'],
+:root[data-nv-skin='neovarch'] [data-slot='select-content'] {
   border-radius: var(--nv-r-control);
 }
-:root[data-hermes-theme='neovarch'] [role='menuitem'],
-:root[data-hermes-theme='neovarch'] [role='option'] {
+:root[data-nv-skin='neovarch'] [role='menuitem'],
+:root[data-nv-skin='neovarch'] [role='option'] {
   border-radius: 8px;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='dialog-content'],
-:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-slot='dialog-content'],
+:root[data-nv-skin='neovarch'] [data-glass-raised] {
   border-radius: var(--nv-r-panel);
 }
 
 /* ── Settings as a page: numbered seven-group index ─────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
   border-radius: 0;
   border: 0;
 }
@@ -1568,7 +1536,7 @@
   padding: 0.2rem 0.7rem;
   border-radius: 999px;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-weight: 600;
 }
 .nv-update-close {
@@ -1582,29 +1550,29 @@
 }
 
 /* ── v1.4: everything rounded; session tabs read as normal words ───────── */
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] {
   text-transform: none;
   letter-spacing: 0;
   font-family: inherit;
   font-size: 0.75rem;
   border-radius: 999px;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] *,
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab']::before,
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab']::after {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] *,
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab']::before,
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab']::after {
   border-radius: 999px;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'],
-:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface'],
+:root[data-nv-skin='neovarch'] [data-slot='composer-root'] {
   border-radius: 16px !important;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   border-radius: 0 12px 12px 0;
 }
-:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-glass-raised] {
   border-radius: var(--nv-r-panel);
 }
-:root[data-hermes-theme='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
   border-radius: var(--nv-r-panel);
 }
 
@@ -1655,7 +1623,7 @@
 .nv-vault-tabs .nv-vault-tab-on {
   background: var(--nv-red);
   border-color: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
 }
 .nv-vault-tree,
 .nv-vault-tree ul {
@@ -1721,7 +1689,7 @@
 }
 .nv-vault-btn:hover {
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
 }
 .nv-vault-md {
   max-width: 46rem;
@@ -1866,7 +1834,7 @@
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-weight: 600;
   font-size: 0.8rem;
 }
@@ -1941,7 +1909,8 @@
   flex-direction: column;
   border: 1px solid var(--nv-line, rgba(255, 255, 255, 0.08));
   border-radius: 14px;
-  background: var(--nv-bg, #0d0606);
+  background: var(--nv-ink);
+  color: var(--nv-text);
   overflow: hidden;
 }
 .nv-doc-preview-bar {
@@ -1959,20 +1928,20 @@
   white-space: nowrap;
 }
 .nv-doc-preview-meta {
-  color: var(--nv-text-3);
+  color: var(--nv-text-2);
   margin-right: auto;
 }
 .nv-doc-preview-open {
   border-radius: 999px;
   padding: 0.25rem 0.75rem;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-weight: 600;
 }
 .nv-doc-preview-close {
   border-radius: 999px;
   padding: 0.25rem;
-  color: var(--nv-text-3);
+  color: var(--nv-text-2);
 }
 .nv-doc-preview-body {
   flex: 1;
@@ -1982,7 +1951,9 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: #2a2525;
+  /* The gutter round the white pages follows the theme: a step off the
+     surface toward the text colour (dark grey in dark, warm grey in light). */
+  background: color-mix(in srgb, var(--nv-text) 14%, var(--nv-ink));
 }
 .nv-doc-page {
   border-radius: 4px;
@@ -2407,6 +2378,858 @@
   font-family: var(--nv-font-mono);
   font-size: 0.75rem;
   color: var(--nv-text-2);
+}
+
+/* ── Kantor 3D ──────────────────────────────────────────────────────────────
+   The canvas is transparent outside the room, so the panel's own glass (and
+   any wallpaper) shows round it. Labels and the popover carry their own
+   surface, so they read the same in both schemes. */
+.nv-office-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.nv-office-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--nv-line);
+  border-radius: 999px;
+  background: var(--nv-ink-2);
+}
+.nv-office-view-toggle button {
+  padding: 0.28rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  color: var(--nv-text-2);
+}
+.nv-office-view-toggle button[aria-pressed='true'] {
+  background: var(--nv-red);
+  color: var(--nv-on-accent, #fff);
+}
+.nv-office3d {
+  position: relative;
+  min-height: 30rem;
+  height: max(30rem, calc(100vh - 15rem));
+  overflow: hidden;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: color-mix(in srgb, var(--nv-ink-2) 55%, transparent);
+  isolation: isolate;
+}
+.nv-office3d-stage {
+  position: absolute;
+  inset: 0;
+}
+.nv-office3d-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.nv-office3d-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 13rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 10px;
+  background: rgb(20 14 12 / 78%);
+  backdrop-filter: blur(8px);
+  color: #f6f1e8;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 22%);
+}
+.nv-office3d-label[data-selected] {
+  border-color: var(--nv-red);
+}
+.nv-office3d-label-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.nv-office3d-label i,
+.nv-office3d-legend i,
+.nv-office3d-popover header p i {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+.nv-office3d-label-task {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: #d9d0c4;
+}
+.nv-office3d-loading,
+.nv-office3d-empty {
+  position: absolute;
+  inset: auto 0 45% 0;
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--nv-text-2);
+}
+.nv-office3d-empty {
+  inset: 1rem auto auto 1rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 10px;
+  background: rgb(20 14 12 / 78%);
+  color: #f6f1e8;
+}
+.nv-office3d-legend {
+  position: absolute;
+  z-index: 1500;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(20 14 12 / 78%);
+  backdrop-filter: blur(8px);
+  font-size: 0.7rem;
+  color: #f6f1e8;
+}
+.nv-office3d-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.nv-office3d-reset {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  color: #f6f1e8;
+}
+.nv-office3d-popover {
+  position: absolute;
+  z-index: 2000;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(20rem, calc(100% - 1.5rem));
+  padding: 0.9rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: color-mix(in srgb, var(--nv-ink) 92%, transparent);
+  backdrop-filter: blur(14px);
+  color: var(--nv-text);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 28%);
+}
+.nv-office3d-popover header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.nv-office3d-popover h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.nv-office3d-popover header p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  color: var(--nv-text-2);
+}
+.nv-office3d-close {
+  padding: 0.25rem;
+  border-radius: 8px;
+  color: var(--nv-text-2);
+}
+.nv-office3d-close:hover {
+  background: var(--nv-ink-3);
+}
+.nv-office3d-popover-task {
+  margin: 0;
+  font-size: 0.8rem;
+}
+.nv-office3d-popover-approval {
+  margin: 0;
+  color: var(--nv-red-text);
+}
+.nv-office3d-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--nv-line);
+}
+.nv-office3d-assign label {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.nv-office3d-assign > div {
+  display: flex;
+  gap: 0.4rem;
+}
+.nv-office3d-assign input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink-2);
+  color: var(--nv-text);
+  font-size: 0.78rem;
+}
+.nv-office3d-assign input::placeholder {
+  color: var(--nv-text-2);
+}
+.nv-office3d-assign button {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-red);
+  color: var(--nv-on-accent, #fff);
+  font-size: 0.76rem;
+}
+.nv-office3d-assign button:disabled {
+  opacity: 0.55;
+}
+.nv-office3d-assign-state {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--nv-text-2);
+}
+.nv-office3d-assign-state[data-kind='error'] {
+  color: var(--nv-red-text);
+}
+.nv-office3d-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.nv-office3d-note {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--nv-line);
+  border-radius: var(--nv-r-control);
+  font-size: 0.78rem;
+  color: var(--nv-text-2);
+}
+.nv-office-model {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+.nv-office-model label {
+  color: var(--nv-text-2);
+}
+.nv-office-model select {
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink-2);
+  color: var(--nv-text);
+  font-family: var(--nv-font-mono);
+  font-size: 0.72rem;
+}
+.nv-office-model select:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.nv-office-model-error {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--nv-red-text);
+}
+
+/* ── Chat, phone look (v1.4.4) ──────────────────────────────────────────────
+   Same structure as the Android remote: the user's turn is a rounded glass
+   bubble on the right ("KAMU" caption), the agent's turn is a glass pill
+   (avatar + NAME · PC, live pulse) over a full-width rounded glass bubble.
+   Kept last so it wins over the older ruled / wallpaper bubble rules. */
+:root[data-nv-skin='neovarch'] {
+  --nv-bubble-radius: 20px;
+  --nv-bubble-fill: var(--nv-ink-2);
+  --nv-bubble-rim: var(--nv-line);
+}
+:root[data-nv-wallpaper] {
+  --nv-bubble-fill: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--nv-glass-base-2), var(--nv-red) var(--nv-glass-tint)) max(var(--nv-glass-keep), var(--nv-floor-bubble, 0%)),
+    transparent
+  );
+  --nv-bubble-rim: var(--nv-glass-rim);
+}
+:root[data-nv-skin='neovarch'] .composer-human-message {
+  width: fit-content;
+  max-width: min(560px, 86%);
+  margin-left: auto;
+  border: 1px solid var(--nv-bubble-rim);
+  border-radius: var(--nv-bubble-radius);
+  background: color-mix(in srgb, var(--nv-bubble-fill), var(--nv-red) 10%);
+  box-shadow: var(--nv-glass-specular, none);
+  padding: 0.625rem 2.25rem 0.75rem 0.875rem;
+}
+:root[data-nv-skin='neovarch'] .composer-human-message:hover {
+  background: color-mix(in srgb, var(--nv-bubble-fill), var(--nv-red) 16%);
+}
+:root[data-nv-skin='neovarch'] .composer-human-message::before {
+  content: 'KAMU';
+  margin-bottom: 0.2rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: var(--nv-text-2);
+}
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root'] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root']::before {
+  content: none;
+}
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-content'] {
+  border: 1px solid var(--nv-bubble-rim);
+  border-radius: var(--nv-bubble-radius);
+  background: var(--nv-bubble-fill);
+  box-shadow: var(--nv-glass-specular, none);
+  padding: 0.625rem 0.625rem 0.375rem 0.875rem;
+}
+.nv-sender-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.45rem;
+  max-width: 100%;
+  margin: 0.25rem 0 0.375rem;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--nv-bubble-rim, var(--nv-line));
+  border-radius: 999px;
+  background: var(--nv-bubble-fill, var(--nv-ink-2));
+}
+.nv-sender-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--nv-red);
+  color: var(--nv-on-accent, #fff);
+  font-family: var(--nv-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.nv-sender-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--nv-text-2);
+}
+.nv-sender-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--nv-red);
+  animation: nv-sender-pulse 1.1s ease-in-out infinite;
+}
+@keyframes nv-sender-pulse {
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nv-sender-live {
+    animation: none;
+  }
+}
+
+/* Agent avatar (agent-identity-spec.md): coat circle, white initial, status dot. */
+.nv-agent-avatar {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  font-family: Inter, var(--font-sans, system-ui), sans-serif;
+  font-weight: 600;
+  line-height: 1;
+}
+:root[data-nv-scheme='light'] .nv-agent-avatar {
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 12%);
+}
+.nv-agent-avatar-dot {
+  position: absolute;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--nv-ink);
+}
+
+/* ── One model selector (v1.4.4) ────────────────────────────────────────────
+   The composer chip is the only place to change the model; the right panel's
+   Model card is read-only info. Chip and sheet follow the phone's
+   ModelChip / ModelPickerSheet: glass pill with a sparkle in the accent, mono
+   name, chevron; the menu opens as a rounded glass sheet with a mono kicker
+   ("model · default PC" / "model · <agent>"), "Pilih model", rounded rows. */
+:root[data-nv-skin='neovarch'] .nv-model-chip {
+  height: 26px;
+  border: 1px solid var(--nv-bubble-rim, var(--nv-line));
+  border-radius: 999px;
+  background: var(--nv-bubble-fill, var(--nv-ink-2));
+  padding: 0 0.55rem 0 0.45rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  color: var(--nv-text);
+}
+:root[data-nv-skin='neovarch'] .nv-model-chip:hover {
+  border-color: color-mix(in srgb, var(--nv-red) 55%, var(--nv-line));
+  color: var(--nv-text);
+}
+.nv-model-chip-icon {
+  color: var(--nv-red);
+}
+:root[data-nv-skin='neovarch'] .nv-model-sheet {
+  overflow: hidden;
+  border: 1px solid var(--nv-bubble-rim, var(--nv-line));
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--nv-ink-2) 92%, transparent);
+  backdrop-filter: blur(22px) saturate(1.3);
+  box-shadow: var(--nv-glass-shadow, 0 18px 48px rgb(0 0 0 / 35%));
+}
+.nv-model-sheet-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.9rem 0.55rem;
+}
+.nv-model-sheet-grip {
+  align-self: center;
+  width: 34px;
+  height: 4px;
+  margin-bottom: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nv-text-3) 55%, transparent);
+}
+.nv-model-sheet-kicker {
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nv-text-2);
+}
+.nv-model-sheet-title {
+  font-size: 1.02rem;
+  font-weight: 650;
+  color: var(--nv-text);
+}
+.nv-model-sheet input {
+  border-radius: 12px;
+}
+.nv-model-sheet [role='menuitem'],
+.nv-model-sheet [role='menuitemradio'] {
+  margin: 1px 6px;
+  border-radius: 12px;
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
+}
+.nv-model-sheet [role='menuitem']:has(.codicon-check) {
+  background: color-mix(in srgb, var(--nv-red) 12%, transparent);
+}
+.nv-model-sheet .codicon-check {
+  color: var(--nv-red);
+}
+.nv-model-sheet [role='separator'] {
+  margin-inline: 12px;
+}
+
+/* Right panel Model card: read-only. */
+:root[data-nv-skin='neovarch'] .nv-context-model {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  margin: 0;
+  border-radius: 14px;
+  cursor: default;
+}
+:root[data-nv-skin='neovarch'] .nv-context-model:hover {
+  border-color: var(--nv-line);
+}
+:root[data-nv-skin='neovarch'] .nv-context-model-name {
+  max-width: 100%;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.nv-context-model-id {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-mono);
+  font-size: 0.64rem;
+  color: var(--nv-text-2);
+}
+.nv-context-hint {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--nv-text-2);
+}
+
+/* Icons: thinner strokes, rounded ends, closer to the phone's Cupertino set. */
+:root[data-nv-skin='neovarch'] .tabler-icon {
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Live report editing in the right panel (v1.4.4) ─────────────────────── */
+.nv-context {
+  transition:
+    flex-basis 260ms ease,
+    width 260ms ease;
+}
+.nv-context:has(.nv-report-card) {
+  flex-basis: 22rem;
+  width: 22rem;
+}
+.nv-context[data-cards-collapsed] > .nv-context-card:not(.nv-report-card) > :not(.nv-context-label) {
+  display: none;
+}
+.nv-context[data-cards-collapsed] > .nv-context-card:not(.nv-report-card) {
+  padding-block: 0.55rem;
+  opacity: 0.8;
+}
+.nv-report-card {
+  flex: 0 1 auto;
+  min-height: 12rem;
+  max-height: 70vh;
+  border-radius: 20px;
+  animation: nv-report-in 260ms ease both;
+}
+.nv-context:not([data-cards-collapsed]) .nv-report-card {
+  max-height: 46vh;
+}
+.nv-report-card[data-editing] {
+  border-color: color-mix(in srgb, var(--nv-red) 45%, var(--nv-line));
+}
+@keyframes nv-report-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+.nv-report-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--nv-text-2);
+}
+.nv-report-head > svg {
+  color: var(--nv-red);
+}
+.nv-report-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--nv-text);
+}
+.nv-report-state {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--nv-line);
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  color: var(--nv-text-2);
+}
+.nv-report-state[data-live] {
+  border-color: color-mix(in srgb, var(--nv-red) 50%, transparent);
+  color: var(--nv-red-text);
+}
+.nv-report-close {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+}
+.nv-report-note {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--nv-text-2);
+}
+.nv-report-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.2rem 0.15rem 0.4rem 0;
+  scroll-behavior: smooth;
+}
+.nv-report-p {
+  margin: 0 0 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--nv-text);
+  transition: background-color 600ms ease;
+}
+.nv-report-hl {
+  background: color-mix(in srgb, var(--nv-red) 13%, transparent);
+  box-shadow: inset 2px 0 0 var(--nv-red);
+  animation: nv-report-hl 2.4s ease both;
+}
+@keyframes nv-report-hl {
+  0% {
+    background: color-mix(in srgb, var(--nv-red) 30%, transparent);
+  }
+  100% {
+    background: color-mix(in srgb, var(--nv-red) 13%, transparent);
+  }
+}
+.nv-report-heading {
+  display: block;
+  font-weight: 700;
+  color: var(--nv-text);
+}
+.nv-report-h1 {
+  font-size: 0.98rem;
+}
+.nv-report-h2 {
+  font-size: 0.88rem;
+}
+.nv-report-h3 {
+  font-size: 0.8rem;
+}
+.nv-report-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.15em;
+  background: var(--nv-red);
+  animation: nv-sender-pulse 0.9s steps(2) infinite;
+}
+.nv-report-reopen {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: 999px;
+  background: var(--nv-ink-2);
+  color: var(--nv-text-2);
+  font-size: 0.72rem;
+}
+.nv-report-reopen:hover {
+  border-color: var(--nv-red);
+  color: var(--nv-text);
+}
+.nv-report-reopen-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.nv-report-reopen-cta {
+  font-weight: 600;
+  color: var(--nv-red-text);
+}
+:root[data-nv-wallpaper] .nv-report-reopen {
+  background: color-mix(in srgb, var(--nv-glass-base) max(80%, var(--nv-glass-keep)), transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nv-context,
+  .nv-report-card,
+  .nv-report-hl,
+  .nv-report-caret {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ── Agent identity everywhere (agent-identity-spec.md §4) ──────────────── */
+.nv-office-desk-head .nv-office-name {
+  font-size: 0.97rem;
+  font-weight: 600;
+}
+.nv-office-desk-head .nv-office-role {
+  font-size: 0.78rem;
+}
+.nv-office-mini-row {
+  border-radius: 14px;
+}
+.nv-office-mini-name {
+  font-size: 0.86rem;
+}
+.nv-office-mini-task {
+  font-size: 0.74rem;
+}
+.nv-office3d-popover {
+  border-radius: 20px;
+}
+.nv-office3d-popover header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+}
+.nv-office3d-popover-kicker {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nv-text-2);
+}
+.nv-office3d-popover header .nv-office-status {
+  margin-top: 0.2rem;
+}
+.nv-office3d-popover header .nv-office-status i {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+.nv-agent-avatar-dot {
+  box-shadow: 0 0 0 2px #141414;
+}
+:root[data-nv-scheme='light'] .nv-agent-avatar-dot {
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+/* 3D labels: one pill, status dot + name (task only for the selected agent). */
+.nv-office3d-label {
+  flex-direction: row;
+  align-items: center;
+  max-width: 14rem;
+  padding: 0.22rem 0.6rem 0.22rem 0.5rem;
+  border-radius: 999px;
+  border-color: rgb(255 255 255 / 12%);
+  background: rgb(18 14 11 / 82%);
+  color: #f6f1e8;
+}
+.nv-office3d-label-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.nv-office3d-label i {
+  width: 8px;
+  height: 8px;
+}
+.nv-office3d-label .nv-office3d-label-task {
+  display: none;
+}
+.nv-office3d-label[data-selected] {
+  flex-direction: column;
+  align-items: flex-start;
+  border-radius: 14px;
+}
+.nv-office3d-label[data-selected] .nv-office3d-label-task {
+  display: block;
+}
+:root[data-nv-scheme='light'] .nv-office3d-label {
+  border-color: rgb(0 0 0 / 10%);
+  background: rgb(255 250 240 / 90%);
+  color: #1e1a18;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
+}
+:root[data-nv-scheme='light'] .nv-office3d-label-task {
+  color: #4a4240;
+}
+
+/* ── Mini Kantor 3D (right sidebar, bottom) ───────────────────────────────── */
+.nv-office-mini {
+  margin-top: auto;
+  border-radius: 20px;
+}
+.nv-office-mini3d {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 8.5rem;
+  overflow: hidden;
+  border: 1px solid var(--nv-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--nv-ink) 70%, transparent);
+}
+.nv-office-mini3d canvas {
+  pointer-events: none;
+}
+.nv-office-mini:hover .nv-office-mini3d {
+  border-color: color-mix(in srgb, var(--nv-red) 55%, var(--nv-line));
+}
+.nv-context[data-cards-collapsed] .nv-office-mini3d {
+  display: none;
+}
+
+/* WCAG AA (light): the upstream tertiary grey (54% ink, ~4.0:1 on paper) is
+   used for timestamps and the status bar; lift it to ≥4.5:1. */
+:root[data-nv-skin='neovarch'][data-nv-scheme='light'] {
+  --ui-text-tertiary: color-mix(in srgb, var(--ui-base) 66%, transparent);
+}
+
+/* Conversation timeline (jump-to-turn ticks at the chat's right edge): one
+   tick per turn, the current one in the accent. With only a few turns it read
+   as a stray "=" floating mid-pane, so it rests at low contrast in plain grey
+   and comes forward (accent on the current turn, wider ticks) only while the
+   pointer or keyboard focus is on it. */
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline'] {
+  opacity: 0.35;
+  transition: opacity 160ms ease;
+}
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:hover,
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:focus-within {
+  opacity: 1;
+}
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:not(:hover, :focus-within)
+  .thread-timeline-tick[aria-current='location']
+  [data-slot='timeline-bar'] {
+  background: var(--ui-text-tertiary);
+}
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:hover [data-slot='timeline-bar'] {
+  width: 0.75rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-nv-skin='neovarch'] [data-slot='thread-timeline'] {
+    transition: none;
+  }
 }
 
 /* ---- Profil & Teman (GitHub friends/profile) — flat, rounded, accent only ---- */

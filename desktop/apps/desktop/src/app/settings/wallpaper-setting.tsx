@@ -1,10 +1,10 @@
 import { useStore } from '@nanostores/react'
 import { type DragEvent, type ReactNode, useState } from 'react'
 
+import { $nvAppearance, DEFAULT_ACCENT } from '@/components/neovarch/appearance'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import { $nvAppearance, DEFAULT_ACCENT } from '@/components/neovarch/appearance'
 import { ImageIcon, RefreshCw, Upload, X } from '@/lib/icons'
 import {
   $wallpaper,
@@ -197,7 +197,7 @@ export function WallpaperSetting() {
               <span className="text-xs text-(--ui-text-tertiary)">
                 {palette.monochrome ? 'Gambar netral, pakai monokrom:' : 'Saran dari gambar:'}
               </span>
-              <div className="nv-wall-swatches" role="group" aria-label="Saran warna dari wallpaper">
+              <div aria-label="Saran warna dari wallpaper" className="nv-wall-swatches" role="group">
                 {palette.swatches.map(hex => (
                   <button
                     aria-label={`Pakai ${hex}`}

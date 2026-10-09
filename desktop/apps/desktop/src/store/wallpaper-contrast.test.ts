@@ -125,7 +125,7 @@ describe('text contrast over the wallpaper', () => {
   it('Tanpa efek makes every panel solid (the frame ground keeps its own floor)', () => {
     const floors = computeFloors(input({ style: 'tanpa' }))
 
-    for (const k of ['--nv-floor-stage', '--nv-floor-sessions', '--nv-floor-context', '--nv-floor-bubble']) expect(floors[k]).toBe(100)
+    for (const k of ['--nv-floor-stage', '--nv-floor-sessions', '--nv-floor-context', '--nv-floor-bubble']) {expect(floors[k]).toBe(100)}
     expect(floors['--nv-floor-frame']).toBe(computeFloors(input({}))['--nv-floor-frame'])
   })
 

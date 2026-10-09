@@ -1,5 +1,6 @@
 import { atom, onMount } from 'nanostores'
 
+import { pluginRest } from '@/api/plugins'
 import { onGatewayEvent } from '@/contrib/events'
 import { $gateway } from '@/store/gateway'
 
@@ -13,8 +14,16 @@ export interface OfficeAgent {
   last_activity_text: null | string
   message_count: number
   model: string
+  /** 9Router contract: the per-agent override, when one is set. */
+  model_override?: null | { model: string; provider: string }
+  model_provider?: string
+  model_source?: 'agent' | 'global'
   name: string
-  pending_approval: null | { command?: string; description?: string; request_id?: string }
+  pending_approval: null | {
+    command?: string
+    description?: string
+    request_id?: string
+  }
   role: string
   session_id: null | string
   source: string
@@ -42,7 +51,12 @@ export interface OfficeVault {
 
 export interface OfficeSnapshot {
   agents: OfficeAgent[]
-  counts: { 'idle': number; total: number; 'waiting-approval': number; 'working': number }
+  counts: {
+    idle: number
+    total: number
+    'waiting-approval': number
+    working: number
+  }
   feed: OfficeFeedItem[]
   generated_at: number
   host: string
@@ -53,10 +67,50 @@ export interface OfficeSnapshot {
 
 export const OFFICE_ROUTE = '/office'
 
+/** Kantor view: the live 3D room (default) or the plain desk list. */
+export type OfficeView = '3d' | 'list'
+export const OFFICE_VIEW_KEY = 'neovarch.desktop.office-view.v1'
+
+function readOfficeView(): OfficeView {
+  try {
+    return window.localStorage.getItem(OFFICE_VIEW_KEY) === 'list' ? 'list' : '3d'
+  } catch {
+    return '3d'
+  }
+}
+
+export const $officeView = atom<OfficeView>(readOfficeView())
+
+export function setOfficeView(view: OfficeView): void {
+  $officeView.set(view)
+
+  try {
+    window.localStorage.setItem(OFFICE_VIEW_KEY, view)
+  } catch {
+    // Private mode / storage full: the choice still holds for this run.
+  }
+}
+
+/** "Kasih tugas": a Kanban card assigned to this agent, through the Kanban
+ *  plugin's own REST door (`POST /api/plugins/kanban/tasks`). The core then
+ *  pushes `office.update`, so the desk picks the task up live. */
+export async function assignOfficeTask(agent: Pick<OfficeAgent, 'name'>, title: string): Promise<unknown> {
+  const trimmed = title.trim()
+
+  if (!trimmed) {
+    throw new Error('Judul tugas kosong')
+  }
+
+  return pluginRest('kanban', '/tasks', {
+    method: 'POST',
+    body: { assignee: agent.name, title: trimmed }
+  })
+}
+
 export const OFFICE_STATUS_LABEL: Record<OfficeAgent['status'], string> = {
-  'idle': 'Santai',
+  idle: 'Santai',
   'waiting-approval': 'Menunggu persetujuan',
-  'working': 'Bekerja'
+  working: 'Bekerja'
 }
 
 /** null = not loaded yet; the error string is shown instead of a toast. */

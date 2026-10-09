@@ -9,6 +9,7 @@ import {
   useThreadRuntime
 } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
+import { Timer } from 'lucide-react'
 import { type FC, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useInRouterContext, useNavigate } from 'react-router'
 
@@ -36,6 +37,7 @@ import { isApprovalActivity, isCurrentTurnMessage } from '@/components/assistant
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
 import { formatElapsed } from '@/components/chat/activity-timer'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
+import { AgentSenderPill, opensAgentTurn } from '@/components/neovarch/agent-identity'
 import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useI18n } from '@/i18n'
@@ -303,6 +305,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
+          <NvSenderPill />
           <div
             className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
             data-slot="aui_assistant-message-content"
@@ -1036,11 +1039,13 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
     <div className="relative flex w-full shrink-0 items-center justify-end gap-1.5">
       {durationS !== undefined && (
         <span
-          className="mr-auto select-none px-0.5 text-[0.6875rem] leading-5 tabular-nums text-muted-foreground"
+          className="mr-auto inline-flex select-none items-center gap-1 px-0.5 text-[0.6875rem] leading-5 tabular-nums text-muted-foreground"
           data-slot="aui_turn-duration"
           title={t.assistant.thread.turnDuration(formatElapsed(durationS))}
         >
-          ⏱ {formatElapsed(durationS)}
+          {/* SVG icon, not the U+23F1 emoji: the emoji rendered as a tofu box where no emoji font is installed. */}
+          <Timer aria-hidden="true" className="size-3 shrink-0" data-slot="aui_turn-duration-icon" strokeWidth={1.75} />
+          {formatElapsed(durationS)}
         </span>
       )}
       <ActionBarPrimitive.Root
@@ -1220,4 +1225,21 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number }> = ({ dura
       <AssistantActionBar durationS={durationS} {...props} />
     </div>
   )
+}
+
+/** Who is speaking: the session's Office agent (avatar + name · PC), with a
+ *  pulse while the turn streams. Same pill as the phone remote; shown once per
+ *  turn (on the assistant message that opens it), not on every tool round. */
+function NvSenderPill() {
+  const view = useSessionView()
+  const runtimeId = useStore(view.$runtimeId)
+  const storedId = useStore(view.$storedId)
+  const opens = useAuiState(s => opensAgentTurn(s.thread.messages, s.message.id))
+  const live = useAuiState(s => s.thread.isRunning && isCurrentTurnMessage(s.thread.messages, s.message.id))
+
+  if (!opens) {
+    return null
+  }
+
+  return <AgentSenderPill live={live} sessionIds={[runtimeId, storedId]} />
 }

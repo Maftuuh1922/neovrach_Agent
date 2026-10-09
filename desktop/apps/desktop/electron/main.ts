@@ -393,8 +393,6 @@ import { isMediaCapturePermission } from './media-capture-permission'
 import { createMediaProtocolHandler, MEDIA_PROTOCOL } from './media-protocol'
 import { fetchLocalMedia } from './media-range'
 import { createMinimizeToTray } from './minimize-to-tray'
-import { createRemoteController } from './neovarch-remote'
-import { createWallpaperStore, WALLPAPER_EXTENSIONS } from './neovarch-wallpaper'
 import {
   createNativeAccessTokenCoordinator,
   type NativeAccessTokenOptions,
@@ -410,6 +408,8 @@ import {
 } from './native-oauth'
 import { runNativeLogin } from './native-oauth-login'
 import { loadNativeTokenSet, type NativeTokenStoreIo, persistNativeTokenSet } from './native-token-store'
+import { createRemoteController } from './neovarch-remote'
+import { createWallpaperStore, WALLPAPER_EXTENSIONS } from './neovarch-wallpaper'
 import { execGit, killTimedGitChildren, setNoConsoleGitRoots } from './no-console-git'
 import { registerNativeNotifications } from './notification-ipc'
 import { isExpectedOauthNavigationAbort } from './oauth-navigation'

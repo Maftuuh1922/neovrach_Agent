@@ -1,7 +1,6 @@
 
-import { capitalize, normalize } from '@/lib/text'
-
 import { neovarchGreeting } from '@/components/neovarch/home'
+import { capitalize, normalize } from '@/lib/text'
 
 import introCopyJsonl from './intro-copy.jsonl?raw'
 

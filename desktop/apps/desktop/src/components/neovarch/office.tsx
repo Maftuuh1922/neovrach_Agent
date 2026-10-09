@@ -6,15 +6,21 @@ import { sessionRoute } from '@/app/routes'
 import { Brain, Users } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
+import { OfficeAgentAvatar } from './agent-identity'
+import { Office3D } from './office-3d'
+import { MiniOffice3D } from './office-mini-3d'
+import { OfficeModelSelect } from './office-model-select'
 import {
   $office,
   $officeError,
-  initials,
+  $officeView,
   OFFICE_ROUTE,
   OFFICE_STATUS_LABEL,
   type OfficeAgent,
   type OfficeFeedItem,
-  relativeTime
+  type OfficeView,
+  relativeTime,
+  setOfficeView
 } from './office-store'
 
 function useNow(intervalMs = 5000): number {
@@ -40,7 +46,7 @@ function Desk({ agent, now }: { agent: OfficeAgent; now: number }) {
   return (
     <article className="nv-office-desk" data-nv-desk={agent.id} data-status={agent.status}>
       <header className="nv-office-desk-head">
-        <span className="nv-office-avatar">{initials(agent.name)}</span>
+        <OfficeAgentAvatar agent={agent} size={40} />
         <div className="min-w-0">
           <h3 className="nv-office-name">{agent.name}</h3>
           <p className="nv-office-role">{agent.role}</p>
@@ -79,6 +85,7 @@ function Desk({ agent, now }: { agent: OfficeAgent; now: number }) {
           </dd>
         </div>
       </dl>
+      <OfficeModelSelect agent={agent} />
       {open && (
         <button className="nv-office-open" onClick={open} type="button">
           Buka obrolan
@@ -98,12 +105,52 @@ function FeedRow({ item, now }: { item: OfficeFeedItem; now: number }) {
   )
 }
 
+const VIEWS: { label: string; value: OfficeView }[] = [
+  { label: '3D', value: '3d' },
+  { label: 'Daftar', value: 'list' }
+]
+
+export function ViewToggle({ onChange, value }: { onChange: (view: OfficeView) => void; value: OfficeView }) {
+  return (
+    <div aria-label="Tampilan kantor" className="nv-office-view-toggle" data-slot="nv-office-view-toggle" role="group">
+      {VIEWS.map(option => (
+        <button
+          aria-pressed={value === option.value}
+          data-view={option.value}
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /** The Office page: every agent the core runs, at its desk, plus a live feed. */
 export function NeovarchOfficePage() {
   const office = useStore($office)
   const error = useStore($officeError)
   const now = useNow()
   const navigate = useNavigate()
+  const view = useStore($officeView)
+
+  const list = (
+    <section aria-label="Meja agen" className="nv-office-grid">
+      {office === null && !error && <p className="nv-office-empty">Memuat kantor…</p>}
+      {error && <p className="nv-office-empty">Kantor belum bisa dimuat: {error}</p>}
+      {office && office.agents.length === 0 && (
+        <div className="nv-office-empty">
+          <Users className="size-5" />
+          <p>Belum ada pegawai. Mulai obrolan atau beri tugas di Kanban, agennya akan duduk di sini.</p>
+        </div>
+      )}
+      {office?.agents.map(agent => (
+        <Desk agent={agent} key={agent.id} now={now} />
+      ))}
+    </section>
+  )
 
   return (
     <div className="nv-office" data-slot="nv-office">
@@ -115,31 +162,28 @@ export function NeovarchOfficePage() {
             Agen yang sedang berjalan di PC ini, statusnya, dan apa yang mereka kerjakan. Diperbarui langsung.
           </p>
         </div>
-        <div className="nv-office-counters">
-          <span>
-            <StatusDot status="working" /> {office?.counts.working ?? 0} bekerja
-          </span>
-          <span>
-            <StatusDot status="waiting-approval" /> {office?.counts['waiting-approval'] ?? 0} menunggu
-          </span>
-          <span>
-            <StatusDot status="idle" /> {office?.counts.idle ?? 0} santai
-          </span>
+        <div className="nv-office-header-tools">
+          <ViewToggle onChange={setOfficeView} value={view} />
+          <div className="nv-office-counters">
+            <span>
+              <StatusDot status="working" /> {office?.counts.working ?? 0} bekerja
+            </span>
+            <span>
+              <StatusDot status="waiting-approval" /> {office?.counts['waiting-approval'] ?? 0} menunggu
+            </span>
+            <span>
+              <StatusDot status="idle" /> {office?.counts.idle ?? 0} santai
+            </span>
+          </div>
         </div>
       </header>
 
       <div className="nv-office-body">
-        <section aria-label="Meja agen" className="nv-office-grid">
-          {office === null && !error && <p className="nv-office-empty">Memuat kantor…</p>}
-          {error && <p className="nv-office-empty">Kantor belum bisa dimuat: {error}</p>}
-          {office && office.agents.length === 0 && (
-            <div className="nv-office-empty">
-              <Users className="size-5" />
-              <p>Belum ada pegawai. Mulai obrolan atau beri tugas di Kanban, agennya akan duduk di sini.</p>
-            </div>
-          )}
-          {office?.agents.map(agent => <Desk agent={agent} key={agent.id} now={now} />)}
-        </section>
+        {view === '3d' ? (
+          <Office3D fallback={list} office={office} onOpenSession={id => navigate(sessionRoute(id))} />
+        ) : (
+          list
+        )}
 
         <aside className="nv-office-side">
           <section className="nv-office-card" data-slot="nv-office-vault">
@@ -178,7 +222,9 @@ export function NeovarchOfficePage() {
               <p className="nv-office-empty-line">Belum ada aktivitas.</p>
             ) : (
               <ol className="nv-office-feed" data-slot="nv-office-feed">
-                {office?.feed.map(item => <FeedRow item={item} key={item.id} now={now} />)}
+                {office?.feed.map(item => (
+                  <FeedRow item={item} key={item.id} now={now} />
+                ))}
               </ol>
             )}
           </section>
@@ -206,17 +252,16 @@ export function NeovarchOfficeMini() {
         <Users className="size-3.5" /> Kantor
         <span className="nv-office-mini-count">{office ? `${office.counts.working} bekerja` : ''}</span>
       </span>
+      <MiniOffice3D office={office} />
       {agents.length === 0 ? (
         <span className="nv-context-empty">Belum ada agen yang bekerja.</span>
       ) : (
         <span className="nv-office-mini-list">
           {agents.map(agent => (
             <span className="nv-office-mini-row" data-status={agent.status} key={agent.id}>
-              <span className="nv-office-avatar nv-office-avatar-sm">{initials(agent.name)}</span>
+              <OfficeAgentAvatar agent={agent} feed={office?.feed} size={32} />
               <span className="min-w-0">
-                <span className="nv-office-mini-name">
-                  <StatusDot status={agent.status} /> {agent.name}
-                </span>
+                <span className="nv-office-mini-name">{agent.name}</span>
                 <span className="nv-office-mini-task">
                   {agent.current_tool || agent.current_task || OFFICE_STATUS_LABEL[agent.status]}
                 </span>

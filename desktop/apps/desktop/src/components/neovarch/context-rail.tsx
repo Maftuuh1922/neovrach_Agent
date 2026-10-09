@@ -4,12 +4,14 @@ import { useLocation } from 'react-router'
 
 import { appViewForPath } from '@/app/routes'
 import type { ChatMessage } from '@/lib/chat-messages/types'
-import { ChevronDown, Cpu, FileText, Wrench } from '@/lib/icons'
+import { Cpu, FileText, Wrench } from '@/lib/icons'
+import { displayModelName, providerDisplayName } from '@/lib/model-status-label'
 import { $reviewFiles } from '@/store/review'
-import { $currentModel, $currentProvider, $messages, setModelPickerOpen } from '@/store/session'
+import { $currentModel, $currentProvider, $messages } from '@/store/session'
 
-import { shortModelName } from './command-bar'
 import { NeovarchOfficeMini } from './office'
+import { $reportPanelOpen, latestReportEdit } from './report-edit'
+import { ReportPanel, useRecentlyChanged, useReportPanelShortcut } from './report-panel'
 
 const PATH_KEYS = ['path', 'file_path', 'filepath', 'filename', 'file', 'target_file']
 
@@ -69,7 +71,8 @@ function baseName(path: string): string {
 }
 
 /**
- * The right context rail beside the conversation: the model in use, the tools
+ * The right context rail beside the conversation: the model in use (read-only
+ * info; the composer's picker is the one place to change it), the tools
  * this chat has called and the files it touched (plus uncommitted changes when
  * the review store has them). Only shown on chat routes.
  */
@@ -82,6 +85,15 @@ export function NeovarchContextRail() {
 
   const tools = useMemo(() => toolsUsed(messages), [messages])
   const touched = useMemo(() => filesTouched(messages), [messages])
+  const report = useMemo(() => latestReportEdit(messages), [messages])
+  const reportOpen = useStore($reportPanelOpen)
+  const recentEdit = useRecentlyChanged(report ? `${report.toolCallId}:${report.revision}` : null, 6000)
+  const editing = Boolean(report && (report.live || recentEdit))
+  // While the agent edits a report in the open panel, the other cards fold to
+  // their headers so the document gets the room.
+  const collapseOthers = editing && reportOpen
+
+  useReportPanelShortcut(Boolean(report))
 
   if (appViewForPath(pathname) !== 'chat') {
     return null
@@ -90,25 +102,32 @@ export function NeovarchContextRail() {
   const turns = messages.filter(message => message.role === 'user' && !message.hidden).length
 
   return (
-    <aside aria-label="Konteks" className="nv-context" data-slot="nv-context-rail">
+    <aside
+      aria-label="Konteks"
+      className="nv-context"
+      data-cards-collapsed={collapseOthers || undefined}
+      data-slot="nv-context-rail"
+    >
+      {report && <ReportPanel edit={report} editing={editing} />}
       <section className="nv-context-card">
         <h3 className="nv-context-label">
           <Cpu className="size-3.5" /> Model
         </h3>
-        <button className="nv-context-model" onClick={() => setModelPickerOpen(true)} title={model || undefined} type="button">
-          <span className="nv-context-model-name">{shortModelName(model)}</span>
-          <ChevronDown className="size-3 shrink-0 opacity-70" />
-        </button>
+        <p className="nv-context-model" data-slot="nv-context-model" title={model || undefined}>
+          <span className="nv-context-model-name">{model.trim() ? displayModelName(model) : 'Belum ada model'}</span>
+          {model.trim() && <span className="nv-context-model-id">{model}</span>}
+        </p>
         <dl className="nv-context-facts">
           <div>
             <dt>Penyedia</dt>
-            <dd>{provider || '—'}</dd>
+            <dd>{provider ? providerDisplayName(provider) : '—'}</dd>
           </div>
           <div>
             <dt>Pesan Anda</dt>
             <dd>{turns}</dd>
           </div>
         </dl>
+        <p className="nv-context-hint">Ganti model lewat pemilih model di kolom chat.</p>
       </section>
 
       <section className="nv-context-card">

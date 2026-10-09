@@ -1,10 +1,9 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { neovarchGreeting } from '@/components/neovarch/home'
 import { I18nProvider, useI18n } from '@/i18n'
 import type { I18nContextValue } from '@/i18n'
-
-import { neovarchGreeting } from '@/components/neovarch/home'
 
 import { Intro } from './intro'
 import stock from './intro-copy.jsonl?raw'

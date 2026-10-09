@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSessionView } from '@/app/chat/session-view'
 import { useTourMarker } from '@/app/chat/tour-marker'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
+import { ModelSheetHead } from '@/components/neovarch/model-sheet'
 import { isElementInHiddenPane } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -12,7 +13,7 @@ import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { ChevronDown } from '@/lib/icons'
+import { ChevronDown, Sparkles } from '@/lib/icons'
 import { formatModelPillLabel, providerDisplayName } from '@/lib/model-status-label'
 import { cn } from '@/lib/utils'
 import { $localSetupMenuRequest, acceptLocalSetupOffer } from '@/store/local-setup-offer'
@@ -160,6 +161,7 @@ export function ModelPill({
     <ChevronDown className="size-3.5 shrink-0 opacity-70" />
   ) : (
     <>
+      <Sparkles aria-hidden className="nv-model-chip-icon size-3 shrink-0" />
       {currentModel.trim() ? (
         <span className="truncate">{pillLabel ?? formatModelPillLabel(currentModel, { fastMode, serviceTier })}</span>
       ) : (
@@ -184,7 +186,7 @@ export function ModelPill({
         'size-(--composer-control-size) shrink-0 justify-center gap-0 rounded-md p-0',
         'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
       )
-    : PILL
+    : cn(PILL, 'nv-model-chip')
 
   const baseTitle = currentProvider
     ? copy.modelTitle(providerDisplayName(currentProvider), currentModel || copy.modelNone)
@@ -239,7 +241,8 @@ export function ModelPill({
       </Tip>
       <DropdownMenuContent
         align="end"
-        className="w-72 p-0"
+        className="nv-model-sheet w-80 p-0"
+        data-slot="nv-model-sheet"
         onCloseAutoFocus={event => {
           if (restoreSelection.current) {
             event.preventDefault()
@@ -253,6 +256,7 @@ export function ModelPill({
         side="top"
         sideOffset={8}
       >
+        <ModelSheetHead sessionIds={[runtimeId]} />
         <ModelMenuCloseContext.Provider value={() => setMenuOpen(false)}>
           {model.modelMenuContent}
         </ModelMenuCloseContext.Provider>
