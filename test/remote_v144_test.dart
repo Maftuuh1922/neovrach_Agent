@@ -348,7 +348,7 @@ void main() {
       expect(again.error, contains('Offline'));
     });
 
-    testWidgets('graph paints GitHub greens from sample data and scrolls sideways at 390 dp', (tester) async {
+    testWidgets('graph paints accent levels from sample data and scrolls sideways at 390 dp', (tester) async {
       tester.view.physicalSize = const Size(390 * 3, 844 * 3);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -359,8 +359,8 @@ void main() {
       expect(painter.weeks.length, 53);
       expect(painter.levelOf(0), 0);
       expect(painter.levelOf(9), 4);
-      expect(contributionColor(4, dark: false), const Color(0xFF216E39));
-      expect(contributionColor(0, dark: true), const Color(0xFF2D333B));
+      expect(contributionColor(4), NV.palette.accent);
+      expect(contributionColor(0), isNot(NV.palette.accent));
       // wider than the card: it scrolls, opened on the latest weeks
       expect(tester.getSize(find.byKey(const ValueKey('contribution-graph'))).width, greaterThan(358));
       expect(find.byKey(const ValueKey('contribution-scroll')), findsOneWidget);

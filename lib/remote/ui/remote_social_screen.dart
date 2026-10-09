@@ -13,6 +13,7 @@ import '../remote_controller.dart';
 import '../social_models.dart';
 import 'nv_widgets.dart';
 import 'tech_logo.dart';
+import 'profile_header_slot.dart' show contributionColor;
 import 'profile_share_card.dart' show showProfileShareSheet;
 
 /// Test seam for avatars (network by default).
@@ -196,13 +197,8 @@ class SocialHeatmapView extends StatelessWidget {
   final SocialHeatmap heatmap;
   final double cell, gap;
 
-  static Color levelColor(int level) => switch (level) {
-        0 => Color.lerp(NV.raised, NV.text, 0.07)!,
-        1 => Color.lerp(NV.raised, NV.red, 0.30)!,
-        2 => Color.lerp(NV.raised, NV.red, 0.55)!,
-        3 => Color.lerp(NV.raised, NV.red, 0.78)!,
-        _ => NV.red,
-      };
+  /// Same accent mapping as the Profil contribution graph.
+  static Color levelColor(int level) => contributionColor(level);
 
   @override
   Widget build(BuildContext context) {

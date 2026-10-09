@@ -80,6 +80,76 @@ List<StackItem> languagesFromRepos(List<dynamic> repos, {int top = 8}) {
   return [for (final e in items.take(top)) StackItem(e.key, total == 0 ? 0 : e.value / total, source: 'github', count: e.value)];
 }
 
+String _unescape(String s) => s
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&#x27;', "'")
+    .replaceAll('\u200b', '');
+
+int _count(String s) {
+  final t = s.trim().toLowerCase().replaceAll(',', '');
+  if (t.endsWith('k')) return ((double.tryParse(t.substring(0, t.length - 1)) ?? 0) * 1000).round();
+  return int.tryParse(t) ?? 0;
+}
+
+/// Parses the pinned repositories from the public profile page
+/// `github.com/<login>` (`li.pinned-item-list-item` cards). Empty when none.
+List<PinnedRepo> parsePinnedReposHtml(String html) {
+  final out = <PinnedRepo>[];
+  final starts = RegExp(r'<li\b[^>]*class="[^"]*\bpinned-item-list-item\b[^"]*"', caseSensitive: false).allMatches(html).map((m) => m.start).toList();
+  for (var i = 0; i < starts.length && out.length < 6; i++) {
+    final end = i + 1 < starts.length ? starts[i + 1] : (html.indexOf('</ol>', starts[i]) < 0 ? html.length : html.indexOf('</ol>', starts[i]));
+    final b = html.substring(starts[i], end);
+    final link = RegExp(r'''href="/([^/"]+)/([^/"]+)"[^>]*>\s*(?:<span class="owner[^"]*"[^>]*>[^<]*</span>\s*/?\s*)?<span class="repo"[^>]*>([^<]*)</span>''', dotAll: true).firstMatch(b);
+    if (link == null) continue;
+    final owner = _unescape(link.group(1)!), repo = _unescape(link.group(2)!);
+    final desc = RegExp(r'<p class="pinned-item-desc[^"]*"[^>]*>(.*?)</p>', dotAll: true).firstMatch(b)?.group(1) ?? '';
+    final lang = RegExp(r'itemprop="programmingLanguage"[^>]*>([^<]*)<').firstMatch(b)?.group(1);
+    final color = RegExp(r'repo-language-color"[^>]*style="background-color:\s*(#[0-9a-fA-F]{3,8})').firstMatch(b)?.group(1);
+    int meta(String kind) {
+      final m = RegExp('href="/[^"]+/$kind"[^>]*>(.*?)</a>', dotAll: true).firstMatch(b);
+      if (m == null) return 0;
+      return _count(m.group(1)!.replaceAll(RegExp(r'<[^>]*>', dotAll: true), ''));
+    }
+
+    out.add(PinnedRepo(
+      name: repo,
+      owner: owner,
+      description: _unescape(desc.replaceAll(RegExp(r'<[^>]*>'), '')).replaceAll(RegExp(r'\s+'), ' ').trim(),
+      language: lang == null || lang.trim().isEmpty ? null : _unescape(lang.trim()),
+      languageColor: color,
+      stars: meta('stargazers'),
+      forks: meta('forks'),
+      url: 'https://github.com/$owner/$repo',
+    ));
+  }
+  return out;
+}
+
+/// No pins: the top-starred public non-fork repos from the REST repos list.
+List<PinnedRepo> pinnedFromRepos(List<dynamic> repos, {int top = 6}) {
+  final list = [for (final r in repos.whereType<Map>()) if (r['fork'] != true) Map<String, dynamic>.from(r)]
+    ..sort((a, b) {
+      final s = ((b['stargazers_count'] as num?) ?? 0).compareTo((a['stargazers_count'] as num?) ?? 0);
+      return s != 0 ? s : '${b['pushed_at'] ?? ''}'.compareTo('${a['pushed_at'] ?? ''}');
+    });
+  return [
+    for (final r in list.take(top))
+      PinnedRepo(
+        name: '${r['name'] ?? ''}',
+        owner: (r['owner'] is Map ? '${(r['owner'] as Map)['login'] ?? ''}' : null),
+        description: '${r['description'] ?? ''}',
+        language: r['language'] is String ? r['language'] as String : null,
+        stars: ((r['stargazers_count'] as num?) ?? 0).toInt(),
+        forks: ((r['forks_count'] as num?) ?? 0).toInt(),
+        url: '${r['html_url'] ?? ''}',
+      ),
+  ];
+}
+
 Map<String, dynamic> _heatJson(SocialHeatmap h) =>
     {'start': h.start, 'end': h.end, 'counts': h.counts, 'total': h.total, 'active_days': h.activeDays, 'streak': h.streak, 'max': h.max};
 
@@ -158,12 +228,17 @@ class GithubPublicController extends ChangeNotifier {
         c.get(Uri.parse('https://api.github.com/users/$enc'), headers: headers),
         c.get(Uri.parse('https://github.com/users/$enc/contributions'), headers: {'User-Agent': 'Neovarch-Remote'}),
         c.get(Uri.parse('https://api.github.com/users/$enc/repos?per_page=100&sort=pushed'), headers: headers),
+        c.get(Uri.parse('https://github.com/$enc'), headers: {'User-Agent': 'Neovarch-Remote'}).catchError((_) => http.Response('', 599)),
       ]).timeout(const Duration(seconds: 20));
       if (res[0].statusCode == 404) throw 'Akun GitHub "$l" tidak ditemukan.';
       if (res[0].statusCode != 200) throw 'GitHub menjawab ${res[0].statusCode}.';
       final u = Map<String, dynamic>.from(jsonDecode(res[0].body) as Map);
       final heat = res[1].statusCode == 200 ? parseContributionsHtml(res[1].body) : null;
-      final langs = res[2].statusCode == 200 ? languagesFromRepos(jsonDecode(res[2].body) as List) : const <StackItem>[];
+      final repos = res[2].statusCode == 200 ? jsonDecode(res[2].body) as List : null;
+      final langs = repos != null ? languagesFromRepos(repos) : const <StackItem>[];
+      var pinned = res[3].statusCode == 200 ? parsePinnedReposHtml(res[3].body) : const <PinnedRepo>[];
+      if (pinned.isEmpty && repos != null) pinned = pinnedFromRepos(repos);
+      if (pinned.isEmpty) pinned = profile?.pinned ?? const [];
       final j = {
         'login': u['login'] ?? l,
         'name': u['name'],
@@ -174,6 +249,7 @@ class GithubPublicController extends ChangeNotifier {
         'stack': {
           'languages': [for (final s in langs) {'name': s.name, 'share': s.share, 'source': s.source, 'count': s.count}],
         },
+        'pinned': [for (final r in pinned) r.toJson()],
       };
       profile = SocialProfile.fromJson(j);
       fetchedAt = DateTime.now();

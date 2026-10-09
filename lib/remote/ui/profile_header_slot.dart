@@ -1,6 +1,6 @@
 // 1.4.4: top of the Profil tab, GitHub-profile style: photo + name/@login +
-// bio, the contribution graph (green, last ~12 months, scrolls sideways on
-// narrow phones) and the tech stack as logo chips.
+// bio, the contribution graph (theme accent, last ~12 months, scrolls sideways on
+// narrow phones), the pinned repositories and the tech stack as logo chips.
 //
 // Source: the PC's GitHub sign-in (`/api/social/profile`) when the PC has one;
 // otherwise the public profile of a username set here
@@ -8,6 +8,7 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../theme/neovarch_mobile_theme.dart';
 import '../github_public.dart';
@@ -64,6 +65,10 @@ class _ProfileHeaderSlotState extends ConsumerState<ProfileHeaderSlot> {
           ],
           const SizedBox(height: 12),
           ContributionGraphCard(heatmap: p.heatmap),
+          if (p.pinned.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            PinnedReposCard(repos: p.pinned),
+          ],
           if (p.languages.isNotEmpty) ...[
             const SizedBox(height: 12),
             NvPanel(
@@ -205,16 +210,98 @@ Future<void> showGithubLoginSheet(BuildContext context, String? current) => show
       ),
     );
 
-/// GitHub's green levels (light and dark site themes).
-Color contributionColor(int level, {required bool dark}) {
-  const lightC = [Color(0xFFEBEDF0), Color(0xFF9BE9A8), Color(0xFF40C463), Color(0xFF30A14E), Color(0xFF216E39)];
-  const darkC = [Color(0xFF2D333B), Color(0xFF0E4429), Color(0xFF006D32), Color(0xFF26A641), Color(0xFF39D353)];
-  return (dark ? darkC : lightC)[level.clamp(0, 4)];
+/// Contribution levels 0..4 in the active theme accent: the empty cell is a
+/// faint text tint over the card, levels 1-4 the accent at 25/45/70/100%
+/// over that empty colour (works for every accent, light and dark).
+Color contributionColor(int level, {NvPalette? palette}) {
+  final p = palette ?? NV.palette;
+  final empty = Color.lerp(p.dark ? p.raised : p.bg, p.text, p.dark ? 0.08 : 0.09)!;
+  const alphas = [0.0, 0.25, 0.45, 0.70, 1.0];
+  final l = level.clamp(0, 4);
+  if (l == 0) return empty;
+  return Color.alphaBlend(p.accent.withValues(alpha: alphas[l]), empty);
+}
+
+/// Pinned repositories as GitHub shows them: name, description, language
+/// dot + name, stars, forks; a tap opens the repo.
+class PinnedReposCard extends StatelessWidget {
+  const PinnedReposCard({super.key, required this.repos, this.onOpen});
+  final List<PinnedRepo> repos;
+
+  /// Test seam; defaults to opening the URL in the browser / GitHub app.
+  final void Function(String url)? onOpen;
+
+  @override
+  Widget build(BuildContext context) => NvPanel(
+        key: const ValueKey('profile-pinned'),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Expanded(child: Text('REPO DISEMATKAN', style: NV.monoLabel(size: 9.5))),
+            Text('${repos.length}', style: NV.monoLabel(size: 9.5, color: NV.text)),
+          ]),
+          const SizedBox(height: 6),
+          for (var i = 0; i < repos.length && i < 6; i++) ...[
+            if (i > 0) Divider(height: 1, thickness: 1, color: NV.glassBorder),
+            _PinnedTile(repo: repos[i], onOpen: onOpen),
+          ],
+        ]),
+      );
+}
+
+class _PinnedTile extends StatelessWidget {
+  const _PinnedTile({required this.repo, this.onOpen});
+  final PinnedRepo repo;
+  final void Function(String url)? onOpen;
+  @override
+  Widget build(BuildContext context) {
+    final r = repo;
+    final dot = r.languageArgb == null ? NV.red : Color(r.languageArgb!);
+    final meta = NV.monoLabel(size: 10, color: NV.muted);
+    return InkWell(
+      key: ValueKey('pinned-${r.name}'),
+      borderRadius: BorderRadius.circular(10),
+      onTap: r.url.isEmpty ? null : () => onOpen != null ? onOpen!(r.url) : launchUrl(Uri.parse(r.url), mode: LaunchMode.externalApplication),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(CupertinoIcons.book, size: 15, color: NV.muted),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: NV.redInk)),
+            ),
+            Icon(CupertinoIcons.arrow_up_right, size: 13, color: NV.faint),
+          ]),
+          if (r.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(r.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: NV.muted, height: 1.35)),
+          ],
+          const SizedBox(height: 6),
+          Row(children: [
+            if (r.language != null) ...[
+              Container(width: 9, height: 9, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+              const SizedBox(width: 5),
+              Flexible(child: Text(r.language!, maxLines: 1, overflow: TextOverflow.ellipsis, style: meta)),
+              const SizedBox(width: 14),
+            ],
+            Icon(CupertinoIcons.star, size: 12, color: NV.muted),
+            const SizedBox(width: 3),
+            Text('${r.stars}', style: meta),
+            const SizedBox(width: 12),
+            Icon(CupertinoIcons.arrow_branch, size: 12, color: NV.muted),
+            const SizedBox(width: 3),
+            Text('${r.forks}', style: meta),
+          ]),
+        ]),
+      ),
+    );
+  }
 }
 
 const _monthsId = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-/// The contribution graph card: month labels, 7 x ~53 green cells (fixed
+/// The contribution graph card: month labels, 7 x ~53 accent cells (fixed
 /// cell size, scrolls sideways and opens on the latest weeks), totals.
 class ContributionGraphCard extends StatelessWidget {
   const ContributionGraphCard({super.key, required this.heatmap, this.cell = 11, this.gap = 3});
@@ -255,7 +342,7 @@ class ContributionGraphCard extends StatelessWidget {
                 width: 9,
                 height: 9,
                 margin: const EdgeInsets.only(left: 2),
-                decoration: BoxDecoration(color: contributionColor(l, dark: dark), borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: contributionColor(l), borderRadius: BorderRadius.circular(2)),
               ),
             Text(' banyak', style: NV.monoLabel(size: 9, color: NV.muted)),
           ]),
@@ -308,11 +395,12 @@ class _Graph extends StatelessWidget {
 }
 
 class ContributionPainter extends CustomPainter {
-  ContributionPainter({required this.weeks, required this.max, required this.cell, required this.gap, required this.dark});
+  ContributionPainter({required this.weeks, required this.max, required this.cell, required this.gap, required this.dark, NvPalette? palette}) : palette = palette ?? NV.palette;
   final List<List<int>> weeks;
   final int max;
   final double cell, gap;
   final bool dark;
+  final NvPalette palette;
 
   /// Levels as GitHub draws them; [max] <= 4 means the counts already are levels.
   int levelOf(int v) => max <= 4 ? v.clamp(0, 4) : SocialHeatmap.level(v, max);
@@ -325,12 +413,12 @@ class ContributionPainter extends CustomPainter {
       for (var d = 0; d < 7; d++) {
         final v = weeks[w][d];
         if (v < 0) continue;
-        paint.color = contributionColor(levelOf(v), dark: dark);
+        paint.color = contributionColor(levelOf(v), palette: palette);
         canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(w * (cell + gap), d * (cell + gap), cell, cell), r), paint);
       }
     }
   }
 
   @override
-  bool shouldRepaint(ContributionPainter old) => old.weeks != weeks || old.max != max || old.dark != dark || old.cell != cell;
+  bool shouldRepaint(ContributionPainter old) => old.weeks != weeks || old.max != max || old.dark != dark || old.cell != cell || old.palette != palette;
 }
