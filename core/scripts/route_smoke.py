@@ -5,7 +5,9 @@
 Starts the mock provider and `neovarch serve` in a throwaway NEOVARCH_HOME,
 GETs the REST routes behind each rail page and Settings tab, calls the gateway
 RPCs those pages use, runs one chat turn and checks the Kantor snapshot and the
-chat's persona. Prints a JSON report (one row per check) and exits non-zero if
+chat's persona, then the routes behind the Kantor desk model switch, thread
+timeline/around, logs level filter, skills toggle + learning node edit,
+memory panel and the GitHub account page. Prints a JSON report (one row per check) and exits non-zero if
 any check fails. A route "fails" when it answers non-2xx or, for a list route,
 returns no list where the page reads one.
 """
@@ -55,9 +57,22 @@ ROUTES = [
     ("jadwal", "/api/cron/jobs", ""),
     ("jadwal", "/api/cron/delivery-targets", "targets"),
     ("mcp", "/api/mcp/servers", None),
-    ("logs", "/api/logs", None),
+    ("logs", "/api/logs", "lines"),
     ("memory", "/api/memory", None),
+    ("settings:account", "/api/account/github", None),
 ]
+
+SMOKE_SKILL = "route-smoke-skill"
+LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
+
+async def rest(http, method: str, url: str, body: dict | None = None) -> tuple[int, object]:
+    async with http.request(method, url, json=body) as resp:
+        text = await resp.text()
+        try:
+            return resp.status, json.loads(text)
+        except ValueError:
+            return resp.status, {}
 
 
 def has_list(body, key) -> bool:
@@ -131,6 +146,100 @@ async def drive(port: int, token: str) -> list[dict]:
             res = await call("session.context_breakdown", {"session_id": sid})
             rows.append({"page": "chat", "check": "session.context_breakdown", "ok": "result" in res})
 
+            # Model picker follows the open chat (session_id), and a desk's
+            # model switch from Kantor is chat-only for a chat desk.
+            opts = (await call("model.options", {"session_id": sid})).get("result") or {}
+            rows.append({"page": "chat", "check": "model.options session_id (before switch)",
+                         "ok": opts.get("model") == "mock-model" and opts.get("scope") == "default"
+                         and "reasoning_effort" in opts and isinstance(opts.get("providers"), list),
+                         "model": opts.get("model"), "scope": opts.get("scope")})
+            status, body = await rest(http, "PUT", f"{base}/api/agents/session:{sid}/model",
+                                      {"model": "mock-model-b"})
+            rows.append({"page": "kantor", "check": "PUT /api/agents/{id}/model (chat desk)",
+                         "ok": status == 200 and body.get("agent_id") == f"session:{sid}", "status": status})
+            opts = (await call("model.options", {"session_id": sid})).get("result") or {}
+            rows.append({"page": "chat", "check": "model.options session_id (after desk switch)",
+                         "ok": opts.get("model") == "mock-model-b" and opts.get("scope") == "session",
+                         "model": opts.get("model"), "scope": opts.get("scope")})
+            glob = (await call("model.options", {})).get("result") or {}
+            rows.append({"page": "chat", "check": "desk switch is chat-only (default unchanged)",
+                         "ok": glob.get("model") == "mock-model", "model": glob.get("model")})
+            status, _ = await rest(http, "PUT", f"{base}/api/agents/session:no-such-chat/model", {"model": "x"})
+            rows.append({"page": "kantor", "check": "PUT /api/agents/{unknown}/model -> 404",
+                         "ok": status == 404, "status": status})
+            status, _ = await rest(http, "PUT", f"{base}/api/agents/session:{sid}/model", {"model": ""})
+            rows.append({"page": "kantor", "check": "PUT /api/agents/{id}/model without model -> 422",
+                         "ok": status == 422, "status": status})
+
+        # Thread jump marks and the page around one of them.
+        status, tl = await rest(http, "GET", f"{base}/api/sessions/{sid}/timeline")
+        entries = tl.get("entries") if isinstance(tl, dict) else None
+        rows.append({"page": "chat", "check": "GET /api/sessions/{id}/timeline",
+                     "ok": status == 200 and isinstance(entries, list) and len(entries) >= 1
+                     and all("row_id" in e for e in entries), "status": status,
+                     "entries": len(entries or [])})
+        row_id = entries[0]["row_id"] if entries else 0
+        status, ar = await rest(http, "GET", f"{base}/api/sessions/{sid}/messages/around?row_id={row_id}&limit=20")
+        msgs = ar.get("messages") if isinstance(ar, dict) else None
+        rows.append({"page": "chat", "check": "GET /api/sessions/{id}/messages/around",
+                     "ok": status == 200 and isinstance(msgs, list) and any(m.get("row_id") == row_id for m in msgs),
+                     "status": status, "returned": len(msgs or [])})
+
+        # Logs page: the gateway really writes agent.log; level is a floor.
+        status, lg = await rest(http, "GET", f"{base}/api/logs?level=INFO&lines=500")
+        lines = lg.get("lines") if isinstance(lg, dict) else None
+        rows.append({"page": "logs", "check": "GET /api/logs?level=INFO has turn lines",
+                     "ok": status == 200 and isinstance(lines, list) and len(lines) > 0,
+                     "status": status, "lines": len(lines or [])})
+        for level in ("WARNING", "ERROR"):
+            status, lg = await rest(http, "GET", f"{base}/api/logs?level={level}&lines=500")
+            lines = lg.get("lines") if isinstance(lg, dict) else None
+            floor = LEVELS.index(level)
+            ok = status == 200 and isinstance(lines, list) and all(
+                len(ln.split(" ", 3)) > 2 and ln.split(" ", 3)[2] in LEVELS
+                and LEVELS.index(ln.split(" ", 3)[2]) >= floor for ln in lines)
+            rows.append({"page": "logs", "check": f"GET /api/logs?level={level} filters", "ok": ok,
+                         "status": status, "lines": len(lines or [])})
+
+        # Skills page: toggle off/on, and the learning node edit.
+        status, tg = await rest(http, "PUT", f"{base}/api/skills/toggle", {"name": SMOKE_SKILL, "enabled": False})
+        status2, sk = await rest(http, "GET", f"{base}/api/skills")
+        listed = next((x for x in (sk if isinstance(sk, list) else []) if x.get("name") == SMOKE_SKILL), {})
+        rows.append({"page": "skill", "check": "PUT /api/skills/toggle (off)",
+                     "ok": status == 200 and tg.get("ok") is True and listed.get("enabled") is False,
+                     "status": status, "listed_enabled": listed.get("enabled")})
+        status, tg = await rest(http, "PUT", f"{base}/api/skills/toggle", {"name": SMOKE_SKILL, "enabled": True})
+        rows.append({"page": "skill", "check": "PUT /api/skills/toggle (on)",
+                     "ok": status == 200 and tg.get("ok") is True, "status": status})
+        status, tg = await rest(http, "PUT", f"{base}/api/skills/toggle", {"name": "no-such-skill", "enabled": False})
+        rows.append({"page": "skill", "check": "PUT /api/skills/toggle unknown skill -> ok:false",
+                     "ok": status == 200 and tg.get("ok") is False, "status": status})
+        status, nd = await rest(http, "GET", f"{base}/api/learning/node?id={SMOKE_SKILL}")
+        rows.append({"page": "skill", "check": "GET /api/learning/node",
+                     "ok": status == 200 and nd.get("ok") is True and "Route smoke" in str(nd.get("content")),
+                     "status": status})
+        edited = "---\nname: route-smoke-skill\ndescription: edited\n---\nEdited by the route smoke.\n"
+        status, ed = await rest(http, "PUT", f"{base}/api/learning/node", {"id": SMOKE_SKILL, "content": edited})
+        _, nd = await rest(http, "GET", f"{base}/api/learning/node?id={SMOKE_SKILL}")
+        rows.append({"page": "skill", "check": "PUT /api/learning/node (edit persists)",
+                     "ok": status == 200 and ed.get("ok") is True and nd.get("content") == edited,
+                     "status": status})
+
+        # Memory panel and the GitHub account page.
+        status, mem = await rest(http, "GET", f"{base}/api/memory")
+        rows.append({"page": "memory", "check": "GET /api/memory (real status)",
+                     "ok": status == 200 and isinstance(mem, dict) and "active" in mem,
+                     "status": status, "active": (mem or {}).get("active") if isinstance(mem, dict) else None})
+        status, acct = await rest(http, "GET", f"{base}/api/account/github")
+        rows.append({"page": "settings:account", "check": "GET /api/account/github",
+                     "ok": status == 200 and acct.get("provider") == "github"
+                     and isinstance(acct.get("connected"), bool),
+                     "status": status, "connected": acct.get("connected")})
+        status, acct = await rest(http, "POST", f"{base}/api/account/github", {"token": ""})
+        rows.append({"page": "settings:account", "check": "POST /api/account/github empty token -> ok:false",
+                     "ok": status == 200 and acct.get("ok") is False and bool(acct.get("error")),
+                     "status": status})
+
     from neovarch.agent import persona_prompt
     persona = persona_prompt(sid, snap)
     rows.append({"page": "chat", "check": "persona names the desk", "ok": bool(desk.get("name"))
@@ -142,6 +251,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=9329)
     ap.add_argument("--llm-port", type=int, default=18090)
+    ap.add_argument("--out", help="also write the JSON report to this file")
     args = ap.parse_args()
     home = Path(tempfile.mkdtemp(prefix="neovarch-routes-"))
     env = {k: v for k, v in os.environ.items() if not k.startswith(("HERM" + "ES_", "NEOVARCH_"))}
@@ -150,6 +260,10 @@ def main() -> int:
     (home / "config.yaml").write_text(
         "model:\n  provider: custom\n  default: mock-model\n"
         f"  base_url: http://127.0.0.1:{args.llm_port}/v1\n", encoding="utf-8")
+    skill = home / "skills" / SMOKE_SKILL
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: route-smoke-skill\ndescription: Route smoke\n---\nRoute smoke skill.\n",
+                                   encoding="utf-8")
     os.environ["NEOVARCH_HOME"] = str(home)
     llm = subprocess.Popen([sys.executable, str(CORE / "tests" / "mock_llm.py"), "--port", str(args.llm_port),
                             "--delay", "0.3"],
@@ -162,7 +276,10 @@ def main() -> int:
         wait_port(args.port)
         rows = asyncio.run(drive(args.port, token))
         failed = [r for r in rows if not r["ok"]]
-        print(json.dumps({"checks": len(rows), "failed": len(failed), "rows": rows}, indent=2, ensure_ascii=False))
+        report = json.dumps({"checks": len(rows), "failed": len(failed), "rows": rows}, indent=2, ensure_ascii=False)
+        print(report)
+        if args.out:
+            Path(args.out).write_text(report + "\n", encoding="utf-8")
         return 1 if failed else 0
     finally:
         for p in (srv, llm):
