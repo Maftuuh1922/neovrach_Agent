@@ -265,4 +265,25 @@ describe('CustomEndpointsSettings', () => {
     // typed bare root would 404 every request even though the test looked green.
     expect(urlInput.value).toBe('http://h.test/v1')
   })
+
+  it('shows an Indonesian error with "Coba lagi" instead of an endless skeleton, and retries', async () => {
+    getCustomEndpoints.mockRejectedValueOnce(new Error('404: Not implemented in the Neovarch core'))
+    getCustomEndpoints.mockResolvedValueOnce(emptyResponse)
+
+    render(<CustomEndpointsSettings />)
+
+    expect(await screen.findByText('Endpoint kustom belum bisa dimuat')).toBeTruthy()
+    expect(screen.getByText(/Not implemented/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Coba lagi' }))
+    await screen.findByText('No custom endpoints')
+    expect(getCustomEndpoints).toHaveBeenCalledTimes(2)
+  })
+
+  it('tolerates a response without an endpoints array', async () => {
+    getCustomEndpoints.mockResolvedValue({ ok: false } as unknown as CustomEndpointsResponse)
+
+    render(<CustomEndpointsSettings />)
+
+    await screen.findByText('No custom endpoints')
+  })
 })

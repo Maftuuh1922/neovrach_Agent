@@ -27,7 +27,7 @@ import type {
 } from '@/types/hermes'
 
 import { ComboboxInput } from './combobox-input'
-import { EmptyState, Pill, SectionHeading, SettingsContent, SettingsSkeleton } from './primitives'
+import { EmptyState, Pill, SectionHeading, SettingsContent, SettingsLoadError, SettingsSkeleton } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 
 interface CustomEndpointsSettingsProps {
@@ -137,6 +137,8 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
   const scopeProfile = useStore($settingsRequestProfile)
   const mounted = useRef(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<unknown>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [activating, setActivating] = useState<string | null>(null)
@@ -154,7 +156,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
     const data = await getCustomEndpoints(scopeProfile)
 
     if (mounted.current) {
-      setEndpoints(data.endpoints)
+      setEndpoints(Array.isArray(data?.endpoints) ? data.endpoints : [])
     }
   }
 
@@ -163,6 +165,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
     let cancelled = false
     mounted.current = true
     setLoading(true)
+    setLoadError(null)
     setForm(EMPTY_FORM)
     setDiscoveredModels([])
     setDiscoveredDetails([])
@@ -176,15 +179,18 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
           return
         }
 
-        setEndpoints(data.endpoints)
-        const current = data.endpoints.find(endpoint => endpoint.is_current) ?? data.endpoints[0]
+        const list = Array.isArray(data?.endpoints) ? data.endpoints : []
+        setEndpoints(list)
+        const current = list.find(endpoint => endpoint.is_current) ?? list[0]
 
         if (current) {
           setForm(formFromEndpoint(current))
-          setDiscoveredModels(current.models)
+          setDiscoveredModels(Array.isArray(current.models) ? current.models : [])
         }
       } catch (err) {
-        notifyError(err, copyRef.current.couldNotLoad)
+        if (!cancelled) {
+          setLoadError(err)
+        }
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -198,7 +204,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
       cancelled = true
       mounted.current = false
     }
-  }, [scopeProfile])
+  }, [scopeProfile, reloadToken])
 
   async function handleSave() {
     try {
@@ -347,6 +353,16 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
         setDeleting(null)
       }
     }
+  }
+
+  if (!loading && loadError) {
+    return (
+      <SettingsLoadError
+        error={loadError}
+        onRetry={() => setReloadToken(n => n + 1)}
+        title="Endpoint kustom belum bisa dimuat"
+      />
+    )
   }
 
   if (loading) {

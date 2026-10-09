@@ -57,6 +57,17 @@ function DeepLinkButton({ target }: { target: string }) {
 }
 
 describe('KeysSettings', () => {
+  it('shows "Kunci API belum bisa dimuat" with Coba lagi when /api/env fails, then loads on retry', async () => {
+    getEnvVars.mockRejectedValueOnce(new Error('404: Not implemented in the Neovarch core: /api/env'))
+    getEnvVars.mockResolvedValueOnce({})
+    await renderKeysSettings('tools')
+
+    expect(await screen.findByText('Kunci API belum bisa dimuat')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Coba lagi' }))
+    await waitFor(() => expect(screen.queryByTestId('settings-load-error')).toBeNull())
+    expect(getEnvVars).toHaveBeenCalledTimes(2)
+  })
+
   it('fetches env vars for the displayed profile (the concrete key, never null) when unscoped', async () => {
     // #90549 class: getEnvVars(null) targets the primary profile's env store,
     // so a non-default profile's Keys page would read (and edit) the wrong

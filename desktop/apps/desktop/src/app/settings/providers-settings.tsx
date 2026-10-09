@@ -34,7 +34,7 @@ import { CustomEndpointsSettings } from './custom-endpoints-settings'
 import { SettingsCategoryHeading, useEnvCredentials } from './env-credentials'
 import { providerGroup, providerMeta, providerPriority } from './helpers'
 import { LocalModelsSettings } from './local-models-settings'
-import { SettingsContent, SettingsSkeleton } from './primitives'
+import { SettingsContent, SettingsLoadError, SettingsSkeleton } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
@@ -393,7 +393,7 @@ export function ProvidersSettings({
 }: ProvidersSettingsProps) {
   const { t } = useI18n()
   const scopeProfile = useStore($settingsRequestProfile)
-  const { rowProps, vars } = useEnvCredentials(scopeProfile)
+  const { loadError, reload, rowProps, vars } = useEnvCredentials(scopeProfile)
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([])
   const [openProvider, setOpenProvider] = useState<null | string>(null)
   const [disconnecting, setDisconnecting] = useState<null | string>(null)
@@ -529,6 +529,16 @@ export function ProvidersSettings({
     }
   }
 
+  // Custom endpoints do not use the env list: never gate them on it (an old
+  // core without /api/env left this view on an endless skeleton).
+  if (view === 'custom-endpoints') {
+    return <CustomEndpointsSettings onConfigSaved={onConfigSaved} onMainModelChanged={onMainModelChanged} />
+  }
+
+  if (!vars && loadError) {
+    return <SettingsLoadError error={loadError} onRetry={reload} title="Penyedia belum bisa dimuat" />
+  }
+
   if (!vars) {
     return <SettingsSkeleton search sections={[{ rows: 6 }]} />
   }
@@ -589,10 +599,6 @@ export function ProvidersSettings({
         )}
       </SettingsContent>
     )
-  }
-
-  if (view === 'custom-endpoints') {
-    return <CustomEndpointsSettings onConfigSaved={onConfigSaved} onMainModelChanged={onMainModelChanged} />
   }
 
   if (view === 'local') {
