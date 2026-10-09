@@ -1,10 +1,10 @@
 import type * as React from 'react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { isPreviewableDocument, openDocPreview } from '@/components/neovarch/doc-preview'
 
 import { TitlebarIcon } from '@/app/shell/titlebar-icon'
 import { ZoomableImage } from '@/components/chat/zoomable-image'
+import { isPreviewableDocument, openDocPreview } from '@/components/neovarch/doc-preview'
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'

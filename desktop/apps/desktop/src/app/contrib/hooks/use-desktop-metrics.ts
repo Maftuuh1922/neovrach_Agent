@@ -10,6 +10,7 @@ import { useEffect, useMemo } from 'react'
 
 import { contributedRoutes } from '@/app/routes'
 import { $workspaceMode } from '@/components/pane-shell/workspace-scope'
+import { NEOVARCH_DESKTOP_METRICS_ENABLED } from '@/neovarch-flags'
 import { $commandPaletteOpen } from '@/store/command-palette'
 import { $activeConnectionId } from '@/store/connections'
 import {
@@ -39,8 +40,6 @@ import {
   type SharedMetricsConsent,
   sharedMetricsProfileRequester
 } from '@/store/shared-metrics'
-
-import { NEOVARCH_DESKTOP_METRICS_ENABLED } from '@/neovarch-flags'
 
 import { observeOnboardingMetrics } from './desktop-onboarding-metrics'
 

@@ -14,9 +14,9 @@ import { type CSSProperties, Fragment, type ReactNode, type RefObject, useEffect
 
 import { ShellMenuItems } from '@/app/context-menu/shell-menu-items'
 import { TITLEBAR_DRAG_HANDLE_WIDTH, TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
+import { NeoLabel } from '@/components/neovarch/halo-mark'
 import { ActionsContextMenu, type MenuKit, renderActionItem } from '@/components/ui/actions-menu'
 import { Codicon } from '@/components/ui/codicon'
-import { NeoLabel } from '@/components/neovarch/halo-mark'
 import { DROP_SHEET_BLUR_CLASS, DROP_SHEET_CLASS } from '@/components/ui/drop-affordance'
 import {
   PANE_TAB_STRIP_LINE_LEFT,

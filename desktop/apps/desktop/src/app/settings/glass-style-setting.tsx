@@ -58,7 +58,7 @@ export function GlassStyleSetting() {
       <p className="mb-3 text-xs text-(--ui-text-tertiary)">
         Cara panel kaca dilukis di atas latar belakang.{wallpaper.source ? '' : ' Terlihat setelah memilih latar belakang.'}
       </p>
-      <div className="nv-glass-tiles" role="group" aria-label="Gaya kaca">
+      <div aria-label="Gaya kaca" className="nv-glass-tiles" role="group">
         {(['reguler', 'bening', 'gelap', 'warna'] as const).map(s => (
           <Tile image={image} key={s} selected={style === s} style={s} />
         ))}

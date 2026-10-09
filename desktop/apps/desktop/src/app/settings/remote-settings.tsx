@@ -187,9 +187,6 @@ export function RemoteSettings() {
       {status?.enabled && (
         <>
           <ListRow
-            description="Di HP: buka Neovarch Agent ▸ Pindai QR dari PC."
-            title="Pasangkan HP"
-            wide
             below={
               <div className="mt-3 flex flex-wrap items-start gap-5">
                 <div className="nv-qr-frame grid size-[232px] place-items-center bg-[#f4f2ed]">
@@ -232,6 +229,9 @@ export function RemoteSettings() {
                 </div>
               </div>
             }
+            description="Di HP: buka Neovarch Agent ▸ Pindai QR dari PC."
+            title="Pasangkan HP"
+            wide
           />
 
           {status.addresses.length > 1 && (

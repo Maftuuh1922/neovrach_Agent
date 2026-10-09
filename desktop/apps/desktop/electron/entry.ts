@@ -7,9 +7,9 @@ import { app } from 'electron'
 import { resolveDesktopHermesHome } from './data-paths'
 import { pinNeovarchEnvironment } from './neovarch-env'
 import { readDesktopLaunchConfig } from './renderer-heap-flags'
+import { readWindowsUserEnvVar } from './windows-user-env'
 import { wslgLaunchArgs } from './wslg-launch'
 import { spawnWslgLaunch } from './wslg-launch-process'
-import { readWindowsUserEnvVar } from './windows-user-env'
 
 // Before anything resolves a path: drop inherited Hermes variables and pin the
 // Neovarch home (see neovarch-env.ts). main.ts is imported dynamically below,
