@@ -213,6 +213,12 @@ import {
 import type { RegistryConnection } from './connection-registry'
 import type { RosterProfileMetadata } from './connection-registry'
 import { liveWindowState, overlayWindowState } from './connection-window-state'
+import {
+  readCoreUpdateAttempt,
+  readInstalledCoreCommit,
+  recordCoreUpdateAttempt,
+  shouldUpdateCore
+} from './core-freshness'
 import { describeCrashReason, installCrashForensics } from './crash-forensics'
 import {
   adoptServedDashboardToken,
@@ -5392,7 +5398,27 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
 
   const activeRuntime: ActiveRuntimeState = activeRuntimeState(activeBackend)
 
-  if (activeBackend && !bootstrapRepairRequested) {
+  // An app update leaves the previously installed core behind; bring it to
+  // this build's commit once (see core-freshness.ts).
+  const coreUpdateNeeded: boolean =
+    Boolean(activeBackend) &&
+    !bootstrapRepairRequested &&
+    shouldUpdateCore({
+      isPackaged: IS_PACKAGED,
+      stampCommit: INSTALL_STAMP?.commit,
+      installedCommit: readInstalledCoreCommit(ACTIVE_HERMES_ROOT),
+      attemptedCommit: readCoreUpdateAttempt(HERMES_HOME),
+      optOut: process.env.NEOVARCH_DESKTOP_KEEP_CORE === '1'
+    })
+
+  if (coreUpdateNeeded && INSTALL_STAMP?.commit) {
+    recordCoreUpdateAttempt(HERMES_HOME, INSTALL_STAMP.commit)
+    rememberLog(
+      `[bootstrap] installed core ${readInstalledCoreCommit(ACTIVE_HERMES_ROOT) || 'unknown'} differs from this app's build ${INSTALL_STAMP.commit.slice(0, 12)}; updating the core`
+    )
+  }
+
+  if (activeBackend && !bootstrapRepairRequested && !coreUpdateNeeded) {
     if (!activeRuntime.hasValidMarker) {
       rememberLog(
         `[bootstrap] Active Hermes runtime at ${ACTIVE_HERMES_ROOT} is usable but the bootstrap marker is missing or stale; skipping first-run bootstrap.`
@@ -5402,8 +5428,8 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
     return activeBackend
   }
 
-  if (bootstrapRepairRequested) {
-    rememberLog('[bootstrap] repair requested; bypassing the usable active runtime to re-run the installer')
+  if (bootstrapRepairRequested || coreUpdateNeeded) {
+    rememberLog('[bootstrap] repair or core update requested; bypassing the usable active runtime to re-run the installer')
   } else {
     // 5. A source install outside ACTIVE_HERMES_ROOT (install.sh --dir, a
     //    setup-hermes.sh clone), found through the launcher it published at a
@@ -5452,11 +5478,14 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
     installStamp: INSTALL_STAMP, // may be null in dev
     isPackaged: IS_PACKAGED,
     platform: process.platform,
-    local: 'none'
+    local: 'none',
+    coreUpdate: coreUpdateNeeded && Boolean(activeBackend)
   }
 }
 
 interface ResolvedHermesBackend {
+  /** Bootstrap re-runs only to update a usable but outdated core. */
+  coreUpdate?: boolean
   kind: string
   label: string
   command: string | null
@@ -5583,6 +5612,19 @@ async function ensureRuntime(
       cancelledError.bootstrapCancelled = true
       bootstrapFailure = cancelledError
       throw cancelledError
+    }
+
+    if (!bootstrapResult.ok && backend.coreUpdate) {
+      // Updating an outdated core failed (offline, GitHub down). The old core
+      // still runs; the attempt is recorded, so this re-resolve launches it.
+      rememberLog(
+        `[bootstrap] core update failed (${bootstrapResult.failedStage || 'unknown stage'}); keeping the installed core`
+      )
+
+      return ensureRuntime(
+        await installedRuntimeGate.afterInstall(() => resolveHermesBackend(backend.args)),
+        assertStillOwned
+      )
     }
 
     if (!bootstrapResult.ok) {
