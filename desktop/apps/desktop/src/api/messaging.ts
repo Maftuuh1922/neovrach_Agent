@@ -14,12 +14,13 @@ import type {
 } from '@/types/hermes'
 
 import { hermesApi, profileScoped } from './client'
+import { asArray } from '@/lib/as-array'
 
 export function getMessagingPlatforms(profile?: null | string): Promise<MessagingPlatformsResponse> {
-  return hermesApi<MessagingPlatformsResponse>({
+  return Promise.resolve(hermesApi<MessagingPlatformsResponse>({
     ...profileScoped(profile),
     path: '/api/messaging/platforms'
-  })
+  })).then(r => ({ ...r, platforms: asArray(r?.platforms, 'platforms') }) as MessagingPlatformsResponse)
 }
 
 /** `hot_served`: a live multiplexer serving this named profile rebuilt its adapters from the new
@@ -112,10 +113,10 @@ export function cancelTelegramOnboarding(pairingId: string, profile?: null | str
 // a row they can already see.
 
 export function getPairing(profile?: null | string): Promise<PairingResponse> {
-  return hermesApi<PairingResponse>({
+  return Promise.resolve(hermesApi<PairingResponse>({
     ...profileScoped(profile),
     path: '/api/pairing'
-  })
+  })).then(r => ({ ...r, approved: asArray(r?.approved, 'approved'), pending: asArray(r?.pending, 'pending') }) as PairingResponse)
 }
 
 export function approvePairing(
@@ -155,10 +156,10 @@ export function revokePairing(platform: string, userId: string, profile?: null |
  *  ambient request scope. Keyed explicitly so a view that survives an active
  *  profile switch keeps talking to the profile it belongs to (#71352). */
 export function getWebhooks(profile?: null | string): Promise<WebhooksResponse> {
-  return hermesApi<WebhooksResponse>({
+  return Promise.resolve(hermesApi<WebhooksResponse>({
     ...profileScoped(profile),
     path: '/api/webhooks'
-  })
+  })).then(r => ({ ...r, subscriptions: asArray(r?.subscriptions, 'subscriptions') }) as WebhooksResponse)
 }
 
 export function enableWebhooks(profile?: null | string): Promise<WebhookEnableResponse> {

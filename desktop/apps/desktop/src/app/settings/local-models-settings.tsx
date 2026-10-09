@@ -21,7 +21,7 @@ import { LocalModelsModelsSection } from './local-models-models-section'
 import { LocalModelsOwnerProvider, useScopedLocalModelsOwner } from './local-models-owner'
 import { LocalModelsQuickstart } from './local-models-quickstart'
 import { LocalModelsRuntimeSection } from './local-models-runtime-section'
-import { SettingsContent, SettingsSkeleton } from './primitives'
+import { SettingsContent, SettingsLoadError, SettingsSkeleton } from './primitives'
 import { ActiveProfileNote } from './profile-scope'
 
 export function LocalModelsSettings(): ReactElement {
@@ -37,9 +37,11 @@ export function LocalModelsSettings(): ReactElement {
 function ScopedLocalModelsSettings(): ReactElement {
   const owner: LocalModelsOwner = useScopedLocalModelsOwner()
   const installStarting: boolean = useIsMutating({ mutationKey: localModelsKey(owner, 'install') }) > 0
-  const { data: status } = useLocalModelsStatus(owner, true, true)
+  const statusQuery = useLocalModelsStatus(owner, true, true)
+  const status = statusQuery.data
   const { data: hardware } = useQuery(localModelsHardwareOptions(owner))
-  const { data: catalog } = useQuery(localModelsCatalogOptions(owner))
+  const catalogQuery = useQuery(localModelsCatalogOptions(owner))
+  const catalog = catalogQuery.data
   // Quickstart escape hatch: true once the user asks for the full pane
   // (model list, HF browser) instead of the one-button setup card.
   const [configure, setConfigure] = useState<boolean>(false)
@@ -78,6 +80,19 @@ function ScopedLocalModelsSettings(): ReactElement {
       }
     }
   }, [jobs, navigate])
+
+  if ((!status && statusQuery.error) || (!catalog && catalogQuery.error)) {
+    return (
+      <SettingsLoadError
+        error={statusQuery.error ?? catalogQuery.error}
+        onRetry={() => {
+          void statusQuery.refetch()
+          void catalogQuery.refetch()
+        }}
+        title="Model lokal belum bisa dimuat"
+      />
+    )
+  }
 
   if (!status || !catalog) {
     return <SettingsSkeleton sections={[{ rows: 2 }, { rows: 4 }]} />

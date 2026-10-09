@@ -21,6 +21,7 @@ import {
   profileScoped,
   sessionReadOwnerPin
 } from './client'
+import { asArray } from '@/lib/as-array'
 
 const SESSION_LIST_REQUEST_TIMEOUT_MS = 60_000
 
@@ -115,7 +116,7 @@ export async function listSessions(
 
   return {
     ...result,
-    sessions: pageWindow(stampActiveConnectionOwner(result.sessions), limit),
+    sessions: pageWindow(stampActiveConnectionOwner(asArray<SessionInfo>(result?.sessions, 'sessions')), limit),
     offset: 0
   }
 }
@@ -158,7 +159,7 @@ export async function listAllProfileSessions(
 
   return {
     ...result,
-    sessions: pageWindow(stampActiveConnectionOwner(result.sessions), limit),
+    sessions: pageWindow(stampActiveConnectionOwner(asArray<SessionInfo>(result?.sessions, 'sessions')), limit),
     offset: Math.max(0, offset)
   }
 }
@@ -351,17 +352,17 @@ export async function listSidebarSessions(req: SidebarSessionsRequest): Promise<
   return {
     recents: {
       ...result.recents,
-      sessions: stampActiveConnectionOwner(result.recents?.sessions ?? []),
+      sessions: stampActiveConnectionOwner(asArray<SessionInfo>(result?.recents?.sessions)),
       ...(result.errors?.length ? { errors: result.errors } : {})
     },
     cron: {
       ...result.cron,
-      sessions: stampActiveConnectionOwner(result.cron?.sessions ?? []),
+      sessions: stampActiveConnectionOwner(asArray<SessionInfo>(result?.cron?.sessions)),
       ...(result.errors?.length ? { errors: result.errors } : {})
     },
     messaging: {
       ...result.messaging,
-      sessions: stampActiveConnectionOwner(result.messaging?.sessions ?? []),
+      sessions: stampActiveConnectionOwner(asArray<SessionInfo>(result?.messaging?.sessions)),
       ...(result.errors?.length ? { errors: result.errors } : {})
     },
     errors: result.errors,
@@ -434,10 +435,10 @@ export function searchSessions(query: string, profile?: null | string): Promise<
   const scope = profileScoped(profile)
   const suffix = scope.profile ? `&profile=${encodeURIComponent(scope.profile)}` : ''
 
-  return hermesApi<SessionSearchResponse>({
+  return Promise.resolve(hermesApi<SessionSearchResponse>({
     ...scope,
     path: `/api/sessions/search?q=${encodeURIComponent(query)}${suffix}`
-  })
+  })).then(r => ({ ...r, results: asArray(r?.results, 'results') }) as SessionSearchResponse)
 }
 
 // Resolves a single session row by id on one backend (the active profile, or
