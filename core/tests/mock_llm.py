@@ -12,13 +12,14 @@ Behaviour (deterministic, no network):
 * user text contains ``danger``           -> a ``shell`` call that needs approval
   (``rm -rf /tmp/neovarch-approval-probe``);
 * anything else                           -> streams ``Halo dari mock Neovarch. Kamu bilang: <text>``
-  word by word, with usage.
+  word by word, with usage; an image part reads ``[gambar <mime>, <n> B]``.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 
 from aiohttp import web
@@ -39,6 +40,21 @@ async def _auth(request: web.Request, handler):
     return await handler(request)
 
 
+def _user_text(content) -> str:
+    """Text of a user turn; image parts (vision input) show as ``[gambar <mime>, <n> B]``."""
+    if not isinstance(content, list):
+        return str(content or "")
+    out = []
+    for part in content:
+        if part.get("type") == "text":
+            out.append(str(part.get("text") or ""))
+        elif part.get("type") == "image_url":
+            url = str((part.get("image_url") or {}).get("url") or "")
+            head, _, b64 = url.partition(",")
+            out.append(f"[gambar {head[5:].split(';')[0] or '?'}, {len(base64.b64decode(b64 or b''))} B]")
+    return " ".join(out)
+
+
 def _decide(messages: list[dict]) -> dict:
     last = messages[-1] if messages else {}
     if last.get("role") == "tool":
@@ -48,7 +64,7 @@ def _decide(messages: list[dict]) -> dict:
     text = ""
     for m in reversed(messages):
         if m.get("role") == "user":
-            text = str(m.get("content") or "")
+            text = _user_text(m.get("content"))
             break
     low = text.lower()
     if "danger" in low:

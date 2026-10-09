@@ -7,7 +7,8 @@ GETs the REST routes behind each rail page and Settings tab, calls the gateway
 RPCs those pages use, runs one chat turn and checks the Kantor snapshot and the
 chat's persona, then the routes behind the Kantor desk model switch, thread
 timeline/around, logs level filter, skills toggle + learning node edit,
-memory panel and the GitHub account page. Prints a JSON report (one row per check) and exits non-zero if
+memory panel, the GitHub account page and a phone chat attachment (upload ->
+vision input). Prints a JSON report (one row per check) and exits non-zero if
 any check fails. A route "fails" when it answers non-2xx or, for a list route,
 returns no list where the page reads one.
 """
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import subprocess
@@ -63,6 +65,8 @@ ROUTES = [
 ]
 
 SMOKE_SKILL = "route-smoke-skill"
+PNG_1PX = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 
@@ -171,6 +175,41 @@ async def drive(port: int, token: str) -> list[dict]:
             rows.append({"page": "kantor", "check": "PUT /api/agents/{id}/model without model -> 422",
                          "ok": status == 422, "status": status})
 
+            # Phone chat attachment: multipart upload, then the image reaches the
+            # model as vision input (the mock echoes it as "[gambar <mime>, <n> B]").
+            phone = (await call("session.create", {"source": "phone"}))["result"]["session_id"]
+            form = aiohttp.FormData()
+            form.add_field("session_id", phone)
+            form.add_field("file", PNG_1PX, filename="scaled_1000.jpg", content_type="image/jpeg")
+            async with http.post(f"{base}/api/uploads", data=form) as resp:
+                status, up = resp.status, await resp.json()
+            rows.append({"page": "chat:phone", "check": "POST /api/uploads (multipart image)",
+                         "ok": status == 200 and len(str(up.get("id") or "")) == 12
+                         and up.get("name") == "scaled_1000.jpg" and up.get("size") == len(PNG_1PX)
+                         and up.get("kind") == "image",
+                         "status": status, "name": up.get("name"), "size": up.get("size")})
+            async with http.get(f"{base}{up.get('url')}") as resp:
+                got = await resp.read()
+            rows.append({"page": "chat:phone", "check": "GET /api/uploads/{id} (bubble thumbnail)",
+                         "ok": resp.status == 200 and got == PNG_1PX, "status": resp.status})
+            events.clear()
+            res = await call("prompt.submit", {"session_id": phone, "text": "ini", "attachments": [up.get("id")]})
+            deadline = time.monotonic() + 30
+            while not any(e["type"] == "message.complete" and e.get("session_id") == phone for e in events):
+                msg = await ws.receive_json(timeout=max(deadline - time.monotonic(), 0.1))
+                if msg.get("method") == "event":
+                    events.append(msg["params"])
+            done = next(e for e in events if e["type"] == "message.complete" and e.get("session_id") == phone)
+            reply = str((done.get("payload") or {}).get("text") or "")
+            rows.append({"page": "chat:phone", "check": "prompt.submit with attachment -> model sees the image",
+                         "ok": "result" in res and f"[gambar image/png, {len(PNG_1PX)} B]" in reply,
+                         "reply": reply[-80:]})
+            hist = (await call("session.history", {"session_id": phone})).get("result") or {}
+            user = next((m for m in hist.get("messages", []) if m.get("role") == "user"), {})
+            rows.append({"page": "chat:phone", "check": "history keeps the attachment (id, name, size)",
+                         "ok": [a.get("id") for a in user.get("attachments") or []] == [up.get("id")]
+                         and user["attachments"][0].get("size") == len(PNG_1PX)})
+
         # Thread jump marks and the page around one of them.
         status, tl = await rest(http, "GET", f"{base}/api/sessions/{sid}/timeline")
         entries = tl.get("entries") if isinstance(tl, dict) else None
@@ -258,7 +297,7 @@ def main() -> int:
     token = "route-smoke"
     env.update(NEOVARCH_HOME=str(home), NEOVARCH_SESSION_TOKEN=token, PYTHONPATH=str(CORE))
     (home / "config.yaml").write_text(
-        "model:\n  provider: custom\n  default: mock-model\n"
+        "model:\n  provider: custom\n  default: mock-model\n  vision: true\n"
         f"  base_url: http://127.0.0.1:{args.llm_port}/v1\n", encoding="utf-8")
     skill = home / "skills" / SMOKE_SKILL
     skill.mkdir(parents=True)
