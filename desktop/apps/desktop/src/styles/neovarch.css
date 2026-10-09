@@ -2408,3 +2408,491 @@
   font-size: 0.75rem;
   color: var(--nv-text-2);
 }
+
+/* ---- Profil & Teman (GitHub friends/profile) — flat, rounded, accent only ---- */
+.nv-social {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  height: 100%;
+  min-height: 0;
+  padding: 1.5rem 1.75rem;
+  overflow: auto;
+}
+.nv-social-kicker {
+  margin: 0 0 0.2rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--nv-red-text);
+}
+.nv-social-title {
+  margin: 0;
+  font-family: var(--nv-font-display);
+  font-size: 1.9rem;
+  font-weight: 600;
+}
+.nv-social-sub,
+.nv-social-muted {
+  margin: 0.3rem 0 0;
+  max-width: 42rem;
+  font-size: 0.82rem;
+  color: var(--nv-text-2);
+}
+.nv-social-warn {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--nv-red-text);
+}
+.nv-social-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 21rem;
+  align-items: start;
+  gap: 1rem;
+}
+@media (max-width: 1100px) {
+  .nv-social-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.nv-social-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.nv-social-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+  min-width: 0;
+}
+.nv-social-h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.nv-social-h3 {
+  margin: 0.5rem 0 0;
+  font-family: var(--nv-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nv-text-3);
+}
+.nv-social-profile-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+}
+.nv-social-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--nv-red);
+  color: #fff;
+  font-weight: 600;
+}
+.nv-social-avatar-lg {
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 1.6rem;
+}
+.nv-social-avatar-sm {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.7rem;
+}
+.nv-social-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.nv-social-login-name {
+  margin: 0;
+  font-family: var(--nv-font-mono);
+  font-size: 0.75rem;
+  color: var(--nv-text-3);
+}
+.nv-social-bio {
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+  color: var(--nv-text-2);
+}
+.nv-social-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--nv-line);
+  font-size: 0.75rem;
+  color: var(--nv-text-2);
+}
+.nv-social-status[data-coding='true'] {
+  border-color: var(--nv-red);
+  color: var(--nv-text);
+}
+.nv-social-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--nv-text-3);
+}
+.nv-social-dot[data-coding='true'] {
+  background: var(--nv-red);
+}
+.nv-social-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.nv-social-dot-badge {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  border: 2px solid var(--nv-ink-2);
+  width: 0.7rem;
+  height: 0.7rem;
+}
+/* heatmap: 53 columns × 7 rows, level 0..4 = accent mixed into the panel colour */
+.nv-social-heatmap {
+  margin: 0;
+  overflow-x: auto;
+}
+.nv-social-heatmap-grid {
+  display: flex;
+  gap: 3px;
+}
+.nv-social-heatmap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nv-social-cell {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--nv-ink-3);
+}
+.nv-social-cell[data-level='pad'] {
+  background: transparent;
+}
+.nv-social-cell[data-level='1'] {
+  background: color-mix(in srgb, var(--nv-red) 30%, var(--nv-ink-3));
+}
+.nv-social-cell[data-level='2'] {
+  background: color-mix(in srgb, var(--nv-red) 55%, var(--nv-ink-3));
+}
+.nv-social-cell[data-level='3'] {
+  background: color-mix(in srgb, var(--nv-red) 78%, var(--nv-ink-3));
+}
+.nv-social-cell[data-level='4'] {
+  background: var(--nv-red);
+}
+.nv-social-heatmap-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  color: var(--nv-text-3);
+}
+.nv-social-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.nv-social-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nv-social-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--nv-red-wash);
+  border: 1px solid color-mix(in srgb, var(--nv-red) 35%, transparent);
+  font-size: 0.78rem;
+}
+.nv-social-chip-share {
+  font-family: var(--nv-font-mono);
+  font-size: 0.68rem;
+  color: var(--nv-text-3);
+}
+.nv-social-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.nv-social-btn {
+  padding: 0.42rem 0.85rem;
+  border-radius: var(--nv-r-control);
+  border: 1px solid var(--nv-line);
+  background: var(--nv-ink-3);
+  color: var(--nv-text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.nv-social-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.nv-social-btn-primary,
+.nv-social-btn-danger {
+  background: var(--nv-red);
+  border-color: var(--nv-red);
+  color: #fff;
+}
+.nv-social-btn-ghost {
+  background: transparent;
+}
+.nv-social-btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.74rem;
+}
+.nv-social-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--nv-red-text);
+  cursor: pointer;
+  font: inherit;
+}
+.nv-social-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.84rem;
+}
+.nv-social-toggle input {
+  accent-color: var(--nv-red);
+}
+.nv-social-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--nv-text-2);
+}
+.nv-social-field input,
+.nv-social-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--nv-r-control);
+  border: 1px solid var(--nv-line);
+  background: var(--nv-ink);
+  color: var(--nv-text);
+  font-size: 0.82rem;
+}
+.nv-social-clientid,
+.nv-social-device {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 34rem;
+}
+.nv-social-code {
+  align-self: flex-start;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-red-wash);
+  font-family: var(--nv-font-mono);
+  font-size: 1.5rem;
+  letter-spacing: 0.15em;
+}
+.nv-social-search {
+  display: flex;
+  gap: 0.4rem;
+}
+.nv-social-results,
+.nv-social-friend-list,
+.nv-social-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nv-social-result,
+.nv-social-pending li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.nv-social-result .nv-social-btn {
+  margin-left: auto;
+}
+.nv-social-tag {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--nv-ink-3);
+  font-size: 0.66rem;
+  color: var(--nv-text-2);
+}
+.nv-social-friend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 0.55rem;
+  border-radius: var(--nv-r-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--nv-text);
+  text-align: left;
+  cursor: pointer;
+}
+.nv-social-friend:hover {
+  background: var(--nv-ink-3);
+}
+.nv-social-friend[data-coding='true'] {
+  border-color: color-mix(in srgb, var(--nv-red) 45%, transparent);
+}
+.nv-social-friend-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nv-social-friend-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nv-social-friend-sub,
+.nv-social-friend-stack {
+  font-size: 0.72rem;
+  color: var(--nv-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nv-social-friend-stack {
+  grid-column: 2;
+  font-family: var(--nv-font-mono);
+}
+.nv-social-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.nv-social-danger {
+  padding: 0.75rem;
+  border-radius: var(--nv-r-panel);
+  border: 1px dashed var(--nv-line);
+  font-size: 0.82rem;
+}
+
+/* technology logos (Simple Icons, CC0) in stack chips */
+.nv-tech-logo {
+  flex: none;
+  color: var(--nv-red);
+}
+.nv-tech-chip {
+  background: color-mix(in srgb, var(--nv-ink-3) 70%, var(--nv-red) 6%);
+  border-color: color-mix(in srgb, var(--nv-text) 12%, transparent);
+}
+.nv-tech-chip-icon {
+  padding: 0.3rem 0.5rem;
+}
+.nv-social-friend-stack {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.nv-social-friend-stack .nv-tech-logo {
+  color: var(--nv-text-3);
+}
+.nv-social-profile-head {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.nv-social-share-btn {
+  align-self: start;
+}
+.nv-rail-avatar {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  object-fit: cover;
+}
+/* share dialog */
+.nv-share-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--nv-ink) 72%, transparent);
+}
+.nv-share-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(34rem, 92vw);
+  max-height: 92vh;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: var(--nv-ink-2);
+}
+.nv-share-head {
+  justify-content: space-between;
+}
+.nv-share-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink-3);
+}
+.nv-share-seg-btn {
+  padding: 0.3rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nv-text-2);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.nv-share-seg-btn[data-active='true'] {
+  background: var(--nv-ink-2);
+  color: var(--nv-text);
+}
+.nv-share-preview {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.nv-share-canvas {
+  height: min(60vh, 34rem);
+  max-width: 100%;
+  border-radius: 18px;
+}
+.nv-share-preview[data-format='square'] .nv-share-canvas {
+  height: auto;
+  width: min(100%, 26rem);
+}

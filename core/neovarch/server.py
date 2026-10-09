@@ -46,6 +46,7 @@ from neovarch.office import Office
 from neovarch import cron as cronmod
 from neovarch import netinfo
 from neovarch.realtime import EventBus
+from neovarch import uploads as upmod
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -147,6 +148,9 @@ class LiveSession:
         self.ctx = ToolContext(cwd=Path(rec.get("cwd") or default_cwd()), approve=self.approve)
         self.agent = Agent(rec, gw.store, self.ctx, self.emit)
         self.last_text = ""
+        # Desktop composers stage images with image.attach* before prompt.submit;
+        # the next submit consumes them as attachments of that user turn.
+        self.pending_attachments: list[dict] = []
 
     def emit(self, kind: str, payload: dict) -> None:
         if kind == "message.complete":
@@ -181,12 +185,12 @@ class LiveSession:
                 return True
         return False
 
-    def submit(self, text: str) -> None:
+    def submit(self, text: str, attachments: list[dict] | None = None) -> None:
         async def run():
             self.status = "running"
             self.gw.broadcast_event("session.status", self.id, {"status": "running"})
             try:
-                await self.agent.run_turn(text)
+                await self.agent.run_turn(text, attachments or None)
             except Exception as exc:  # report, keep the gateway alive
                 traceback.print_exc()
                 self.emit("error", {"message": f"{type(exc).__name__}: {exc}"})
@@ -221,6 +225,8 @@ def to_ui_messages(rec: dict) -> list[dict]:
             item["name"] = m.get("name")
         if m.get("reasoning"):
             item["reasoning"] = m["reasoning"]
+        if role == "user" and m.get("attachments"):
+            item["attachments"] = [upmod.public(a) for a in m["attachments"] if isinstance(a, dict) and a.get("id")]
         out.append(item)
     return out
 
@@ -237,6 +243,9 @@ class Gateway:
         self.bus = EventBus()
         self.kanban.on_event = lambda ev: self.broadcast_event("kanban.changed", None, ev)
         self.office = Office(self)
+        self.uploads = upmod.UploadStore()
+        from neovarch.social import Social
+        self.social = Social(self)
         self.cron = cronmod.CronStore()
         self.scheduler = cronmod.Scheduler(
             self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
@@ -271,6 +280,9 @@ class Gateway:
     def broadcast_event(self, kind: str, sid: str | None, payload: dict) -> None:
         if kind != "office.update":
             self.office.observe(kind, sid, payload)
+        social = self.__dict__.get("social")
+        if social is not None:
+            social.observe(kind, sid, payload)
         if (kind == "tool.complete" and isinstance(payload, dict)
                 and str(payload.get("name") or "").startswith("obsidian_write")):
             self.broadcast_event("vault.changed", None, {"tool": payload.get("name")})
@@ -381,13 +393,27 @@ class Gateway:
         if method == "prompt.submit":
             live = self._live(p)
             text = str(p.get("text") or "")
-            if not text.strip():
+            atts = self._resolve_attachments(p.get("attachments"))
+            atts = live.pending_attachments + [a for a in atts if a["id"] not in {x["id"] for x in live.pending_attachments}]
+            if not text.strip() and not atts:
                 raise RpcError(-32602, "text is required")
             if live.status == "running":
                 raise RpcError(-32010, "a turn is already running in this session")
             conn.attached.add(live.id)
-            live.submit(text)
-            return {"ok": True, "session_id": live.id, "status": "running"}
+            live.pending_attachments = []
+            live.submit(text, atts)
+            res: dict[str, Any] = {"ok": True, "session_id": live.id, "status": "running"}
+            if atts:
+                res["attachments"] = [upmod.public(a) for a in atts]
+                cfg = cfgmod.load_config()
+                if any(a["kind"] == "image" for a in atts) and not upmod.supports_vision(cfg, cfgmod.resolve_endpoint(cfg)):
+                    res["notice"] = upmod.VISION_NOTICE
+            return res
+        if method in ("image.attach", "image.attach_bytes", "file.attach", "image.detach",
+                      "attachment.list", "attachment.upload", "attachment.upload_chunk"):
+            return self._attach_rpc(method, p)
+        if method.startswith("social."):
+            return await self.social.rpc(method, p)
         if method == "approval.pending":
             live = self._live(p)
             return {"pending": [a["params"] for a in live.approvals.values()]}
@@ -474,6 +500,98 @@ class Gateway:
         if not key or key.startswith("appearance"):
             self.broadcast_event("appearance.changed", None, appearance_of(cfgmod.load_config()))
 
+    def _resolve_attachments(self, raw: Any) -> list[dict]:
+        out: list[dict] = []
+        for item in raw if isinstance(raw, list) else []:
+            uid = item.get("id") if isinstance(item, dict) else item
+            meta = self.uploads.get(str(uid or ""))
+            if not meta:
+                raise RpcError(-32602, f"lampiran tidak ditemukan: {uid}")
+            out.append(meta)
+        return out
+
+    def _attach_rpc(self, method: str, p: dict) -> dict:
+        """Desktop composer staging (image.attach*, file.attach, image.detach) and the
+        chunked upload for clients without multipart (attachment.upload_chunk)."""
+        sid = str(p.get("session_id") or "")
+        try:
+            if method == "attachment.list":
+                return {"attachments": [upmod.public(m) for m in self.uploads.list(sid)]}
+            if method == "attachment.upload_chunk":
+                return self._upload_chunk(sid, p)
+            if method == "attachment.upload":
+                raw = base64.b64decode(str(p.get("content_base64") or ""), validate=False)
+                meta = self.uploads.save_bytes(sid, str(p.get("filename") or p.get("name") or "file"), raw,
+                                               p.get("mime"))
+                return {"ok": True, **upmod.public(meta)}
+            live = self._live(p) if sid else None
+            if method == "image.detach":
+                if not live:
+                    return {"detached": False, "count": 0}
+                target = str(p.get("path") or p.get("id") or "")
+                before = len(live.pending_attachments)
+                live.pending_attachments = [a for a in live.pending_attachments
+                                            if target not in (a["path"], a["id"]) and target]
+                if not target:
+                    live.pending_attachments = []
+                return {"detached": len(live.pending_attachments) < before, "count": len(live.pending_attachments)}
+            if method == "image.attach_bytes":
+                raw = base64.b64decode(str(p.get("content_base64") or ""), validate=False)
+                meta = self.uploads.save_bytes(sid, str(p.get("filename") or "image.png"), raw)
+            elif method == "image.attach":
+                meta = self.uploads.import_path(sid, Path(os.path.expanduser(str(p.get("path") or ""))))
+            else:  # file.attach
+                name = str(p.get("name") or Path(str(p.get("path") or "file")).name)
+                data_url = str(p.get("data_url") or "")
+                if data_url:
+                    head, _, b64 = data_url.partition(",")
+                    mime = head[5:].split(";")[0] if head.startswith("data:") else None
+                    meta = self.uploads.save_bytes(sid, name, base64.b64decode(b64, validate=False), mime)
+                else:
+                    src = Path(os.path.expanduser(str(p.get("path") or "")))
+                    if not src.is_file():
+                        return {"attached": False, "message": f"File tidak ditemukan: {src}"}
+                    return {"attached": True, "path": str(src), "ref_path": str(src), "name": name,
+                            "ref_text": f"@file:{_ref(str(src))}", "uploaded": False}
+                return {"attached": True, "path": meta["path"], "ref_path": meta["path"], "name": meta["name"],
+                        "ref_text": f"@file:{_ref(meta['path'])}", "uploaded": True, "id": meta["id"]}
+        except upmod.UploadError as exc:
+            return {"attached": False, "ok": False, "message": str(exc)}
+        except (ValueError, TypeError) as exc:
+            return {"attached": False, "ok": False, "message": f"lampiran tidak valid: {exc}"}
+        if meta["kind"] != "image":
+            self.uploads.delete(meta["id"])
+            return {"attached": False, "message": f"{meta['name']} bukan gambar."}
+        if live:
+            live.pending_attachments.append(meta)
+        return {"attached": True, "path": meta["path"], "name": meta["name"], "bytes": meta["size"],
+                "count": len(live.pending_attachments) if live else 1, "id": meta["id"],
+                "text": f"[gambar: {meta['name']}]"}
+
+    def _upload_chunk(self, sid: str, p: dict) -> dict:
+        """{upload_id?, filename, mime, index, data(base64), final} -> {upload_id, received} / upload."""
+        uid = str(p.get("upload_id") or "")
+        chunks = self.__dict__.setdefault("_chunked", {})
+        if not uid:
+            uid = secrets.token_hex(8)
+            chunks[uid] = self.uploads.writer(sid, str(p.get("filename") or "file"), p.get("mime"))
+        w = chunks.get(uid)
+        if w is None:
+            raise RpcError(-32602, "upload_id tidak dikenal")
+        try:
+            data = base64.b64decode(str(p.get("data") or ""), validate=False)
+            if not getattr(w, "head", None):
+                w.head = data[:16]
+            w.write(data)
+        except upmod.UploadError:
+            chunks.pop(uid, None)
+            raise
+        if p.get("final"):
+            chunks.pop(uid, None)
+            meta = w.finish(head=getattr(w, "head", b""))
+            return {"ok": True, "upload_id": uid, "done": True, **upmod.public(meta)}
+        return {"ok": True, "upload_id": uid, "received": w.size, "done": False}
+
     def _live(self, p: dict) -> LiveSession:
         sid = str(p.get("session_id") or "")
         if sid in self.live:
@@ -492,6 +610,10 @@ class Gateway:
             return []
         stem = "" if folder == base else base.name
         return [{"path": str(n), "name": n.name, "is_dir": n.is_dir()} for n in names if n.name.startswith(stem)][:50]
+
+
+def _ref(path: str) -> str:
+    return f'"{path}"' if any(c.isspace() for c in path) else path
 
 
 class RpcError(Exception):
@@ -537,9 +659,11 @@ def build_app(gw: Gateway) -> web.Application:
 
     async def _start_cron(_app):
         gw.scheduler.start()
+        gw.social.start()
 
     async def _stop_cron(_app):
         await gw.scheduler.stop()
+        await gw.social.stop()
     app.on_startup.append(_start_cron)
     app.on_cleanup.append(_stop_cron)
 
@@ -1144,6 +1268,91 @@ def build_app(gw: Gateway) -> web.Application:
         cfgmod.save_config(cfg)
         gw._config_changed("appearance")
         return web.json_response(new)
+
+    # ---- chat attachments + binary downloads ---------------------------------
+    async def upload_post(request):
+        """multipart/form-data: field `file` (+ optional `session_id`); or a raw body with
+        ?filename=&session_id= and Content-Type. Max 25 MB. Returns the stored upload."""
+        sid = request.query.get("session_id") or ""
+        try:
+            if request.content_type.startswith("multipart/"):
+                reader = await request.multipart()
+                meta = None
+                while True:
+                    part = await reader.next()
+                    if part is None:
+                        break
+                    if part.name == "session_id" and not part.filename:
+                        sid = (await part.text()).strip()
+                        continue
+                    if part.filename is None:
+                        await part.release()
+                        continue
+                    w = gw.uploads.writer(sid, part.filename, part.headers.get("Content-Type"))
+                    head = b""
+                    while True:
+                        chunk = await part.read_chunk(256 * 1024)
+                        if not chunk:
+                            break
+                        head = head or chunk[:16]
+                        w.write(chunk)
+                    meta = w.finish(head=head)
+                    break
+                if meta is None:
+                    return web.json_response({"detail": "field `file` wajib ada"}, status=400)
+            else:
+                if request.content_length and request.content_length > upmod.MAX_BYTES:
+                    return web.json_response({"detail": "File terlalu besar (maks 25 MB)."}, status=413)
+                w = gw.uploads.writer(sid, request.query.get("filename") or "file", request.content_type)
+                head = b""
+                async for chunk in request.content.iter_chunked(256 * 1024):
+                    head = head or chunk[:16]
+                    w.write(chunk)
+                meta = w.finish(head=head)
+        except upmod.UploadError as exc:
+            return web.json_response({"detail": str(exc)}, status=exc.status)
+        gw.broadcast_event("attachment.uploaded", sid or None, upmod.public(meta))
+        return web.json_response(upmod.public(meta))
+
+    def _file_response(path: Path, name: str, mime: str | None, download: bool) -> web.StreamResponse:
+        disp = "attachment" if download else "inline"
+        quoted = name.replace('"', "")
+        return web.FileResponse(path, headers={
+            "Content-Type": mime or "application/octet-stream",
+            "Content-Disposition": f'{disp}; filename="{quoted}"',
+            "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
+
+    async def upload_get(request):
+        meta = gw.uploads.get(request.match_info["uid"])
+        if not meta:
+            return web.json_response({"detail": "lampiran tidak ditemukan"}, status=404)
+        return _file_response(Path(meta["path"]), meta["name"], meta["mime"], request.query.get("download") in ("1", "true"))
+
+    async def upload_meta(request):
+        meta = gw.uploads.get(request.match_info["uid"])
+        return web.json_response(upmod.public(meta)) if meta else web.json_response({"detail": "lampiran tidak ditemukan"}, status=404)
+
+    async def upload_delete(request):
+        return web.json_response({"ok": gw.uploads.delete(request.match_info["uid"])})
+
+    async def uploads_list(request):
+        return web.json_response({"attachments": [upmod.public(m) for m in gw.uploads.list(request.query.get("session_id") or "")]})
+
+    async def fs_download(request):
+        """Binary download of any readable file (reports, artifacts, attachments)."""
+        p = Path(os.path.expanduser(request.query.get("path") or ""))
+        if not p.is_file():
+            return web.json_response({"detail": f"file tidak ditemukan: {p}"}, status=404)
+        import mimetypes
+        return _file_response(p, p.name, mimetypes.guess_type(p.name)[0], request.query.get("inline") not in ("1", "true"))
+
+    r.add_post("/api/uploads", upload_post)
+    r.add_get("/api/uploads", uploads_list)
+    r.add_get("/api/uploads/{uid}", upload_get)
+    r.add_get("/api/uploads/{uid}/meta", upload_meta)
+    r.add_delete("/api/uploads/{uid}", upload_delete)
+    r.add_get("/api/fs/download", fs_download)
+    gw.social.install_routes(r)
 
     r.add_get("/api/office", office_get)
     r.add_get("/api/office/events", office_events)
