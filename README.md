@@ -25,7 +25,7 @@ The phone is just a remote: pair it with a QR code and drive the agent on your P
 
 Use any model that speaks the OpenAI `/chat/completions` API: OpenAI, OpenRouter, Groq, DeepSeek, Ollama,
 or a custom endpoint (including a local server). Pick a provider with `neovarch setup`; API keys are stored in
-`~/.neovarch/.env`.
+`~/.neovarch/.env` (`%LOCALAPPDATA%\neovarch\.env` on Windows).
 
 <table>
   <tr>
