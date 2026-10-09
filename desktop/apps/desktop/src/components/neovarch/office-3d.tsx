@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { X } from '@/lib/icons'
 
+import { AgentAvatar } from './agent-identity'
 import { OFFICE3D_STATUS, type SceneAgent, sceneAgentsFromSnapshot } from './office3d-model'
 import type { OfficeScene } from './office3d-scene'
 import { OfficeModelSelect } from './office-model-select'
@@ -185,6 +186,7 @@ export function AgentPopover({
   scene: SceneAgent
 }) {
   const [title, setTitle] = useState('')
+
   const [state, setState] = useState<{
     kind: 'error' | 'idle' | 'sending' | 'sent'
     message?: string
@@ -222,11 +224,13 @@ export function AgentPopover({
       role="dialog"
     >
       <header>
+        <AgentAvatar id={agent.id} name={agent.name} size={44} status={scene.status} />
         <div className="min-w-0">
+          <p className="nv-office3d-popover-kicker">{agent.role}</p>
           <h3>{agent.name}</h3>
-          <p>
-            <i style={{ background: OFFICE3D_STATUS[scene.status].color }} /> {scene.statusText} · {agent.role}
-          </p>
+          <span className="nv-office-status" data-status={agent.status}>
+            <i style={{ background: OFFICE3D_STATUS[scene.status].color }} /> {scene.statusText}
+          </span>
         </div>
         <button aria-label="Tutup" className="nv-office3d-close" onClick={onClose} type="button">
           <X className="size-3.5" />

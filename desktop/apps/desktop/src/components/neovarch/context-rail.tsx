@@ -10,6 +10,8 @@ import { $reviewFiles } from '@/store/review'
 import { $currentModel, $currentProvider, $messages } from '@/store/session'
 
 import { NeovarchOfficeMini } from './office'
+import { $reportPanelOpen, latestReportEdit } from './report-edit'
+import { ReportPanel, useRecentlyChanged, useReportPanelShortcut } from './report-panel'
 
 const PATH_KEYS = ['path', 'file_path', 'filepath', 'filename', 'file', 'target_file']
 
@@ -83,6 +85,15 @@ export function NeovarchContextRail() {
 
   const tools = useMemo(() => toolsUsed(messages), [messages])
   const touched = useMemo(() => filesTouched(messages), [messages])
+  const report = useMemo(() => latestReportEdit(messages), [messages])
+  const reportOpen = useStore($reportPanelOpen)
+  const recentEdit = useRecentlyChanged(report ? `${report.toolCallId}:${report.revision}` : null, 6000)
+  const editing = Boolean(report && (report.live || recentEdit))
+  // While the agent edits a report in the open panel, the other cards fold to
+  // their headers so the document gets the room.
+  const collapseOthers = editing && reportOpen
+
+  useReportPanelShortcut(Boolean(report))
 
   if (appViewForPath(pathname) !== 'chat') {
     return null
@@ -91,7 +102,13 @@ export function NeovarchContextRail() {
   const turns = messages.filter(message => message.role === 'user' && !message.hidden).length
 
   return (
-    <aside aria-label="Konteks" className="nv-context" data-slot="nv-context-rail">
+    <aside
+      aria-label="Konteks"
+      className="nv-context"
+      data-cards-collapsed={collapseOthers || undefined}
+      data-slot="nv-context-rail"
+    >
+      {report && <ReportPanel edit={report} editing={editing} />}
       <section className="nv-context-card">
         <h3 className="nv-context-label">
           <Cpu className="size-3.5" /> Model

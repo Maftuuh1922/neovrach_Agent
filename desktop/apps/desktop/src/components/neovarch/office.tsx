@@ -6,13 +6,13 @@ import { sessionRoute } from '@/app/routes'
 import { Brain, Users } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
+import { OfficeAgentAvatar } from './agent-identity'
 import { Office3D } from './office-3d'
 import { OfficeModelSelect } from './office-model-select'
 import {
   $office,
   $officeError,
   $officeView,
-  initials,
   OFFICE_ROUTE,
   OFFICE_STATUS_LABEL,
   type OfficeAgent,
@@ -45,7 +45,7 @@ function Desk({ agent, now }: { agent: OfficeAgent; now: number }) {
   return (
     <article className="nv-office-desk" data-nv-desk={agent.id} data-status={agent.status}>
       <header className="nv-office-desk-head">
-        <span className="nv-office-avatar">{initials(agent.name)}</span>
+        <OfficeAgentAvatar agent={agent} size={40} />
         <div className="min-w-0">
           <h3 className="nv-office-name">{agent.name}</h3>
           <p className="nv-office-role">{agent.role}</p>
@@ -257,11 +257,9 @@ export function NeovarchOfficeMini() {
         <span className="nv-office-mini-list">
           {agents.map(agent => (
             <span className="nv-office-mini-row" data-status={agent.status} key={agent.id}>
-              <span className="nv-office-avatar nv-office-avatar-sm">{initials(agent.name)}</span>
+              <OfficeAgentAvatar agent={agent} feed={office?.feed} size={32} />
               <span className="min-w-0">
-                <span className="nv-office-mini-name">
-                  <StatusDot status={agent.status} /> {agent.name}
-                </span>
+                <span className="nv-office-mini-name">{agent.name}</span>
                 <span className="nv-office-mini-task">
                   {agent.current_tool || agent.current_task || OFFICE_STATUS_LABEL[agent.status]}
                 </span>
