@@ -192,35 +192,6 @@
   color: var(--nv-text-3);
 }
 
-.nv-command-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 1.875rem;
-  max-width: 18rem;
-  padding: 0 0.6rem;
-  border: 1px solid var(--nv-line);
-  background: transparent;
-  color: var(--nv-text);
-  font-size: 0.78rem;
-}
-.nv-command-model:hover {
-  border-color: var(--nv-red);
-}
-.nv-command-model-label {
-  font-family: var(--nv-font-mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.24em;
-  color: var(--nv-red-text);
-}
-.nv-command-model-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-family: var(--nv-font-mono);
-  font-size: 0.72rem;
-}
 
 .nv-rail {
   display: flex;
@@ -767,9 +738,6 @@
 
 /* Command bar */
 .nv-command-search,
-.nv-command-model {
-  border-radius: var(--nv-r-control);
-}
 .nv-command-kbd {
   border-radius: 6px;
 }
@@ -2820,4 +2788,124 @@
   position: absolute;
   border-radius: 999px;
   box-shadow: 0 0 0 2px var(--nv-ink);
+}
+
+/* ── One model selector (v1.4.4) ────────────────────────────────────────────
+   The composer chip is the only place to change the model; the right panel's
+   Model card is read-only info. Chip and sheet follow the phone's
+   ModelChip / ModelPickerSheet: glass pill with a sparkle in the accent, mono
+   name, chevron; the menu opens as a rounded glass sheet with a mono kicker
+   ("model · default PC" / "model · <agent>"), "Pilih model", rounded rows. */
+:root[data-hermes-theme='neovarch'] .nv-model-chip {
+  height: 26px;
+  border: 1px solid var(--nv-bubble-rim, var(--nv-line));
+  border-radius: 999px;
+  background: var(--nv-bubble-fill, var(--nv-ink-2));
+  padding: 0 0.55rem 0 0.45rem;
+  font-family: var(--nv-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  color: var(--nv-text);
+}
+:root[data-hermes-theme='neovarch'] .nv-model-chip:hover {
+  border-color: color-mix(in srgb, var(--nv-red) 55%, var(--nv-line));
+  color: var(--nv-text);
+}
+.nv-model-chip-icon {
+  color: var(--nv-red);
+}
+:root[data-hermes-theme='neovarch'] .nv-model-sheet {
+  overflow: hidden;
+  border: 1px solid var(--nv-bubble-rim, var(--nv-line));
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--nv-ink-2) 92%, transparent);
+  backdrop-filter: blur(22px) saturate(1.3);
+  box-shadow: var(--nv-glass-shadow, 0 18px 48px rgb(0 0 0 / 35%));
+}
+.nv-model-sheet-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.9rem 0.55rem;
+}
+.nv-model-sheet-grip {
+  align-self: center;
+  width: 34px;
+  height: 4px;
+  margin-bottom: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nv-text-3) 55%, transparent);
+}
+.nv-model-sheet-kicker {
+  font-family: var(--nv-font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nv-text-2);
+}
+.nv-model-sheet-title {
+  font-size: 1.02rem;
+  font-weight: 650;
+  color: var(--nv-text);
+}
+.nv-model-sheet input {
+  border-radius: 12px;
+}
+.nv-model-sheet [role='menuitem'],
+.nv-model-sheet [role='menuitemradio'] {
+  margin: 1px 6px;
+  border-radius: 12px;
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
+}
+.nv-model-sheet [role='menuitem']:has(.codicon-check) {
+  background: color-mix(in srgb, var(--nv-red) 12%, transparent);
+}
+.nv-model-sheet .codicon-check {
+  color: var(--nv-red);
+}
+.nv-model-sheet [role='separator'] {
+  margin-inline: 12px;
+}
+
+/* Right panel Model card: read-only. */
+:root[data-hermes-theme='neovarch'] .nv-context-model {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  margin: 0;
+  border-radius: 14px;
+  cursor: default;
+}
+:root[data-hermes-theme='neovarch'] .nv-context-model:hover {
+  border-color: var(--nv-line);
+}
+:root[data-hermes-theme='neovarch'] .nv-context-model-name {
+  max-width: 100%;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.nv-context-model-id {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--nv-font-mono);
+  font-size: 0.64rem;
+  color: var(--nv-text-2);
+}
+.nv-context-hint {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--nv-text-2);
+}
+
+/* Icons: thinner strokes, rounded ends, closer to the phone's Cupertino set. */
+:root[data-hermes-theme='neovarch'] .tabler-icon {
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
