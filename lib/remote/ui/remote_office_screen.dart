@@ -15,10 +15,12 @@ import '../models_api.dart' show modelShort;
 import '../office_models.dart';
 import '../office_scene_state.dart';
 import '../remote_controller.dart';
+import 'brag_share_sheet.dart' show showBragShareSheet;
 import 'nv_widgets.dart';
 import 'model_picker.dart';
 import 'remote_office_3d.dart';
 import 'remote_vault_screen.dart';
+import '../home_widget.dart' show remoteLaunchAction;
 
 /// "3 mnt lalu" style relative time in Indonesian.
 String agoId(DateTime? t, {DateTime? now}) {
@@ -51,6 +53,48 @@ class _RemoteOfficeScreenState extends ConsumerState<RemoteOfficeScreen> {
   void _openAgent(OfficeAgent a) => showAgentSheet(context, a, onOpenChat: widget.onOpenChat, onOpenApprovals: widget.onOpenApprovals);
 
   @override
+  void initState() {
+    super.initState();
+    remoteLaunchAction.addListener(_onLaunchAction);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunchAction());
+  }
+
+  @override
+  void dispose() {
+    remoteLaunchAction.removeListener(_onLaunchAction);
+    super.dispose();
+  }
+
+  /// Home-screen widget "Agen" row: open that agent's sheet once the Office
+  /// snapshot that has it is in (waits for the connection after a cold start).
+  bool _awaitLaunch = false;
+  void _onLaunchAction() {
+    final v = remoteLaunchAction.value;
+    if (!mounted || v == null || !v.startsWith('agent:')) return;
+    final id = v.substring(6);
+    final r = ref.read(remoteProvider);
+    final a = r.office?.agents.where((x) => x.id == id).firstOrNull;
+    if (a == null) {
+      if (_awaitLaunch || r.office != null && r.connected) {
+        // connected and the agent is gone: nothing to open
+        if (!_awaitLaunch) remoteLaunchAction.value = null;
+        return;
+      }
+      _awaitLaunch = true;
+      void later() {
+        if (mounted && (r.office == null || !r.connected)) return;
+        r.removeListener(later);
+        _awaitLaunch = false;
+        _onLaunchAction();
+      }
+      r.addListener(later);
+      return;
+    }
+    remoteLaunchAction.value = null;
+    _openAgent(a);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final r = ref.watch(remoteProvider);
     final o = r.office;
@@ -68,6 +112,13 @@ class _RemoteOfficeScreenState extends ConsumerState<RemoteOfficeScreen> {
             kicker: 'kantor · $pc',
             title: 'Kantor',
             actions: [
+              NvIconButton(
+                key: const ValueKey('office-pamerkan'),
+                tooltip: 'Pamerkan kantor',
+                icon: CupertinoIcons.share,
+                onPressed: () => showBragShareSheet(context, ref),
+              ),
+              const SizedBox(width: 8),
               _ViewToggle(
                 visual: _visual,
                 onChanged: (v) => setState(() {

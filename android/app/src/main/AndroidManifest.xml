@@ -162,7 +162,7 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Home-screen widget (NvHomeWidget.kt): data pushed by the app. -->
+        <!-- "Neovarch · Aksi cepat" widget (NvHomeWidget.kt): data pushed by the app. -->
         <receiver
             android:name=".NvHomeWidget"
             android:exported="false"
@@ -174,6 +174,33 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/nv_home_widget_info" />
         </receiver>
+        <!-- "Neovarch · Status" and "Neovarch · Agen" widgets (NvStatusWidget.kt, NvAgentsWidget.kt). -->
+        <receiver
+            android:name=".NvStatusWidget"
+            android:exported="false"
+            android:label="@string/nvw_status_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nv_status_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".NvAgentsWidget"
+            android:exported="false"
+            android:label="@string/nvw_agents_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nv_agents_widget_info" />
+        </receiver>
+        <service
+            android:name=".NvAgentsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
         <!-- "Hey Neo" wake word (NvWakeService.kt), opt-in from Profil. -->
         <service
             android:name=".NvWakeService"
@@ -204,6 +231,22 @@
         <!-- flutter_tts needs to see the TTS engine (Android 11+) -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- Kartu Neovarch share targets (lib/remote/share/share_targets.dart) -->
+        <package android:name="com.instagram.android" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+        <package android:name="org.thunderdog.challegram" />
+        <intent>
+            <action android:name="com.instagram.share.ADD_TO_STORY" />
+            <data android:mimeType="image/*" />
         </intent>
         <!-- url_launcher: open links in a browser -->
         <intent>

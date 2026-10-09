@@ -1,12 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home-screen widget, day (values-night has the night set). -->
+<!-- Home-screen widgets, day (values-night has the night set). Glass-like:
+     a translucent flat tint with a hairline, no gradients. -->
 <resources>
-    <color name="nvw_bg">#F2F6F4F1</color>
-    <color name="nvw_line">#1F140607</color>
-    <color name="nvw_chip">#14140607</color>
+    <color name="nvw_bg">#E8FBF9F6</color>
+    <color name="nvw_line">#1A140607</color>
+    <color name="nvw_tile">#0F140607</color>
+    <color name="nvw_tile_line">#0F140607</color>
     <color name="nvw_text">#FF140607</color>
-    <color name="nvw_muted">#FF5C5350</color>
-    <color name="nvw_accent">#FFC8101A</color>
+    <color name="nvw_muted">#FF6A615D</color>
+    <color name="nvw_accent">#FFD81920</color>
     <color name="nvw_on_accent">#FFFFFFFF</color>
     <color name="nvw_ok">#FF1E8E4E</color>
+    <color name="nvw_warn">#FFB7791F</color>
+    <color name="nvw_idle">#FF9C9488</color>
+    <color name="nvw_ring">#FFFBF9F6</color>
+    <color name="nvw_scrim">#9E0D0A09</color>
+    <color name="nvw_on_scrim">#FFFFFFFF</color>
+    <color name="nvw_on_scrim_muted">#D9FFFFFF</color>
+    <color name="nvw_panel">#FFEFE6D6</color>
 </resources>

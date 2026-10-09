@@ -1,6 +1,12 @@
 // End-to-end agent loop against tool/mock_llm_tools.py (127.0.0.1:8898):
 // office tools are registered + on, the office summary is in the system
 // prompt, a risky device tool waits for approval, reasoning params are sent.
+//
+// Opt-in (needs the mock LLM server on :8898):
+//   NV_MOCK_LLM=1 flutter test test/agent_loop_test.dart
+// Skipped otherwise (CI / plain `flutter test`).
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neovarch_agent/data/agent_runtime.dart';
 import 'package:neovarch_agent/data/kv_store.dart';
@@ -51,5 +57,5 @@ void main() {
     expect(events.whereType<ReasoningEvent>(), isNotEmpty);
     expect(events.whereType<DeltaEvent>().map((e) => e.text).join(), contains('Selesai'));
     backend.dispose();
-  });
+  }, skip: Platform.environment['NV_MOCK_LLM'] == null ? 'set NV_MOCK_LLM=1 with the mock LLM server on 127.0.0.1:8898' : false);
 }

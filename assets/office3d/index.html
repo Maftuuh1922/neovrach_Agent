@@ -13,6 +13,10 @@
 <!--
   Neovarch phone remote: the PC's office as a low-poly, semi-Japanese 3D room
   (tatami floor, shoji walls, paper lanterns, low wooden desks, warm light).
+  The left shoji has a sliding door onto a wooden engawa and a small raked
+  gravel garden (koi pond, stone lantern, maple, pine, bench, tea tray); idle
+  agents now and then go out there and come back (desktop office3d-spec.md,
+  "Garden + outdoor strolls").
   Data comes only from Flutter over the JS bridge:
     window.nvOffice.setState({agents:[{id,name,status,task,desk}], kanban:{...}, accent:'#rrggbb', dark:bool, motion:bool})
   Messages back on the `NvOffice` JavaScript channel (JSON):
@@ -51,14 +55,19 @@
 
   var scene = new T.Scene();
   var camera = new T.PerspectiveCamera(38, 1, 0.1, 100);
-  var target = new T.Vector3(0.6, 0.2, 0.9);
+  // aimed a little left of the room's centre so the engawa and the garden's
+  // pond show beside the room
+  var target = new T.Vector3(-1.2, 0.2, 0.9);
 
   // ------------------------------------------------------------- palette --
   var C = {
     // shared with the desktop office (office3d-model.ts OFFICE3D_PALETTE / STATUS)
     tatami: 0xc9b98a, tatami2: 0xb3a271, heri: 0x2e2a24, wood: 0x8a6a48, woodDark: 0x5a3b24, woodLight: 0xc79a63, desk: 0x6b4429,
     paper: 0xf3ebdc, plinth: 0x5a3b24, lantern: 0xf6e3c0, skin: 0xe8c6a0, hair: 0x1e1a18, working: 0x6fcf8a, amber: 0xf2b544, idle: 0x9c9488,
-    leaf: 0x4f6b3a, pot: 0x3c3f44, cushion: [0x2f3a56], coats: [0x3a4a6e, 0x7a2e2e, 0x3e5a4a, 0x6a5a8c, 0x8a6a3a, 0x45434a]
+    leaf: 0x4f6b3a, pot: 0x3c3f44, cushion: [0x2f3a56], coats: [0x3a4a6e, 0x7a2e2e, 0x3e5a4a, 0x6a5a8c, 0x8a6a3a, 0x45434a],
+    // garden (OFFICE3D_PALETTE)
+    gravel: 0xcfc6b4, gravelRake: 0xb5ab97, gardenEdge: 0x6f665a, stone: 0x8d8a83, stoneDark: 0x6d6a64, pond: 0x2f5a63,
+    koi: 0xe0662e, koiWhite: 0xefe6d2, maple: 0xb5402e, mapleDeep: 0x8f2f25, pine: 0x3f5a3a, moss: 0x6f7f4a, trunk: 0x4a3322
   };
   var accent = new T.Color('#ee1c1c');
   var dark = true, motion = true;
@@ -112,6 +121,7 @@
     var n = alongX ? 7 : 5, pw = len / n;
     for (var i = 0; i < n; i++) {
       var a = -len / 2 + pw * (i + 0.5);
+      if (!alongX && Math.abs(a - GARDEN.door.z) < pw / 2) { doorBay(a, pw); continue; }
       var px = alongX ? a : X0 + 0.05, pz = alongX ? Z0 + 0.05 : a;
       var g = new T.Group();
       g.position.set(px, 0, pz);
@@ -128,10 +138,172 @@
     }
     // kamoi (top beam) and base board
     if (alongX) { box(W, 0.2, 0.18, wood, 0, WALL - 0.12, Z0 + 0.06); box(W, 0.3, 0.16, woodDark, 0, 0.15, Z0 + 0.06); }
-    else { box(0.18, 0.2, D, wood, X0 + 0.06, WALL - 0.12, 0); box(0.16, 0.3, D, woodDark, X0 + 0.06, 0.15, 0); }
+    else {
+      box(0.18, 0.2, D, wood, X0 + 0.06, WALL - 0.12, 0);
+      // base board, open at the doorway
+      var d0 = GARDEN.door.z - GARDEN.door.w / 2, d1 = GARDEN.door.z + GARDEN.door.w / 2;
+      box(0.16, 0.3, d0 - Z0, woodDark, X0 + 0.06, 0.15, (Z0 + d0) / 2);
+      box(0.16, 0.3, Z0 + D - d1, woodDark, X0 + 0.06, 0.15, (d1 + Z0 + D) / 2);
+    }
   }
+  // ------------------------------------------------- garden (desktop spec) --
+  // gardenLayout() of office3d-model.ts for this room: door near the front of
+  // the left wall, engawa 1.4 m, gravel 5.6 m beyond it one step (0.24) down.
+  var GARDEN = (function () {
+    var L = X0, hd = D / 2, dz = hd - 3, ex = L - 1.4;
+    return {
+      L: L, door: { z: dz, w: 1.0 }, ex: ex, x0: ex - 5.6, z0: -hd - 0.3, z1: hd + 1.6, gy: -0.24,
+      pond: { x: L - 4.4, z: hd - 0.85, rx: 1.25, rz: 0.85 }, bench: { x: L - 4.4, z: hd - 3.1, len: 1.4 },
+      tea: { x: L - 1.05, z: dz + 1.5 }, lantern: { x: L - 6.15, z: hd + 0.5 }, maple: { x: L - 6, z: hd - 5 },
+      pine: { x: L - 2.5, z: -hd + 1.3 },
+      stones: [[L - 1.75, dz, 0.26], [L - 2.35, dz + 0.35, 0.24], [L - 2.95, dz + 0.8, 0.25], [L - 3.55, dz + 0.85, 0.22], [L - 2.9, dz + 1.45, 0.24]]
+    };
+  })();
+  function groundAt(x) {
+    if (x >= GARDEN.ex) return 0;
+    var k = Math.min(1, (GARDEN.ex - x) / 0.45);
+    return GARDEN.gy * k * k * (3 - 2 * k);
+  }
+  var doorLeaf = null, doorOpen = 0;
+  // the door bay of the left wall: fixed half-width paper either side of a
+  // 1 m opening, and one sliding shoji leaf outside that slides toward +z
+  function doorBay(a, pw) {
+    var dz = GARDEN.door.z, dw = GARDEN.door.w, ph = WALL - 0.55;
+    [[a - pw / 2, dz - dw / 2], [dz + dw / 2, a + pw / 2]].forEach(function (seg) {
+      var len = seg[1] - seg[0];
+      if (len < 0.05) return;
+      var g = new T.Group();
+      g.position.set(X0 + 0.05, 0, (seg[0] + seg[1]) / 2);
+      g.rotation.y = Math.PI / 2;
+      scene.add(g);
+      var p = new T.Mesh(new T.PlaneGeometry(len - 0.06, ph), paper);
+      p.position.set(0, 0.32 + ph / 2, 0.02);
+      g.add(p);
+      for (var h = 1; h < 5; h++) box(len - 0.06, 0.035, 0.04, woodDark, 0, 0.32 + h * ph / 5, 0.05, g);
+    });
+    // the bay's own post (front edge), door posts, sill and lintel
+    box(0.12, WALL, 0.14, wood, X0 + 0.05, WALL / 2, a + pw / 2);
+    box(0.12, WALL, 0.14, wood, X0 + 0.05, WALL / 2, dz - dw / 2);
+    box(0.12, WALL, 0.14, wood, X0 + 0.05, WALL / 2, dz + dw / 2);
+    box(0.18, 0.04, dw, woodDark, X0 + 0.05, 0.08, dz);
+    box(0.08, 0.03, dw * 2.2, woodDark, X0 - 0.12, 0.0, dz + dw / 2);
+    box(0.08, 0.05, dw * 2.2, woodDark, X0 - 0.12, 0.32 + ph + 0.02, dz + dw / 2);
+    var leaf = new T.Group();
+    leaf.position.set(X0 - 0.12, 0, dz);
+    scene.add(leaf);
+    var lh = 0.32 + ph - 0.02, lw = dw - 0.02;
+    var lp = new T.Mesh(new T.PlaneGeometry(lw - 0.06, lh - 0.36), paper);
+    lp.rotation.y = Math.PI / 2;
+    lp.position.y = 0.32 + (lh - 0.36) / 2;
+    leaf.add(lp);
+    box(0.05, lh, 0.05, woodDark, 0, lh / 2, -lw / 2 + 0.025, leaf);
+    box(0.05, lh, 0.05, woodDark, 0, lh / 2, lw / 2 - 0.025, leaf);
+    box(0.05, 0.05, lw, woodDark, 0, lh - 0.025, 0, leaf);
+    box(0.04, 0.3, lw, woodDark, 0, 0.17, 0, leaf);
+    for (var v = 1; v < 3; v++) box(0.03, lh - 0.36, 0.022, woodDark, 0, 0.32 + (lh - 0.36) / 2, -lw / 2 + v * lw / 3, leaf);
+    for (var k = 1; k < 5; k++) box(0.03, 0.022, lw, woodDark, 0, 0.32 + k * (lh - 0.36) / 5, 0, leaf);
+    doorLeaf = leaf;
+  }
+  function buildGarden() {
+    var G = GARDEN, gy = G.gy, hd = D / 2;
+    // engawa deck along the outside of the left wall, flush with the floor
+    var deckW = (X0 - 0.25) - G.ex, deckZ0 = -hd - 0.25, deckZ1 = hd + 0.25;
+    box(deckW, 0.3, deckZ1 - deckZ0, lam(C.wood), G.ex + deckW / 2, -0.16, 0);
+    for (var i = 1; i < 6; i++) box(0.012, 0.004, deckZ1 - deckZ0, woodDark, G.ex + i * (X0 - G.ex) / 6, -0.008, 0);
+    box(0.1, 0.32, deckZ1 - deckZ0, woodDark, G.ex + 0.05, -0.16, 0);
+    // raked gravel bed on a darker kerb
+    var gw = G.x1 - G.x0, gd = G.z1 - G.z0, gx = (G.x0 + G.x1) / 2, gz = (G.z0 + G.z1) / 2;
+    box(gw + 0.24, 0.4, gd + 0.24, lam(C.gardenEdge), gx - 0.12, gy - 0.22, gz);
+    var cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
+    var c2 = cv.getContext('2d');
+    if (c2) {
+      c2.fillStyle = '#cfc6b4'; c2.fillRect(0, 0, 128, 128);
+      var seed = 7;
+      for (var q = 0; q < 900; q++) {
+        seed = (seed * 16807) % 2147483647; var px = seed % 128;
+        seed = (seed * 16807) % 2147483647; var py = seed % 128;
+        c2.globalAlpha = 0.5; c2.fillStyle = q % 3 ? '#b5ab97' : '#ddd5c4'; c2.fillRect(px, py, 1, 1);
+      }
+      c2.globalAlpha = 0.35; c2.fillStyle = '#b5ab97';
+      for (var ry = 3; ry < 128; ry += 8) c2.fillRect(0, ry, 128, 1);
+      c2.globalAlpha = 1;
+    }
+    var gt = new T.CanvasTexture(cv);
+    gt.colorSpace = T.SRGBColorSpace; gt.wrapS = gt.wrapT = 1000; // RepeatWrapping
+    gt.repeat.set(gw / 2, gd / 2);
+    box(gw, 0.3, gd, new T.MeshLambertMaterial({ color: 0xffffff, map: gt }), gx, gy - 0.15, gz);
+    // raked rings round the pond and the lantern
+    var rake = lam(C.gravelRake);
+    function ring(x, z, rx, rz) {
+      var r = new T.Mesh(new T.TorusGeometry(1, 0.012, 3, 40), rake);
+      r.rotation.x = -Math.PI / 2; r.scale.set(rx, rz, 1); r.position.set(x, gy + 0.004, z); scene.add(r);
+    }
+    [1.25, 1.5, 1.75].forEach(function (k) { ring(G.pond.x, G.pond.z, G.pond.rx * k, G.pond.rz * k); });
+    [0.55, 0.8].forEach(function (k) { ring(G.lantern.x, G.lantern.z, k, k); });
+    // shoe stone at the step, stepping stones
+    var stone = lam(C.stone), stoneDark = lam(C.stoneDark);
+    box(0.5, 0.16, 0.34, stone, G.ex - 0.3, gy + 0.06, G.door.z);
+    G.stones.forEach(function (st) {
+      var m = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 1, 9), stone);
+      m.scale.set(st[2] * 2, 0.06, st[2] * 1.7); m.position.set(st[0], gy + 0.02, st[1]); m.rotation.y = st[0] * 1.7; scene.add(m);
+    });
+    // koi pond with a rim of rocks and two koi
+    var water = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 1, 24), new T.MeshLambertMaterial({ color: C.pond }));
+    water.scale.set(G.pond.rx * 2, 0.04, G.pond.rz * 2); water.position.set(G.pond.x, gy + 0.012, G.pond.z); scene.add(water);
+    for (var ri = 0; ri < 11; ri++) {
+      var a = (ri / 11) * Math.PI * 2 + 0.3, sz = 0.2 + ((ri * 37) % 7) * 0.025;
+      var rock = new T.Mesh(new T.IcosahedronGeometry(0.5, 0), ri % 3 ? stone : stoneDark);
+      rock.scale.set(sz * 1.3, sz * 0.7, sz);
+      rock.position.set(G.pond.x + Math.cos(a) * (G.pond.rx + 0.05), gy + 0.05, G.pond.z + Math.sin(a) * (G.pond.rz + 0.05));
+      rock.rotation.y = a; scene.add(rock);
+    }
+    [C.koi, C.koiWhite].forEach(function (col, k) {
+      var f = new T.Group();
+      var fb = new T.Mesh(new T.SphereGeometry(0.5, 8, 5), lam(col)); fb.scale.set(0.09, 0.04, 0.24); f.add(fb);
+      var tail = new T.Mesh(new T.BoxGeometry(0.1, 0.01, 0.07), lam(k ? C.koi : C.koiWhite)); tail.position.z = -0.14; f.add(tail);
+      f.userData.offset = k * Math.PI; f.position.set(G.pond.x, gy + 0.04, G.pond.z);
+      scene.add(f); koi.push(f);
+    });
+    // stone lantern (toro) with a warm window
+    var Lx = G.lantern.x, Lz = G.lantern.z;
+    function cyl(mat, sx, sy, y) { var m = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 1, 8), mat); m.scale.set(sx, sy, sx); m.position.set(Lx, gy + y, Lz); scene.add(m); }
+    cyl(stoneDark, 0.46, 0.12, 0.06); cyl(stone, 0.16, 0.62, 0.43);
+    box(0.42, 0.06, 0.42, stone, Lx, gy + 0.77, Lz); box(0.32, 0.26, 0.32, stone, Lx, gy + 0.93, Lz);
+    var glow = new T.MeshLambertMaterial({ color: C.lantern, emissive: 0xff9a40, emissiveIntensity: 0.9 });
+    box(0.34, 0.12, 0.2, glow, Lx, gy + 0.94, Lz); box(0.2, 0.12, 0.34, glow, Lx, gy + 0.94, Lz);
+    var roof = new T.Mesh(new T.ConeGeometry(0.5, 1, 4), stoneDark); roof.scale.set(0.7, 0.24, 0.7); roof.rotation.y = Math.PI / 4; roof.position.set(Lx, gy + 1.18, Lz); scene.add(roof);
+    var knob = new T.Mesh(new T.SphereGeometry(0.1, 6, 4), stone); knob.position.set(Lx, gy + 1.33, Lz); scene.add(knob);
+    // maple (momiji) and a cloud-pruned pine
+    var trunkM = lam(C.trunk);
+    function tree(x, z, h, lean, pads) {
+      var t = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 1, 6), trunkM); t.scale.set(0.16, h, 0.16); t.position.set(x, gy + h / 2, z); t.rotation.z = lean; scene.add(t);
+      pads.forEach(function (p) { var m = new T.Mesh(new T.IcosahedronGeometry(0.5, 0), p[4]); m.scale.set(p[3] * 1.25, p[3] * 0.62, p[3]); m.position.set(x + p[0], gy + p[1], z + p[2]); m.rotation.y = p[0] * 3; scene.add(m); });
+    }
+    var maple = lam(C.maple), mapleDeep = lam(C.mapleDeep), pine = lam(C.pine);
+    tree(G.maple.x, G.maple.z, 2.1, -0.12, [[0.25, 2.35, 0, 1.3, maple], [-0.45, 2.05, 0.35, 0.95, mapleDeep], [0.6, 1.95, -0.3, 0.85, maple], [0.1, 2.75, -0.15, 0.9, mapleDeep]]);
+    tree(G.pine.x, G.pine.z, 1.6, 0.1, [[0.15, 1.75, 0, 0.95, pine], [-0.35, 1.3, 0.1, 0.7, pine], [0.45, 1.1, -0.1, 0.6, pine]]);
+    var moss = lam(C.moss);
+    [[Lx + 0.55, Lz - 0.6, 0.55], [G.maple.x + 1.1, G.maple.z + 0.9, 0.6], [G.ex - 0.55, G.door.z - 1.8, 0.5], [G.pond.x - G.pond.rx - 0.4, G.pond.z - 0.5, 0.45]].forEach(function (sh) {
+      var m = new T.Mesh(new T.IcosahedronGeometry(0.5, 0), moss); m.scale.set(sh[2] * 1.3, sh[2] * 0.7, sh[2]); m.position.set(sh[0], gy + sh[2] * 0.25, sh[1]); scene.add(m);
+    });
+    // bench facing the pond, tea tray on the engawa
+    box(G.bench.len, 0.06, 0.42, woodLight, G.bench.x, gy + 0.33, G.bench.z);
+    [-1, 1].forEach(function (sd) { box(0.16, 0.3, 0.34, stoneDark, G.bench.x + sd * (G.bench.len / 2 - 0.2), gy + 0.15, G.bench.z); });
+    box(0.42, 0.03, 0.3, woodDark, G.tea.x, 0.015, G.tea.z);
+    var tp = new T.Mesh(new T.SphereGeometry(0.5, 8, 6), lam(C.pot)); tp.scale.set(0.15, 0.12, 0.15); tp.position.set(G.tea.x - 0.08, 0.09, G.tea.z); scene.add(tp);
+    [-0.08, 0.08].forEach(function (dz) { var cp = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, 0.05, 7), lam(0xe9e2d2)); cp.position.set(G.tea.x + 0.11, 0.055, G.tea.z + dz); scene.add(cp); });
+    // low bamboo fence on the far side and the back
+    var fence = lam(C.woodLight);
+    var nz = Math.round(gd / 1.2), nx = Math.round(gw / 1.2);
+    for (var fz = 0; fz <= nz; fz++) box(0.07, 0.9, 0.07, fence, G.x0, gy + 0.45, G.z0 + fz * gd / nz);
+    for (var fx = 1; fx <= nx; fx++) box(0.07, 0.9, 0.07, fence, G.x0 + fx * gw / nx, gy + 0.45, G.z0);
+    [0.35, 0.75].forEach(function (y) { box(0.05, 0.04, gd, fence, G.x0, gy + y, gz); box(gw, 0.04, 0.05, fence, gx, gy + y, G.z0); });
+  }
+  var koi = [];
+  GARDEN.x1 = GARDEN.ex;
   shojiWall(true);
   shojiWall(false);
+  buildGarden();
   box(0.16, WALL, 0.16, wood, X0 + 0.06, WALL / 2, Z0 + 0.06); // corner post
 
   // ---------------------------------------------------------------- desks --
@@ -309,7 +481,8 @@
     g.add(label);
     [body, obi, head, hair, label].forEach(function (m) { m.userData.agentId = a.id; pickables.push(m); });
     scene.add(g);
-    var v = { id: a.id, group: g, fig: fig, ring: ring, badge: badge, label: label, pos: null, goal: new T.Vector3(), face: 0, phase: hue / 57, key: '' };
+    var v = { id: a.id, group: g, fig: fig, ring: ring, badge: badge, label: label, pos: null, goal: new T.Vector3(), face: 0, phase: hue / 57, key: '',
+      outing: null, nextOuting: clock.getElapsedTime() + 6 + Math.random() * 12 };
     return v;
   }
   function deskFor(a, i, used) { return a.desk; }
@@ -372,13 +545,15 @@
   // ---------------------------------------------------------- camera rig --
   // Spherical orbit around the room with limits; one finger rotates, two
   // fingers pinch-zoom (wheel on desktop). A short tap picks an agent.
-  var THETA0 = 0.62, PHI0 = 0.98;
+  var THETA0 = 0.6, PHI0 = 0.98;
   var orbit = { theta: THETA0, phi: PHI0, r: 18, rMin: 9, rMax: 26 };
-  // same limits as the desktop (OFFICE3D_CAMERA): azimuth -0.3..1.75, polar 0.35..1.25
-  var LIM = { tMin: -0.3, tMax: 1.75, pMin: 0.35, pMax: 1.25 };
+  // same limits as the desktop (OFFICE3D_CAMERA): azimuth -0.55..1.75 (a little
+  // negative to look into the garden from the front-left), polar 0.35..1.25
+  var LIM = { tMin: -0.55, tMax: 1.75, pMin: 0.35, pMax: 1.25 };
   function fitRadius() {
     var aspect = Math.max(0.4, camera.aspect);
-    orbit.base = aspect >= 1.25 ? 21 : 24 * Math.pow(1.25 / aspect, 0.9); // whole room in a portrait phone panel
+    // whole room + engawa + the near half of the garden in a portrait phone panel
+    orbit.base = (aspect >= 1.25 ? 21 : 24 * Math.pow(1.25 / aspect, 0.9)) * 1.22;
     orbit.rMin = orbit.base * 0.5; orbit.rMax = orbit.base * 1.35;
   }
   function placeCamera() {
@@ -472,23 +647,88 @@
     layoutLabels();
   }
   window.addEventListener('resize', resize);
+  // ------------------------------------------------- outings (garden) --
+  // Idle agents now and then walk out through the sliding door for tea on the
+  // engawa, a sit on the bench or a look at the koi, then come back to the tea
+  // corner. Busy agents (working / waiting) stay inside at their desk; one that
+  // gets work while outside hurries back through the door. No outings with
+  // motion off. Kinds + paths follow strollPlan() in office3d-model.ts.
+  function outingPath(kind, pick) {
+    var G = GARDEN, dz = G.door.z, y = 0.14;
+    var P = [new T.Vector3(G.L + 0.45, y, dz), new T.Vector3(G.L - 0.7, y, dz)];
+    if (kind === 'tea') {
+      P.push(new T.Vector3(G.L - 0.55, y, G.tea.z + (pick - 0.5) * 0.5));
+      return { path: P, face: new T.Vector3(G.tea.x, 0, G.tea.z) };
+    }
+    P.push(new T.Vector3(G.stones[0][0], y, dz));
+    var lawnZ = G.bench.z + 0.85;
+    P.push(new T.Vector3(G.L - 3, y, lawnZ));
+    if (kind === 'bench') {
+      var sx = G.bench.x + (pick < 0.5 ? -0.35 : 0.35);
+      P.push(new T.Vector3(sx, y, lawnZ), new T.Vector3(sx, y, G.bench.z + 0.08));
+      return { path: P, face: new T.Vector3(sx, 0, G.bench.z + 3) };
+    }
+    P.push(new T.Vector3(G.pond.x + G.pond.rx + 0.3, y, G.pond.z - 0.3 + pick * 0.6));
+    return { path: P, face: new T.Vector3(G.pond.x, 0, G.pond.z) };
+  }
+  function startOuting(v, t) {
+    var r = Math.random();
+    var kind = r < 0.3 ? 'tea' : (r < 0.65 ? 'bench' : 'pond');
+    var o = outingPath(kind, Math.random());
+    v.outing = { kind: kind, phase: 'out', path: o.path, idx: 0, face: o.face, until: 0, hurry: false };
+  }
+  function updateOuting(v, t) {
+    var busy = v.status === 'working' || v.status === 'waiting-approval';
+    if (!motion) { if (v.outing) { v.outing = null; v.pos.copy(v.goal); } return null; }
+    if (!v.outing) {
+      if (busy) { v.nextOuting = Math.max(v.nextOuting, t + 6); return null; }
+      if (t < v.nextOuting) return null;
+      startOuting(v, t);
+    }
+    var o = v.outing;
+    if (busy && !o.hurry && o.phase !== 'back') {
+      // work arrived: turn round, back through the door to the desk
+      o.hurry = true; o.phase = 'back'; o.path = o.path.slice(0, o.idx).reverse(); o.idx = 0;
+    }
+    if (o.phase === 'stay') {
+      if (t >= o.until) { o.phase = 'back'; o.path = o.path.slice().reverse(); o.idx = 0; }
+      return null;
+    }
+    if (o.idx >= o.path.length) {
+      if (o.phase === 'out') { o.phase = 'stay'; o.until = t + 6 + Math.random() * 4; return null; }
+      v.outing = null; v.nextOuting = t + 14 + Math.random() * 16;
+      return null;
+    }
+    return o.path[o.idx];
+  }
   function step(dt, t) {
     var moving = false;
+    var nearDoor = false;
     Object.keys(agents).forEach(function (id) {
       var v = agents[id];
-      var d = v.goal.clone().sub(v.pos);
+      var wp = updateOuting(v, t);
+      var o = v.outing;
+      var goal = wp || (o && o.phase === 'stay' ? v.pos : v.goal);
+      var d = goal.clone().sub(v.pos);
+      d.y = 0;
       var dist = d.length();
       var walking = dist > 0.02;
       if (walking) {
-        var stepLen = Math.min(dist, 2.4 * dt);
+        var stepLen = Math.min(dist, (o && o.hurry ? 3.8 : (o ? 1.6 : 2.4)) * dt);
         v.pos.add(d.multiplyScalar(stepLen / dist));
-        v.face = Math.atan2(v.goal.x - v.pos.x, v.goal.z - v.pos.z);
+        v.face = Math.atan2(goal.x - v.pos.x, goal.z - v.pos.z);
         moving = true;
       } else {
-        var df = ((v.faceGoal - v.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        if (wp) o.idx++;
+        var fg = o && o.phase === 'stay' ? Math.atan2(o.face.x - v.pos.x, o.face.z - v.pos.z) : v.faceGoal;
+        var df = ((fg - v.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
         v.face += df * Math.min(1, dt * 6);
       }
+      if (Math.hypot(v.pos.x - GARDEN.L, v.pos.z - GARDEN.door.z) < 1.3 && v.outing) nearDoor = true;
       v.group.position.copy(v.pos);
+      // one step down into the garden; sitting up on the bench
+      var perched = o && o.phase === 'stay' && o.kind === 'bench' && !walking;
+      v.group.position.y = v.pos.y + groundAt(v.pos.x) + (perched ? 0.3 : 0);
       v.group.rotation.y = v.face;
       var bob = !motion ? 0 : walking ? Math.abs(Math.sin(t * 12 + v.phase)) * 0.06
         : v.status === 'working' ? Math.abs(Math.sin(t * 5 + v.phase)) * 0.025 : Math.sin(t * 1.4 + v.phase) * 0.02;
@@ -496,14 +736,27 @@
       v.fig.position.y = (walking ? 0 : -0.08) + bob;
       // neighbouring desks: pills step up toward the back-left of the row (as the
       // default camera sees it) so names at adjacent desks never overlap
-      v.label.position.y = 1.85 + (walking ? 0 : -0.1) + (!walking && v.desk != null ? (3 - v.desk % 4) * 0.28 : 0);
+      v.label.position.y = 1.85 + (walking ? 0 : -0.1) + (!walking && v.desk != null ? (3 - v.desk % 4) * 0.34 : 0);
       if (v.badge.visible) {
         v.badge.rotation.y = t * 2;
         v.badge.position.y = 1.62 + (motion ? Math.sin(t * 3 + v.phase) * 0.04 : 0) + (walking ? 0 : -0.08);
         v.ring.material.opacity = v.status === 'waiting-approval' && motion ? 0.55 + 0.4 * Math.abs(Math.sin(t * 3)) : 0.9;
       }
     });
+    // the door slides open while someone passes through it
+    var dTarget = nearDoor ? 1 : 0;
+    if (doorOpen !== dTarget) {
+      doorOpen = dTarget > doorOpen ? Math.min(1, doorOpen + 2.2 * dt) : Math.max(0, doorOpen - 2.2 * dt);
+      moving = true;
+    }
+    if (doorLeaf) doorLeaf.position.z = GARDEN.door.z + doorOpen * doorOpen * (3 - 2 * doorOpen) * (GARDEN.door.w - 0.04);
     if (motion) {
+      koi.forEach(function (f) {
+        var a = t * 0.35 + f.userData.offset;
+        f.position.x = GARDEN.pond.x + Math.cos(a) * GARDEN.pond.rx * 0.55;
+        f.position.z = GARDEN.pond.z + Math.sin(a) * GARDEN.pond.rz * 0.55;
+        f.rotation.y = -a + Math.PI;
+      });
       lanterns.forEach(function (l, i) { l.material.emissiveIntensity = 0.85 + 0.08 * Math.sin(t * 2.3 + i * 1.7); });
       lampA.intensity = 6 + 0.25 * Math.sin(t * 2.1);
       screens.forEach(function (m, i) { if (m.emissiveIntensity > 0) m.emissiveIntensity = 0.65 + 0.2 * Math.abs(Math.sin(t * 3 + i)); });
@@ -528,12 +781,36 @@
   window.nvOffice = {
     setState: function (s) { try { apply(typeof s === 'string' ? JSON.parse(s) : s); } catch (e) { post({ type: 'error', reason: 'state: ' + e.message }); } },
     setActive: function (on) { active = !!on; dirty = true; },
+    // Kartu Neovarch: render now and read the canvas in the same task (no
+    // preserveDrawingBuffer needed); JPEG keeps the bridge payload small.
+    snapshot: function () { try { renderer.render(scene, camera); return canvas.toDataURL('image/jpeg', 0.86); } catch (e) { return ''; } },
     resetView: function () { orbit.theta = THETA0; orbit.phi = PHI0; orbit.r = orbit.base; placeCamera(); },
     debugAgents: function () { return Object.keys(agents).map(function (id) { var v = agents[id]; return { id: id, status: v.status, x: v.goal.x, z: v.goal.z }; }); }
   };
   resize();
   drawBoard();
   requestAnimationFrame(frame);
+  // Home-screen widget snapshot: renders one frame and posts it, centre-
+  // cropped to w x h on a flat backdrop (the canvas itself is transparent),
+  // as {type:'snapshot', data:'data:image/jpeg;base64,…'}.
+  window.nvOffice.widgetSnapshot = function (w, h) {
+    try {
+      w = Math.max(64, Math.min(720, w | 0 || 480));
+      h = Math.max(64, Math.min(720, h | 0 || 480));
+      renderer.render(scene, camera); // same task as drawImage: no preserveDrawingBuffer needed
+      var out = document.createElement('canvas');
+      out.width = w; out.height = h;
+      var g = out.getContext('2d');
+      g.fillStyle = dark ? '#16110e' : '#efe6d6';
+      g.fillRect(0, 0, w, h);
+      var sw = canvas.width, sh = canvas.height;
+      if (!sw || !sh) return;
+      var s = Math.max(w / sw, h / sh) * 1.2; // a little zoom: the room fills the tile
+      var dw = sw * s, dh = sh * s;
+      g.drawImage(canvas, (w - dw) / 2, (h - dh) / 2 - h * 0.07, dw, dh);
+      post({ type: 'snapshot', data: out.toDataURL('image/jpeg', 0.84) });
+    } catch (e) { post({ type: 'snapshot-error', reason: '' + e.message }); }
+  };
   if (/[?&]demo\b/.test(location.search)) {
     window.nvOffice.setState({
       accent: '#ee1c1c', dark: true, motion: false,
