@@ -51,7 +51,7 @@
 
   var scene = new T.Scene();
   var camera = new T.PerspectiveCamera(38, 1, 0.1, 100);
-  var target = new T.Vector3(-0.4, 0.2, 0.6);
+  var target = new T.Vector3(0.6, 0.2, 0.9);
 
   // ------------------------------------------------------------- palette --
   var C = {
@@ -378,7 +378,7 @@
   var LIM = { tMin: -0.3, tMax: 1.75, pMin: 0.35, pMax: 1.25 };
   function fitRadius() {
     var aspect = Math.max(0.4, camera.aspect);
-    orbit.base = aspect >= 1.25 ? 20 : 20 * Math.pow(1.25 / aspect, 0.9);
+    orbit.base = aspect >= 1.25 ? 21 : 24 * Math.pow(1.25 / aspect, 0.9); // whole room in a portrait phone panel
     orbit.rMin = orbit.base * 0.5; orbit.rMax = orbit.base * 1.35;
   }
   function placeCamera() {
@@ -494,7 +494,9 @@
         : v.status === 'working' ? Math.abs(Math.sin(t * 5 + v.phase)) * 0.025 : Math.sin(t * 1.4 + v.phase) * 0.02;
       // kneeling at a desk or by the tea table: a little lower
       v.fig.position.y = (walking ? 0 : -0.08) + bob;
-      v.label.position.y = 1.85 + (walking ? 0 : -0.1);
+      // neighbouring desks: pills step up toward the back-left of the row (as the
+      // default camera sees it) so names at adjacent desks never overlap
+      v.label.position.y = 1.85 + (walking ? 0 : -0.1) + (!walking && v.desk != null ? (3 - v.desk % 4) * 0.28 : 0);
       if (v.badge.visible) {
         v.badge.rotation.y = t * 2;
         v.badge.position.y = 1.62 + (motion ? Math.sin(t * 3 + v.phase) * 0.04 : 0) + (walking ? 0 : -0.08);
