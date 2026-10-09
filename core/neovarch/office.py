@@ -201,7 +201,22 @@ class Office:
             })
         return out
 
+    @staticmethod
+    def _with_model(desk: dict, cfg: dict) -> dict:
+        from neovarch import models as modelsmod
+        try:
+            am = modelsmod.agent_model(cfg, desk["id"])
+        except Exception:  # noqa: BLE001 - never break the snapshot
+            return desk
+        desk["model"] = am["model"]
+        desk["model_provider"] = am["provider"]
+        desk["model_override"] = am["override"]
+        desk["model_source"] = am["source"]
+        return desk
+
     def snapshot(self) -> dict[str, Any]:
+        from neovarch import config as cfgmod
+        from neovarch import models as modelsmod
         gw = self.gw
         now = time.time()
         desks: list[dict] = []
@@ -228,6 +243,9 @@ class Office:
         order = {"working": 0, "waiting-approval": 1, "idle": 2}
         desks.sort(key=lambda d: (order.get(d["status"], 3), -float(d["last_activity"] or 0)))
         desks = desks[:MAX_DESKS]
+        cfg = cfgmod.load_config()
+        desks = [self._with_model(d, cfg) for d in desks]
+        dref = modelsmod.default_ref(cfg)
         counts = {"total": len(desks), "working": 0, "waiting-approval": 0, "idle": 0}
         for d in desks:
             counts[d["status"]] = counts.get(d["status"], 0) + 1
@@ -238,4 +256,5 @@ class Office:
             "agents": desks, "counts": counts, "kanban": kanban,
             "feed": list(reversed(list(self.feed)[-60:])),
             "vault": self._vault(),
+            "default_model": {"model": dref["model"], "provider": dref["provider"]},
         }

@@ -46,6 +46,8 @@ from neovarch.office import Office
 from neovarch import cron as cronmod
 from neovarch import netinfo
 from neovarch.realtime import EventBus
+from neovarch import models as modelsmod
+from neovarch import router9
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -186,6 +188,7 @@ class LiveSession:
             self.status = "running"
             self.gw.broadcast_event("session.status", self.id, {"status": "running"})
             try:
+                await self.gw.ensure_router(self.id)
                 await self.agent.run_turn(text)
             except Exception as exc:  # report, keep the gateway alive
                 traceback.print_exc()
@@ -199,7 +202,7 @@ class LiveSession:
 
     def info(self) -> dict:
         return {"title": self.rec.get("title") or "", "running": self.status == "running",
-                "model": self.rec.get("model") or cfgmod.resolve_endpoint(cfgmod.load_config())["model"],
+                "model": modelsmod.agent_model(cfgmod.load_config(), "session:" + self.id)["model"],
                 "cwd": str(self.ctx.cwd), "status": self.status,
                 # Version of the desktop session protocol this core speaks; the
                 # desktop warns "backend out of date" below its required level.
@@ -237,6 +240,9 @@ class Gateway:
         self.bus = EventBus()
         self.kanban.on_event = lambda ev: self.broadcast_event("kanban.changed", None, ev)
         self.office = Office(self)
+        self.catalog = modelsmod.ModelCatalog()
+        self.router = router9.Router9(on_status=lambda st: self.broadcast_event("router.status", None, st),
+                                      on_models=lambda _ids: self._models_stale())
         self.cron = cronmod.CronStore()
         self.scheduler = cronmod.Scheduler(
             self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
@@ -313,6 +319,62 @@ class Gateway:
         return {"model": ep["model"], "provider": ep["provider"], "base_url": ep["base_url"],
                 "context_length": cfgmod.get_path(cfg, "model.context_length", 128000),
                 "configured": bool(ep["base_url"])}
+
+    # ---- 9Router + model routing -------------------------------------------
+    def _models_stale(self) -> None:
+        self.catalog.fetched_at = 0.0
+        self.broadcast_event("models.changed", None, {"count": len(self.catalog.rows), "fetched_at": time.time()})
+
+    async def ensure_router(self, sid: str) -> None:
+        """Before a turn on 9Router: make sure we know it is up and hold its API key."""
+        try:
+            ep = modelsmod.endpoint_for(cfgmod.load_config(), "session:" + sid)
+            if ep["provider"] == router9.PROVIDER and (not ep["api_key"] or not self.router.running):
+                st = await self.router.refresh()
+                if (not st["running"] and st["installed"] and not self.router.user_stopped
+                        and router9.autostart_enabled() and router9.is_local(st["base_url"])):
+                    await self.router.start()
+        except Exception:  # noqa: BLE001 - the turn reports the real error
+            pass
+
+    async def router_status(self, refresh: bool = True) -> dict:
+        if refresh:
+            return await self.router.refresh()
+        return self.router.status()
+
+    async def models_payload(self, refresh: bool = False) -> dict:
+        cfg = cfgmod.load_config()
+        st = await self.router.refresh(cfg)
+        changed = await self.catalog.fetch(cfg, force=refresh)
+        if changed:
+            self.broadcast_event("models.changed", None, {"count": len(self.catalog.rows),
+                                                          "fetched_at": self.catalog.fetched_at})
+        cfg = cfgmod.load_config()  # provisioning may have written the key / config
+        ref = modelsmod.default_ref(cfg)
+        listing = self.catalog.listing(cfg, st["running"])
+        return {"models": listing,
+                # OpenAI-style mirror, kept for older callers of /api/models
+                "data": [{"id": m["id"], "object": "model", "owned_by": m["provider"]} for m in listing],
+                "default": {"model": ref["model"], "provider": ref["provider"]},
+                "router": self.router.status(cfg), "fetched_at": self.catalog.fetched_at,
+                "error": self.catalog.error if not st["running"] or self.catalog.error else None}
+
+    def set_default_model(self, model: str, provider: str | None) -> dict:
+        cfg = cfgmod.load_config()
+        res = modelsmod.set_default(cfg, model, provider, self.catalog.ids())
+        cfgmod.save_config(cfg)
+        self.broadcast_event("model.default.changed", None, res)
+        self.broadcast_event("model.changed", None, res)
+        self.office.schedule()
+        return {**res, "ok": True}
+
+    def set_agent_model(self, agent_id: str, model: str | None, provider: str | None) -> dict:
+        cfg = cfgmod.load_config()
+        res = modelsmod.set_agent_model(cfg, agent_id, model, provider, self.catalog.ids())
+        cfgmod.save_config(cfg)
+        self.broadcast_event("agent.model.changed", None, res)
+        self.office.schedule()
+        return {**res, "ok": True}
 
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
@@ -406,6 +468,23 @@ class Gateway:
             return {"ok": True}
         if method == "office.snapshot":
             return self.office.snapshot()
+        if method == "router.status":
+            return await self.router_status()
+        if method == "router.start":
+            return await self.router.start()
+        if method == "models.list":
+            return await self.models_payload(bool(p.get("refresh")))
+        if method == "models.default.get":
+            return modelsmod.default_ref(cfgmod.load_config())
+        if method in ("models.default.set", "agent.model.set", "agent.model.get"):
+            try:
+                if method == "models.default.set":
+                    return self.set_default_model(str(p.get("model") or ""), p.get("provider"))
+                if method == "agent.model.get":
+                    return modelsmod.agent_model(cfgmod.load_config(), str(p.get("agent_id") or ""))
+                return self.set_agent_model(str(p.get("agent_id") or ""), p.get("model"), p.get("provider"))
+            except modelsmod.ModelError as exc:
+                raise RpcError(-32602, str(exc)) from None
         if method == "commands.catalog":
             return {"commands": [{"name": "new", "description": "Start a new chat"},
                                  {"name": "model", "description": "Show the configured model"}], "skills": list_skills()}
@@ -537,9 +616,12 @@ def build_app(gw: Gateway) -> web.Application:
 
     async def _start_cron(_app):
         gw.scheduler.start()
+        if os.environ.get("NEOVARCH_9ROUTER_SUPERVISE", "1") not in ("0", "false", "off"):
+            gw.router.start_supervisor()
 
     async def _stop_cron(_app):
         await gw.scheduler.stop()
+        await gw.router.close()
     app.on_startup.append(_start_cron)
     app.on_cleanup.append(_stop_cron)
 
@@ -1145,6 +1227,110 @@ def build_app(gw: Gateway) -> web.Application:
         gw._config_changed("appearance")
         return web.json_response(new)
 
+    # ---- 9Router + models (contract: docs/9router.md) ------------------------
+    def _bad(exc: Exception, code: int = 400):
+        return web.json_response({"ok": False, "error": str(exc), "detail": str(exc)}, status=code)
+
+    async def router_status_h(_):
+        return web.json_response(await gw.router_status())
+
+    async def router_start_h(_):
+        st = await gw.router.start()
+        if st["state"] == "not_installed":
+            return web.json_response({**st, "ok": False, "error": st["setup"]["message"]}, status=409)
+        return web.json_response(st)
+
+    async def router_stop_h(_):
+        if not gw.router.status()["managed"]:
+            st = gw.router.status()
+            return web.json_response({**st, "ok": False,
+                                      "error": "9Router ini tidak dijalankan oleh Neovarch, jadi tidak dihentikan."},
+                                     status=409)
+        return web.json_response(await gw.router.stop())
+
+    async def router_config_h(request):
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        r9 = cfg.setdefault("router9", {})
+        if "base_url" in body:
+            url = str(body.get("base_url") or "").strip()
+            if url:
+                from neovarch import providers
+                try:
+                    url = providers.normalize_base_url(url)
+                except providers.EndpointError as exc:
+                    return _bad(exc)
+            r9["base_url"] = url
+            gw.catalog.fetched_at = 0.0
+        if "autostart" in body:
+            r9["autostart"] = bool(body["autostart"])
+        cfgmod.save_config(cfg)
+        if "api_key" in body:
+            cfgmod.write_env_value(router9.KEY_ENV, str(body.get("api_key") or "").strip())
+        st = await gw.router_status()
+        gw.router._last_sig = None
+        gw.router._publish()
+        return web.json_response(st)
+
+    async def router_provision_h(_):
+        await gw.router.provision()
+        gw.router._last_sig = None
+        return web.json_response(await gw.router_status())
+
+    async def models_list_h(request):
+        return web.json_response(await gw.models_payload(request.query.get("refresh") in ("1", "true")))
+
+    async def models_default_get_h(_):
+        return web.json_response(modelsmod.default_ref(cfgmod.load_config()))
+
+    async def models_default_put_h(request):
+        body = await _json(request)
+        try:
+            return web.json_response(gw.set_default_model(str(body.get("model") or ""), body.get("provider")))
+        except (modelsmod.ModelError, ValueError) as exc:
+            return _bad(exc)
+
+    async def agents_models_h(_):
+        cfg = cfgmod.load_config()
+        ref = modelsmod.default_ref(cfg)
+        return web.json_response({"default": {"model": ref["model"], "provider": ref["provider"]},
+                                  "agents": {aid: modelsmod.agent_model(cfg, aid) for aid in modelsmod.overrides(cfg)}})
+
+    async def agent_model_get_h(request):
+        try:
+            return web.json_response(modelsmod.agent_model(cfgmod.load_config(), request.match_info["aid"]))
+        except modelsmod.ModelError as exc:
+            return _bad(exc)
+
+    async def agent_model_put_h(request):
+        body = await _json(request)
+        if "model" not in body:
+            return _bad(ValueError("model wajib ada (null untuk kembali ke model global)"))
+        try:
+            return web.json_response(gw.set_agent_model(request.match_info["aid"], body.get("model"),
+                                                        body.get("provider")))
+        except modelsmod.ModelError as exc:
+            return _bad(exc)
+
+    async def agent_model_delete_h(request):
+        try:
+            return web.json_response(gw.set_agent_model(request.match_info["aid"], None, None))
+        except modelsmod.ModelError as exc:
+            return _bad(exc)
+
+    r.add_get("/api/router/status", router_status_h)
+    r.add_post("/api/router/start", router_start_h)
+    r.add_post("/api/router/stop", router_stop_h)
+    r.add_put("/api/router/config", router_config_h)
+    r.add_post("/api/router/config", router_config_h)
+    r.add_post("/api/router/provision", router_provision_h)
+    r.add_get("/api/models", models_list_h)
+    r.add_get("/api/models/default", models_default_get_h)
+    r.add_put("/api/models/default", models_default_put_h)
+    r.add_get("/api/agents/models", agents_models_h)
+    r.add_get("/api/agents/{aid}/model", agent_model_get_h)
+    r.add_put("/api/agents/{aid}/model", agent_model_put_h)
+    r.add_delete("/api/agents/{aid}/model", agent_model_delete_h)
     r.add_get("/api/office", office_get)
     r.add_get("/api/office/events", office_events)
     r.add_get("/api/events", events_sse)

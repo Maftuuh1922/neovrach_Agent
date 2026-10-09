@@ -1,0 +1,301 @@
+"""9Router as the built-in default provider: detection, provisioning, model list,
+global default and per-agent models — all against a mocked 9Router (no network)."""
+import asyncio
+import hashlib
+import os
+import socket
+import stat
+import sys
+from pathlib import Path
+
+import pytest
+from aiohttp.test_utils import TestClient, TestServer
+
+import mock_9router
+from neovarch import config as cfgmod
+from neovarch import models as modelsmod
+from neovarch import router9
+from neovarch.server import Gateway, build_app
+
+from test_server import WS
+
+MACHINE_ID = "test-machine-1234"
+CLI_SECRET = "s3cr3t" * 4
+
+
+def _token() -> str:
+    return hashlib.sha256((MACHINE_ID + "9r-cli-auth" + CLI_SECRET).encode()).hexdigest()[:16]
+
+
+def _data_dir(tmp_path: Path) -> Path:
+    d = tmp_path / "9r-data"
+    (d / "auth").mkdir(parents=True)
+    (d / "machine-id").write_text(MACHINE_ID)
+    (d / "auth" / "cli-secret").write_text(CLI_SECRET)
+    return d
+
+
+@pytest.fixture
+async def router(home, tmp_path, monkeypatch):
+    """A running mock 9Router whose local CLI token Neovarch can derive."""
+    app = mock_9router.build_app(_token())
+    server = TestServer(app)
+    await server.start_server()
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", str(server.make_url("/v1")))
+    monkeypatch.setenv("NEOVARCH_9ROUTER_DATA_DIR", str(_data_dir(tmp_path)))
+    yield app[mock_9router.STATE]
+    await server.close()
+
+
+async def _client(monkeypatch):
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
+    gw = Gateway(isolated=False)
+    c = TestClient(TestServer(build_app(gw)))
+    await c.start_server()
+    return gw, c
+
+
+def H():
+    return {"Authorization": "Bearer tok"}
+
+
+async def _ws(c):
+    ws = WS(await c.ws_connect("/api/ws?token=tok"))
+    await ws.pump()
+    return ws
+
+
+async def _chat(ws, sid, text="halo"):
+    ws.events.clear()
+    await ws.call("prompt.submit", {"session_id": sid, "text": text})
+    return (await ws.until("message.complete", timeout=20))["payload"]
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+# ------------------------------------------------------------------ units ---
+
+def test_urls_and_token(tmp_path, monkeypatch):
+    monkeypatch.delenv("NEOVARCH_9ROUTER_URL", raising=False)
+    cfg = {"router9": {}}
+    assert router9.base_url(cfg) == "http://localhost:20128/v1"
+    assert router9.dashboard_url(router9.base_url(cfg)) == "http://localhost:20128/dashboard"
+    assert router9.base_url({"router9": {"base_url": "127.0.0.1:3000"}}) == "http://127.0.0.1:3000/v1"
+    assert router9.base_url({"router9": {"base_url": "http://box:20128/v1/"}}) == "http://box:20128/v1"
+    assert router9.is_local("http://localhost:20128/v1") and not router9.is_local("https://r.example.com/v1")
+    assert router9.port_of("http://localhost:20128/v1") == 20128
+    assert router9.cli_token(tmp_path / "missing") is None
+    assert router9.cli_token(_data_dir(tmp_path)) == _token()
+
+
+def test_choose_default_prefers_big_pickle_then_fallbacks():
+    assert router9.choose_default([]) == "oc/big-pickle"
+    assert router9.choose_default(["exo-free", "big-pickle"]) == "oc/big-pickle"
+    assert router9.choose_default(["exo-free", "ling-3.1-flash-free"]) == "oc/ling-3.1-flash-free"
+    assert router9.choose_default(["exo-free"]) == "oc/exo-free"
+
+
+def test_fresh_install_defaults_to_9router(home, monkeypatch):
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", "http://localhost:20128/v1")
+    cfg = cfgmod.load_config()
+    ep = cfgmod.resolve_endpoint(cfg)
+    assert ep["provider"] == "9router" and ep["model"] == "oc/big-pickle"
+    assert ep["base_url"] == "http://localhost:20128/v1"
+    assert modelsmod.default_ref(cfg) == {"model": "oc/big-pickle", "provider": "9router", "source": "builtin"}
+    # an explicitly configured provider still wins
+    cfg["model"] = {"provider": "groq", "default": ""}
+    assert cfgmod.resolve_endpoint(cfg)["provider"] == "groq"
+    assert modelsmod.default_ref(cfg)["source"] == "config"
+
+
+def test_per_agent_override_routing(home, monkeypatch):
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", "http://localhost:20128/v1")
+    monkeypatch.setenv("GROQ_API_KEY", "gk")
+    cfg = cfgmod.load_config()
+    a = modelsmod.set_agent_model(cfg, "abc", "kr/glm-5", None, {"kr/glm-5"})
+    assert a == {"agent_id": "session:abc", "model": "kr/glm-5", "provider": "9router",
+                 "override": {"model": "kr/glm-5", "provider": "9router"}, "source": "agent"}
+    assert modelsmod.endpoint_for(cfg, "session:abc")["model"] == "kr/glm-5"
+    assert modelsmod.endpoint_for(cfg, "session:other")["model"] == "oc/big-pickle"
+    # an override on another provider goes to that provider's URL and key
+    modelsmod.set_agent_model(cfg, "kanban:Ayu", "llama-3.1-8b-instant", "groq")
+    ep = modelsmod.endpoint_for(cfg, "kanban:Ayu")
+    assert ep["base_url"].startswith("https://api.groq.com") and ep["api_key"] == "gk"
+    # clearing falls back to the global default
+    b = modelsmod.set_agent_model(cfg, "session:abc", None)
+    assert b["source"] == "global" and b["override"] is None and b["model"] == "oc/big-pickle"
+    with pytest.raises(modelsmod.ModelError):
+        modelsmod.normalize_agent_id("  ")
+
+
+# ------------------------------------------------------------ integration ---
+
+async def test_status_provisions_key_and_registers_free_models(router, monkeypatch):
+    gw, c = await _client(monkeypatch)
+    try:
+        st = await (await c.get("/api/router/status", headers=H())).json()
+        assert st["state"] == "running" and st["running"] and st["version"] == "0.5.99"
+        assert st["has_api_key"] and st["setup"] == {**st["setup"], "ready": True, "action": None}
+        assert len(router["keys"]) == 1 and router["keys"][0]["name"] == "neovarch"
+        assert cfgmod.read_env_file()[router9.KEY_ENV] == router["keys"][0]["key"]
+        assert {("oc", i) for i in mock_9router.FREE_IDS} <= {(m["providerAlias"], m["id"]) for m in router["custom"]}
+        # a second check reuses the key, never creates another
+        await gw.router.provision()
+        cfgmod.write_env_value(router9.KEY_ENV, "")
+        await gw.router.provision()
+        assert len(router["keys"]) == 1
+
+        data = await (await c.get("/api/models?refresh=1", headers=H())).json()
+        ids = [m["id"] for m in data["models"]]
+        assert ids[0] == "oc/big-pickle" and data["models"][0]["recommended"] and data["models"][0]["free"]
+        assert data["models"][0]["group"] == "OpenCode Free" and data["models"][0]["provider"] == "9router"
+        assert "kr/glm-5" in ids and next(m for m in data["models"] if m["id"] == "kr/glm-5")["group"] == "Kiro"
+        assert data["default"] == {"model": "oc/big-pickle", "provider": "9router"}
+        assert data["router"]["running"] and data["error"] is None
+        assert {"id": "oc/big-pickle", "object": "model", "owned_by": "9router"} in data["data"]
+
+        opts = await (await c.get("/api/model/options", headers=H())).json()
+        assert opts["providers"][0]["slug"] == "9router" and "kr/glm-5" in opts["providers"][0]["models"]
+    finally:
+        await c.close()
+
+
+async def test_chat_uses_default_then_agent_override_live_events(router, monkeypatch):
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        sid = (await ws.call("session.create", {}))["result"]["session_id"]
+        out = await _chat(ws, sid)
+        assert "(oc/big-pickle)" in out["text"] and "error" not in out
+        assert router["chats"][-1]["model"] == "oc/big-pickle"
+
+        aid = f"session:{sid}"
+        ws.events.clear()
+        r = await c.put(f"/api/agents/{aid}/model", json={"model": "kr/glm-5"}, headers=H())
+        body = await r.json()
+        assert r.status == 200 and body["ok"] and body["source"] == "agent" and body["provider"] == "9router"
+        ev = await ws.until("agent.model.changed")
+        assert ev["session_id"] is None and ev["payload"]["model"] == "kr/glm-5"
+        office = (await ws.until("office.update"))["payload"]
+        desk = next(d for d in office["agents"] if d["id"] == aid)
+        assert desk["model"] == "kr/glm-5" and desk["model_source"] == "agent"
+        assert desk["model_override"] == {"model": "kr/glm-5", "provider": "9router"}
+        assert office["default_model"] == {"model": "oc/big-pickle", "provider": "9router"}
+
+        out = await _chat(ws, sid, "lagi")
+        assert "(kr/glm-5)" in out["text"]
+        # another agent still follows the global default
+        sid2 = (await ws.call("session.create", {}))["result"]["session_id"]
+        assert "(oc/big-pickle)" in (await _chat(ws, sid2))["text"]
+        assert (await ws.call("session.status", {"session_id": sid}))["result"]["model"] == "kr/glm-5"
+
+        listing = await (await c.get("/api/agents/models", headers=H())).json()
+        assert listing["agents"][aid]["model"] == "kr/glm-5" and aid in listing["agents"] and len(listing["agents"]) == 1
+
+        # global default via RPC (the phone's path); the override keeps winning for its agent
+        ws.events.clear()
+        res = (await ws.call("models.default.set", {"model": "kr/claude-sonnet-4.5"}))["result"]
+        assert res == {"model": "kr/claude-sonnet-4.5", "provider": "9router", "ok": True}
+        assert (await ws.until("model.default.changed"))["payload"]["model"] == "kr/claude-sonnet-4.5"
+        assert "(kr/claude-sonnet-4.5)" in (await _chat(ws, sid2))["text"]
+        assert "(kr/glm-5)" in (await _chat(ws, sid))["text"]
+
+        # clearing the override (DELETE) -> back to the global default
+        r = await c.delete(f"/api/agents/{aid}/model", headers=H())
+        assert (await r.json())["source"] == "global"
+        assert "(kr/claude-sonnet-4.5)" in (await _chat(ws, sid))["text"]
+        got = (await ws.call("agent.model.get", {"agent_id": sid}))["result"]
+        assert got["agent_id"] == aid and got["source"] == "global"
+        bad = await ws.call("agent.model.set", {"agent_id": "", "model": "x"})
+        assert bad["error"]["code"] == -32602
+        assert (await c.put(f"/api/agents/{aid}/model", json={}, headers=H())).status == 400
+        assert (await c.put("/api/models/default", json={"model": ""}, headers=H())).status == 400
+        d = await (await c.get("/api/models/default", headers=H())).json()
+        assert d == {"model": "kr/claude-sonnet-4.5", "provider": "9router", "source": "config"}
+    finally:
+        await c.close()
+
+
+async def test_not_installed_and_unreachable_chat(home, monkeypatch):
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", f"http://127.0.0.1:{_free_port()}/v1")
+    gw, c = await _client(monkeypatch)
+    try:
+        st = await (await c.get("/api/router/status", headers=H())).json()
+        assert st["state"] == "not_installed" and not st["installed"] and not st["running"]
+        assert st["setup"]["action"] == "install" and st["setup"]["install_command"] == "npm install -g 9router"
+        r = await c.post("/api/router/start", headers=H())
+        assert r.status == 409 and "9Router belum terpasang" in (await r.json())["error"]
+        assert (await c.post("/api/router/stop", headers=H())).status == 409
+        data = await (await c.get("/api/models", headers=H())).json()
+        assert data["models"][0]["id"] == "oc/big-pickle" and data["error"]
+        ws = await _ws(c)
+        sid = (await ws.call("session.create", {}))["result"]["session_id"]
+        out = await _chat(ws, sid)
+        assert "9Router belum berjalan" in out["error"]
+    finally:
+        await c.close()
+
+
+async def test_running_without_token_asks_for_key_then_accepts_pasted_key(home, tmp_path, monkeypatch):
+    app = mock_9router.build_app("")  # CLI token unknown to us
+    server = TestServer(app)
+    await server.start_server()
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", str(server.make_url("/v1")))
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        st = await (await c.get("/api/router/status", headers=H())).json()
+        assert st["running"] and not st["setup"]["ready"] and st["setup"]["action"] == "api_key"
+        assert st["setup"]["action_url"].endswith("/dashboard") and "Buka dashboard 9Router" in st["setup"]["message"]
+        sid = (await ws.call("session.create", {}))["result"]["session_id"]
+        out = await _chat(ws, sid)
+        assert "9Router meminta API key" in out["error"]
+        app[mock_9router.STATE]["keys"].append({"name": "manual", "key": "sk-manual", "isActive": True})
+        ws.events.clear()
+        st = await (await c.put("/api/router/config", json={"api_key": "sk-manual"}, headers=H())).json()
+        assert st["has_api_key"] and st["setup"]["ready"]
+        assert (await ws.until("router.status"))["payload"]["setup"]["ready"]
+        assert "(oc/big-pickle)" in (await _chat(ws, sid))["text"]
+    finally:
+        await c.close()
+        await server.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell shim")
+async def test_start_and_stop_a_local_9router(home, tmp_path, monkeypatch):
+    port = _free_port()
+    shim = tmp_path / "bin" / "9router"
+    shim.parent.mkdir()
+    mock = Path(mock_9router.__file__).resolve()
+    shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{mock}" --cli-token {_token()} "$@"\n')
+    shim.chmod(shim.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("NEOVARCH_9ROUTER_BIN", str(shim))
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", f"http://127.0.0.1:{port}/v1")
+    monkeypatch.setenv("NEOVARCH_9ROUTER_DATA_DIR", str(_data_dir(tmp_path)))
+    gw, c = await _client(monkeypatch)
+    try:
+        st = await (await c.get("/api/router/status", headers=H())).json()
+        assert st["state"] == "stopped" and st["installed"] and st["setup"]["action"] == "start"
+        st = await (await c.post("/api/router/start", headers=H())).json()
+        assert st["state"] == "running" and st["managed"] and st["pid"] and st["has_api_key"], st
+        st = await (await c.post("/api/router/stop", headers=H())).json()
+        assert st["state"] == "stopped" and not st["managed"]
+        # supervisor: autostart at boot, restart after a crash
+        monkeypatch.setenv("NEOVARCH_9ROUTER_AUTOSTART", "1")
+        gw.router.user_stopped = False
+        st = await gw.router.tick(first=True)
+        assert st["running"] and st["managed"]
+        gw.router.proc.kill()
+        gw.router.proc.wait()
+        await asyncio.sleep(0.2)
+        st = await gw.router.tick()
+        assert st["running"] and st["managed"], st
+        await gw.router.stop()
+    finally:
+        if gw.router.proc and gw.router.proc.poll() is None:
+            gw.router.proc.kill()
+        await c.close()

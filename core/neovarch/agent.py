@@ -78,7 +78,8 @@ class Agent:
 
     async def run_turn(self, user_text: str) -> str:
         cfg = cfgmod.load_config()
-        endpoint = cfgmod.resolve_endpoint(cfg)
+        from neovarch import models as modelsmod
+        endpoint = modelsmod.endpoint_for(cfg, "session:" + str(self.rec.get("id") or ""))
         self.ctx.approvals_mode = str(cfgmod.get_path(cfg, "approvals.mode", "ask") or "ask")
         max_turns = int(cfgmod.get_path(cfg, "agent.max_turns", 30) or 30)
         self.interrupted = False
@@ -141,7 +142,7 @@ class Agent:
             else:
                 error = f"stopped after {max_turns} model calls"
         except LLMError as exc:
-            error = str(exc)
+            error = _explain(str(exc), endpoint)
         if error and error != "interrupted":
             self.emit("error", {"message": error})
         elapsed = max(time.monotonic() - started, 1e-6)
@@ -155,6 +156,21 @@ class Agent:
             **({"status": "interrupted"} if error == "interrupted" else {}),
         })
         return final_text
+
+
+def _explain(error: str, endpoint: dict) -> str:
+    """A 9Router failure the user can act on, in Indonesian."""
+    if endpoint.get("provider") != "9router":
+        return error
+    from neovarch import router9
+    root = router9.root_url(endpoint.get("base_url") or router9.DEFAULT_BASE_URL)
+    if error.startswith("could not reach"):
+        return (f"9Router belum berjalan di {root}. Buka Pengaturan \u25b8 Model lalu tekan Jalankan, "
+                f"atau pasang dulu: {router9.INSTALL_COMMAND}")
+    if "HTTP 401" in error:
+        return (f"9Router meminta API key. Buka dashboard 9Router ({root}/dashboard) \u25b8 Endpoint, "
+                "buat API key, lalu tempel di Pengaturan \u25b8 Model.")
+    return error
 
 
 def _wire(m: dict) -> dict:

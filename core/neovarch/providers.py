@@ -293,6 +293,16 @@ def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, An
     ep = cfgmod.resolve_endpoint(cfg)
     current = ep["provider"]
     providers: list[dict[str, Any]] = []
+    from neovarch import router9
+    r9_models = list(router9.LAST_MODEL_IDS)
+    r9_default = ep["model"] if current == router9.PROVIDER else router9.default_model_id(cfg)
+    if r9_default and r9_default not in r9_models:
+        r9_models.insert(0, r9_default)
+    providers.append({"slug": router9.PROVIDER, "name": router9.LABEL, "models": r9_models,
+                      "total_models": len(r9_models), "is_current": current == router9.PROVIDER,
+                      "is_user_defined": False, "api_url": router9.base_url(cfg),
+                      "authenticated": bool(router9.api_key()), "key_env": router9.KEY_ENV,
+                      "source": "builtin", "auth_type": "none", "builtin": True})
     for slug, preset in cfgmod.PRESETS.items():
         key_env = preset.get("key_env") or ""
         authed = bool(cfgmod.secret(key_env)) if key_env else slug == "ollama"
@@ -323,7 +333,8 @@ def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, An
         providers.insert(0, {"slug": current, "name": name, "models": [ep["model"]] if ep["model"] else [],
                              "total_models": 1 if ep["model"] else 0, "is_current": True, "is_user_defined": True,
                              "api_url": ep["base_url"], "authenticated": True, "source": "config"})
-    providers.sort(key=lambda p: (not p["is_current"], not p["is_user_defined"], p["name"].lower()))
+    providers.sort(key=lambda p: (not p["is_current"], not p.get("builtin", False), not p["is_user_defined"],
+                                  p["name"].lower()))
     return {"model": ep["model"], "provider": current, "providers": providers}
 
 

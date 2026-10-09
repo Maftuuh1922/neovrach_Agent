@@ -4,7 +4,8 @@ Shape (all keys optional)::
 
     model:
       default: gpt-4o-mini          # model id sent to the provider
-      provider: openai              # a name from `providers:` / `custom_providers:`, or "custom"
+      provider: openai              # "9router" (built-in default), a preset, a name from
+                                    # `providers:` / `custom_providers:`, or "custom"
       base_url: https://api.openai.com/v1
       context_length: 128000
     providers:                      # named OpenAI-compatible endpoints
@@ -21,6 +22,12 @@ Shape (all keys optional)::
     appearance:
       accent: "#EE1C1C"             # accent colour chosen at first run (desktop + phone)
       base: dark                    # dark | light
+    router9:                        # the built-in 9Router provider (see router9.py)
+      base_url: http://localhost:20128/v1
+      autostart: true               # start the local 9router when installed and not running
+    agents:
+      models:                       # per-agent model (Office desk id -> model)
+        "session:abc123": {model: oc/big-pickle, provider: 9router}
 
 API keys live in ``.env`` (KEY=value lines), never in config.yaml.
 """
@@ -185,8 +192,14 @@ def resolve_endpoint(cfg: dict) -> dict[str, str]:
     provider = str(model_cfg.get("provider") or "")
     entries = provider_entries(cfg)
     spec: dict = {}
+    if not provider and not model_cfg.get("base_url"):
+        # Fresh install: the built-in default provider is the local 9Router.
+        provider = "9router"
     if provider.startswith("custom:"):
         spec = entries.get(provider.split(":", 1)[1], {})
+    elif provider == "9router" and provider not in entries:
+        from neovarch import router9
+        spec = router9.endpoint_spec(cfg)
     elif provider in entries:
         spec = entries[provider]
     elif provider in PRESETS:
@@ -197,7 +210,7 @@ def resolve_endpoint(cfg: dict) -> dict[str, str]:
         base_url = str(spec.get("base_url") or "")
     key_env = str(spec.get("key_env") or ("OPENAI_API_KEY" if base_url else ""))
     api_key = secret(key_env) or str(spec.get("api_key") or "")
-    if not api_key:
+    if not api_key and provider != "9router":
         api_key = secret("NEOVARCH_API_KEY") or secret("OPENAI_API_KEY")
     return {
         "base_url": base_url.rstrip("/"),

@@ -14,6 +14,12 @@ import mock_llm  # noqa: E402
 def home(tmp_path, monkeypatch):
     h = tmp_path / "nvhome"
     monkeypatch.setenv("NEOVARCH_HOME", str(h))
+    # Never touch a real 9Router (or the user's ~/.9router) from the tests.
+    monkeypatch.setenv("NEOVARCH_9ROUTER_SUPERVISE", "0")
+    monkeypatch.setenv("NEOVARCH_9ROUTER_AUTOSTART", "0")
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", "http://127.0.0.1:9/v1")
+    monkeypatch.setenv("NEOVARCH_9ROUTER_DATA_DIR", str(tmp_path / "no-9router"))
+    monkeypatch.setenv("NEOVARCH_9ROUTER_BIN", str(tmp_path / "no-9router" / "9router"))
     for k in ("OPENAI_API_KEY", "NEOVARCH_API_KEY", "HERMES_DASHBOARD_SESSION_TOKEN",
               "HERMES_DASHBOARD_BASIC_AUTH_SECRET", "NEOVARCH_SESSION_TOKEN", "NEOVARCH_REMOTE_SECRET"):
         monkeypatch.delenv(k, raising=False)
