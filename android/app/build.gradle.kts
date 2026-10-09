@@ -127,3 +127,12 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core:1.6.1")
 }
+
+// Unit-test asset packaging reads the merged assets dir that Flutter's
+// copyFlutterAssets* also writes; order them so Gradle's validation passes.
+tasks.configureEach {
+    if (name.startsWith("package") && name.endsWith("UnitTestForUnitTest")) {
+        val variant = name.removePrefix("package").removeSuffix("UnitTestForUnitTest")
+        mustRunAfter("copyFlutterAssets$variant")
+    }
+}
