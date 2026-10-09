@@ -898,8 +898,8 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             label: t.shell.statusbar.cron,
             run: go(CRON_ROUTE)
           },
-          { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
-          { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) },
+          // Profiles / Agents rows removed: the Neovarch core has one profile and
+          // no agent-profile manager, so those pages only showed stubs.
         ]
       },
       projectGroup,
@@ -993,20 +993,6 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             keywords: ['appearance', 'color mode', 'brightness', 'dark', 'light', 'system'],
             label: cc.changeColorMode,
             to: 'color-mode'
-          },
-          {
-            icon: PawPrint,
-            id: 'appearance-pets',
-            keywords: ['pet', 'petdex', 'mascot', 'pets', '/pet', 'paw'],
-            label: cc.pets.title,
-            to: 'pets'
-          },
-          {
-            icon: Egg,
-            id: 'appearance-generate-pet',
-            keywords: ['pet', 'generate', 'create', 'make', 'new pet', 'mascot', 'hatch', 'ai'],
-            label: cc.generatePet.title,
-            run: () => openPetGenerate()
           }
         ]
       },
