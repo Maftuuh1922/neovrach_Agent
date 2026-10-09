@@ -7,7 +7,8 @@
   ``GET/POST /api/models/custom``;
 * ``GET /v1/models`` (static aliases + registered custom models, like 9Router) and
   streaming ``POST /v1/chat/completions`` which requires the API key (``requireApiKey``)
-  and answers ``Halo dari 9Router mock (<model>)``.
+  and answers ``Halo dari 9Router mock (<model>)``; models in state ``limited`` answer
+  HTTP 429 FreeUsageLimitError (like OpenCode Free), models in ``down`` HTTP 503.
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ def build_app(cli_token: str = "", *, free_ids: list[str] | None = None, require
     """``lazy_files=(data_dir, machine_id, cli_secret)``: like the real 9Router, write
     machine-id and auth/cli-secret only when a request first carries a CLI token."""
     app = web.Application()
-    app[STATE] = {"keys": [], "custom": [], "chats": [], "cli_token": cli_token,
+    app[STATE] = {"keys": [], "custom": [], "chats": [], "cli_token": cli_token, "limited": set(), "down": set(),
+                  "attempts": [],
                   "free": list(FREE_IDS if free_ids is None else free_ids), "require_key": require_key}
 
     def st(r: web.Request) -> dict:
@@ -95,6 +97,12 @@ def build_app(cli_token: str = "", *, free_ids: list[str] | None = None, require
             if not auth.startswith("Bearer ") or auth[7:] not in {k["key"] for k in state["keys"]}:
                 return web.json_response({"error": {"message": "Missing API key"}}, status=401)
         body = await r.json()
+        state["attempts"].append(body.get("model"))
+        if body.get("model") in state["limited"]:
+            return web.json_response({"error": {"message": "FreeUsageLimitError: Rate limit exceeded. "
+                                                "Please try again later.", "type": "FreeUsageLimitError"}}, status=429)
+        if body.get("model") in state["down"]:
+            return web.json_response({"error": {"message": "upstream unavailable"}}, status=503)
         state["chats"].append(body)
         text = f"Halo dari 9Router mock ({body.get('model')})"
         resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})

@@ -413,3 +413,141 @@ def test_rate_limit_is_explained_in_indonesian():
     assert "OpenCode Free" in out and "oc/big-pickle" in out and "pilih model lain" in out
     assert "HTTP 429" in _explain("provider returned HTTP 429: slow down", {"provider": "9router", "model": "kr/glm-5"})
     assert _explain(err, {"provider": "openai", "model": "gpt"}) == err
+
+
+# ------------------------------------------------- free-model fallback (429) ---
+
+@pytest.fixture(autouse=True)
+def _no_cooldowns():
+    router9.clear_limited()
+    yield
+    router9.clear_limited()
+
+
+def test_free_fallback_order_cooldown_and_retryable_errors():
+    live = ["oc/zeta-free", "oc/big-pickle", "kr/glm-5", "oc/alpha-free", "oc/gpt-paid", "ocg/x-free"]
+    order = router9.free_order(live)
+    assert order[:4] == ["oc/big-pickle", "oc/nemotron-3-ultra-free", "oc/ling-3.1-flash-free",
+                         "oc/mimo-v2.6-flash-free"]
+    assert order[4:] == ["oc/alpha-free", "oc/zeta-free"]          # other oc/*-free, sorted
+    assert router9.is_free_model("oc/big-pickle") and not router9.is_free_model("kr/glm-5")
+    assert not router9.is_free_model("oc/gpt-paid") and not router9.is_free_model("ocg/x-free")
+    cands = router9.fallback_candidates("oc/big-pickle", live)
+    assert cands[0] == "oc/nemotron-3-ultra-free" and "oc/big-pickle" not in cands
+    router9.mark_limited("oc/nemotron-3-ultra-free")
+    assert router9.cooldown_left("oc/nemotron-3-ultra-free") > 590
+    cands = router9.fallback_candidates("oc/big-pickle", live)
+    assert cands[0] == "oc/ling-3.1-flash-free" and cands[-1] == "oc/nemotron-3-ultra-free"  # resting last
+    router9.mark_limited("oc/ling-3.1-flash-free", seconds=-1)          # expired
+    assert router9.cooldown_left("oc/ling-3.1-flash-free") == 0
+    r = router9.retryable_status
+    assert r('provider returned HTTP 429: {"error":"FreeUsageLimitError"}') == 429
+    assert r("provider returned HTTP 503: down") == 503 and r("provider returned HTTP 401: key") is None
+    assert r("FreeUsageLimitError: Rate limit exceeded") == 429 and r("could not reach the model provider") is None
+    assert router9.fallback_notice("oc/big-pickle", "oc/nemotron-3-ultra-free") == \
+        "Model oc/big-pickle sedang dibatasi, pakai oc/nemotron-3-ultra-free sementara."
+
+
+async def test_rate_limited_default_falls_back_with_notice_and_cooldown(router, monkeypatch):
+    router["limited"].add("oc/big-pickle")
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        sid = (await ws.call("session.create", {}))["result"]["session_id"]
+        out = await _chat(ws, sid)
+        assert "(oc/nemotron-3-ultra-free)" in out["text"] and "error" not in out, out
+        assert router["attempts"] == ["oc/big-pickle", "oc/nemotron-3-ultra-free"]
+        assert out["model"] == "oc/nemotron-3-ultra-free" and out["model_fallback"][0]["status"] == 429
+        fb = next(e for e in ws.events if e["type"] == "model.fallback")["payload"]
+        assert fb["from"] == "oc/big-pickle" and fb["to"] == "oc/nemotron-3-ultra-free"
+        assert fb["reason"] == "rate_limited" and fb["cooldown_s"] > 590
+        st = next(e for e in ws.events if e["type"] == "status.update")
+        assert st["session_id"] == sid and st["payload"]["kind"] == "fallback"
+        assert "Model oc/big-pickle sedang dibatasi, pakai oc/nemotron-3-ultra-free sementara" in st["payload"]["text"]
+        # the notice comes before the answer's text
+        kinds = [e["type"] for e in ws.events]
+        assert kinds.index("status.update") < kinds.index("message.delta")
+        # the user's saved default is untouched
+        d = await (await c.get("/api/models/default", headers=H())).json()
+        assert d["model"] == "oc/big-pickle"
+        assert "model" not in (cfgmod.load_config().get("model") or {}) or \
+            cfgmod.load_config()["model"].get("default") in (None, "", "oc/big-pickle")
+
+        # within the cooldown the next turn goes straight to the fallback (one request)
+        router["attempts"].clear()
+        out = await _chat(ws, sid, "lagi")
+        assert "(oc/nemotron-3-ultra-free)" in out["text"] and router["attempts"] == ["oc/nemotron-3-ultra-free"]
+        fb = next(e for e in ws.events if e["type"] == "model.fallback")["payload"]
+        assert fb["reason"] == "cooldown"
+
+        # cooldown over (and quota back) -> the default again, no notice
+        router["limited"].clear()
+        router9.clear_limited()
+        router["attempts"].clear()
+        out = await _chat(ws, sid, "sekali lagi")
+        assert "(oc/big-pickle)" in out["text"] and router["attempts"] == ["oc/big-pickle"]
+        assert not any(e["type"] == "model.fallback" for e in ws.events) and "model_fallback" not in out
+    finally:
+        await c.close()
+
+
+async def test_fallback_skips_limited_and_unavailable_then_gives_up_in_indonesian(router, monkeypatch):
+    router["limited"].update({"oc/big-pickle", "oc/nemotron-3-ultra-free"})
+    router["down"].add("oc/ling-3.1-flash-free")
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        sid = (await ws.call("session.create", {}))["result"]["session_id"]
+        out = await _chat(ws, sid)
+        assert "(oc/mimo-v2.6-flash-free)" in out["text"], out
+        assert router["attempts"] == ["oc/big-pickle", "oc/nemotron-3-ultra-free", "oc/ling-3.1-flash-free",
+                                      "oc/mimo-v2.6-flash-free"]
+        fb = [e["payload"] for e in ws.events if e["type"] == "model.fallback"]
+        assert len(fb) == 1 and fb[0]["from"] == "oc/big-pickle" and fb[0]["to"] == "oc/mimo-v2.6-flash-free"
+        for m in ("oc/big-pickle", "oc/nemotron-3-ultra-free", "oc/ling-3.1-flash-free"):
+            assert router9.cooldown_left(m) > 0
+        assert not router9.cooldown_left("oc/mimo-v2.6-flash-free")
+
+        # every free model limited: each tried once, then one Indonesian error
+        router9.clear_limited()
+        router["limited"].update(router9.free_order())
+        router["attempts"].clear()
+        out = await _chat(ws, sid, "lagi")
+        assert out["error"].startswith("Semua model gratis yang dicoba sedang dibatasi"), out
+        assert "oc/big-pickle" in out["error"]
+        assert len(router["attempts"]) == len(set(router["attempts"])) <= 1 + router9.MAX_FALLBACKS
+        assert not any(e["type"] == "model.fallback" for e in ws.events)
+    finally:
+        await c.close()
+
+
+async def test_pinned_agent_model_is_tried_first_and_paid_pins_never_switch(router, monkeypatch):
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        sid = (await ws.call("session.create", {}))["result"]["session_id"]
+        aid = f"session:{sid}"
+        # a pinned free model that is cooling down is still tried first (it answers)
+        await c.put(f"/api/agents/{aid}/model", json={"model": "oc/ling-3.1-flash-free"}, headers=H())
+        router9.mark_limited("oc/ling-3.1-flash-free")
+        out = await _chat(ws, sid)
+        assert "(oc/ling-3.1-flash-free)" in out["text"] and router["attempts"][-1:] == ["oc/ling-3.1-flash-free"]
+        assert not router9.cooldown_left("oc/ling-3.1-flash-free")   # it answered: rest cleared
+        assert not any(e["type"] == "model.fallback" for e in ws.events)
+
+        # the pinned free model fails -> only then the free chain, with the notice
+        router["limited"].add("oc/ling-3.1-flash-free")
+        router["attempts"].clear()
+        out = await _chat(ws, sid, "lagi")
+        assert "(oc/big-pickle)" in out["text"]
+        assert router["attempts"] == ["oc/ling-3.1-flash-free", "oc/big-pickle"]
+        assert (await ws.call("agent.model.get", {"agent_id": sid}))["result"]["model"] == "oc/ling-3.1-flash-free"
+
+        # a pinned paid/non-free model is never swapped for a free one
+        await c.put(f"/api/agents/{aid}/model", json={"model": "kr/glm-5"}, headers=H())
+        router["limited"].add("kr/glm-5")
+        router["attempts"].clear()
+        out = await _chat(ws, sid, "sekali lagi")
+        assert router["attempts"] == ["kr/glm-5"] and "kr/glm-5" in out["error"] and "pilih model lain" in out["error"]
+    finally:
+        await c.close()

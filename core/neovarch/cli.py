@@ -32,6 +32,8 @@ def _print_event(kind: str, payload: dict) -> None:
         sys.stdout.write(f"\n\x1b[2m⚙ {payload.get('name')}: {payload.get('preview', '')}\x1b[0m\n")
     elif kind == "tool.complete":
         sys.stdout.write(f"\x1b[2m  ↳ {payload.get('summary', '')} ({payload.get('duration_s')}s)\x1b[0m\n")
+    elif kind == "model.fallback":
+        sys.stdout.write(f"\n\x1b[33m⚠ {payload.get('text', '')}\x1b[0m\n")
     elif kind == "error":
         sys.stdout.write(f"\n\x1b[31merror: {payload.get('message')}\x1b[0m\n")
     elif kind == "message.complete":

@@ -67,6 +67,80 @@ FREE_ALIASES = {"oc"}
 # Ids from the last successful GET /v1/models (filled by models.ModelCatalog).
 LAST_MODEL_IDS: list[str] = []
 
+# ----------------------------------------------------- free-model fallback ---
+# OpenCode Free answers HTTP 429 (FreeUsageLimitError) when a model's free quota is
+# used up. A chat turn then retries the same request on the next free model, and the
+# limited model rests for COOLDOWN_S (in memory only; the saved default never changes).
+COOLDOWN_S = 600.0
+MAX_FALLBACKS = 6           # extra models tried per failed request
+_LIMITED: dict[str, float] = {}   # model id -> monotonic time its cooldown ends
+
+
+def is_free_model(model: str) -> bool:
+    mid = str(model or "")
+    alias, _, name = mid.partition("/")
+    return alias in FREE_ALIASES and bool(name) and (mid == DEFAULT_MODEL or name.endswith("-free"))
+
+
+def free_order(live_ids: list[str] | None = None) -> list[str]:
+    """OpenCode Free models in fallback order: big-pickle, the named fallbacks, then the
+    other ``oc/*-free`` models 9Router lists."""
+    ids = LAST_MODEL_IDS if live_ids is None else live_ids
+    order = [DEFAULT_MODEL] + list(FREE_FALLBACKS)
+    order += sorted(i for i in ids if is_free_model(i) and i not in order)
+    return order
+
+
+def mark_limited(model: str, seconds: float = COOLDOWN_S) -> None:
+    _LIMITED[str(model)] = time.monotonic() + seconds
+
+
+def clear_limited(model: str | None = None) -> None:
+    if model is None:
+        _LIMITED.clear()
+    else:
+        _LIMITED.pop(str(model), None)
+
+
+def cooldown_left(model: str) -> float:
+    end = _LIMITED.get(str(model))
+    if end is None:
+        return 0.0
+    left = end - time.monotonic()
+    if left <= 0:
+        _LIMITED.pop(str(model), None)
+        return 0.0
+    return left
+
+
+def fallback_candidates(model: str, live_ids: list[str] | None = None) -> list[str]:
+    """Free models to try after ``model`` failed: the fallback order without ``model``,
+    models still cooling down last (tried only when every other one failed too)."""
+    rest = [m for m in free_order(live_ids) if m != model]
+    fresh = [m for m in rest if not cooldown_left(m)]
+    resting = [m for m in rest if cooldown_left(m)]
+    return (fresh + resting)[:MAX_FALLBACKS]
+
+
+def retryable_status(error: str) -> int | None:
+    """HTTP status of a chat failure another free model may not have (429 / 5xx /
+    upstream unavailable), else None."""
+    import re
+    m = re.search(r"HTTP (\d{3})", error or "")
+    if m:
+        code = int(m.group(1))
+        return code if code == 429 or 500 <= code <= 599 else None
+    low = (error or "").lower()
+    if "freeusagelimit" in low or "rate limit" in low:
+        return 429
+    if any(w in low for w in ("unavailable", "overloaded", "no available", "upstream error")):
+        return 503
+    return None
+
+
+def fallback_notice(limited: str, used: str) -> str:
+    return f"Model {limited} sedang dibatasi, pakai {used} sementara."
+
 
 # ------------------------------------------------------------------ config ---
 

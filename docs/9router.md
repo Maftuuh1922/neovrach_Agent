@@ -206,5 +206,28 @@ models (`POST /api/models/custom {providerAlias:"oc", id}`) so they appear in `/
   (`requireApiKey`, 401 "Missing API key"). Bound to `0.0.0.0`, a request from the LAN IP is
   refused earlier by 9Router's local-request check ("API key required for remote API access").
 * OpenCode Free models answer without any account; they can return HTTP 429
-  (`FreeUsageLimitError`) when the free quota for that model is used up — the chat then shows
-  an Indonesian hint to retry or pick another model in the composer picker.
+  (`FreeUsageLimitError`) when the free quota for that model is used up — the core then falls
+  back automatically (next section).
+
+## Free-model fallback (HTTP 429 / 5xx)
+
+When a chat request to a 9Router **free** model (`oc/big-pickle` or `oc/*-free`) fails with
+HTTP 429 or 5xx (or an upstream "rate limit"/"unavailable" error) **before any text streamed**,
+the core retries the same request once per next free model, in this order:
+`oc/big-pickle` → `oc/nemotron-3-ultra-free` → `oc/ling-3.1-flash-free` →
+`oc/mimo-v2.6-flash-free` → the other `oc/*-free` models 9Router lists (sorted); at most 6 extra
+attempts. The model that answers is used for the rest of that turn.
+
+* The failed model rests for **10 minutes** (in memory, `router9.COOLDOWN_S`); models still resting
+  are tried last. While it rests, an agent that follows the global default starts directly on the
+  first non-resting free model (one request, still with the notice).
+* An agent with an explicit per-agent model is always sent to that model first (cooldown ignored);
+  only if it fails with 429/5xx and it is a free model does the free chain run. A pinned non-free
+  model (e.g. `kr/glm-5`) is never swapped.
+* The saved global default and per-agent models are never changed.
+* Events on the session: `model.fallback` `{from, to, reason: 'rate_limited'|'unavailable'|'cooldown',
+  status, cooldown_s, text}` and `status.update` `{kind: 'fallback', text: '⚠️ Model X sedang dibatasi,
+  pakai Y sementara.'}` (Desktop shows it as a line in the transcript), emitted just before the
+  fallback's first token. `message.complete` then carries `model` and `model_fallback: [...]`.
+* If every free model fails: one Indonesian error, "Semua model gratis yang dicoba sedang dibatasi
+  atau tidak tersedia (…)".

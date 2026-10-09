@@ -98,20 +98,27 @@ class Agent:
         usage: dict[str, Any] = {}
         error = None
         sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text)
+        pinned = modelsmod.agent_model(cfg, "session:" + str(self.rec.get("id") or "x"))["source"] == "agent"
+        # The endpoint this turn really uses: a free 9Router model that is cooling down
+        # after a rate limit is skipped up front, unless the agent pinned it.
+        active = dict(endpoint)
+        self.tried: list[str] = []
+        self.fallbacks: list[dict] = []
+        from neovarch import router9
+        if (endpoint.get("provider") == router9.PROVIDER and not pinned
+                and router9.is_free_model(endpoint["model"]) and router9.cooldown_left(endpoint["model"])):
+            alt = next((m for m in router9.fallback_candidates(endpoint["model"])
+                        if not router9.cooldown_left(m)), None)
+            if alt:
+                self._announce_fallback(endpoint["model"], alt, "cooldown", None)
+                active["model"] = alt
         try:
             for _ in range(max_turns):
                 if self.interrupted:
                     error = "interrupted"
                     break
                 wire = [{"role": "system", "content": sys_prompt}] + [_wire(m) for m in messages]
-                comp: Completion = await stream_chat(
-                    base_url=endpoint["base_url"], api_key=endpoint["api_key"], model=endpoint["model"],
-                    messages=wire, tools=tool_schemas(),
-                    on_text=lambda t: self.emit("message.delta", {"text": t}),
-                    on_reasoning=lambda t: self.emit("reasoning.delta", {"text": t}),
-                    extra_headers=endpoint.get("headers") or None,
-                    verify_ssl=endpoint.get("verify_ssl", True),
-                )
+                comp: Completion = await self._complete(active, wire, pinned)
                 usage = comp.usage or usage
                 assistant: dict[str, Any] = {"role": "assistant", "content": comp.text, "ts": time.time()}
                 if comp.reasoning:
@@ -142,7 +149,7 @@ class Agent:
             else:
                 error = f"stopped after {max_turns} model calls"
         except LLMError as exc:
-            error = _explain(str(exc), endpoint)
+            error = _explain(str(exc), active, self.tried)
         if error and error != "interrupted":
             self.emit("error", {"message": error})
         elapsed = max(time.monotonic() - started, 1e-6)
@@ -153,12 +160,95 @@ class Agent:
             "usage": {**usage, "avg_tps": round(out_tokens / elapsed, 1) if out_tokens else None,
                       "context_percent": round(100 * int(usage.get("prompt_tokens") or 0) / ctx_len, 1)},
             **({"error": error} if error else {}),
+            **({"model": active["model"], "model_fallback": self.fallbacks} if self.fallbacks else {}),
             **({"status": "interrupted"} if error == "interrupted" else {}),
         })
         return final_text
 
 
-def _explain(error: str, endpoint: dict) -> str:
+    async def _stream(self, endpoint: dict, wire: list[dict], started: list[bool],
+                      on_first: Callable[[], None] | None = None) -> Completion:
+        def first() -> None:
+            if not started[0]:
+                started[0] = True
+                if on_first:
+                    on_first()  # e.g. the fallback notice, so it lands before the answer
+
+        def on_text(t: str) -> None:
+            first()
+            self.emit("message.delta", {"text": t})
+
+        def on_reasoning(t: str) -> None:
+            first()
+            self.emit("reasoning.delta", {"text": t})
+
+        return await stream_chat(
+            base_url=endpoint["base_url"], api_key=endpoint["api_key"], model=endpoint["model"],
+            messages=wire, tools=tool_schemas(), on_text=on_text, on_reasoning=on_reasoning,
+            extra_headers=endpoint.get("headers") or None,
+            verify_ssl=endpoint.get("verify_ssl", True),
+        )
+
+    async def _complete(self, active: dict, wire: list[dict], pinned: bool) -> Completion:
+        """One model call. When a free 9Router model answers 429 / 5xx before streaming
+        anything, the same request is retried once per next free model; ``active`` then
+        keeps the model that answered for the rest of the turn. The saved default and
+        per-agent models are never changed."""
+        from neovarch import router9
+        started = [False]
+        try:
+            comp = await self._stream(active, wire, started)
+            router9.clear_limited(active["model"])
+            return comp
+        except LLMError as exc:
+            first = exc
+            status = router9.retryable_status(str(exc))
+            if (started[0] or status is None or active.get("provider") != router9.PROVIDER
+                    or not router9.is_free_model(active["model"])):
+                raise
+        limited = active["model"]
+        router9.mark_limited(limited)
+        self.tried.append(limited)
+        last: LLMError = first
+        for cand in router9.fallback_candidates(limited):
+            if self.interrupted or cand in self.tried:
+                continue
+            attempt = {**active, "model": cand}
+            started = [False]
+            announced = [False]
+
+            def announce(cand: str = cand) -> None:
+                announced[0] = True
+                self._announce_fallback(limited, cand, "rate_limited" if status == 429 else "unavailable", status)
+            try:
+                comp = await self._stream(attempt, wire, started, announce)
+            except LLMError as exc:
+                last = exc
+                code = router9.retryable_status(str(exc))
+                if started[0] or code is None:
+                    raise
+                router9.mark_limited(cand)
+                self.tried.append(cand)
+                continue
+            router9.clear_limited(cand)
+            if not announced[0]:  # tool calls only, no text streamed
+                announce()
+            active["model"] = cand
+            return comp
+        raise last
+
+    def _announce_fallback(self, limited: str, used: str, reason: str, status: int | None) -> None:
+        from neovarch import router9
+        text = router9.fallback_notice(limited, used)
+        info = {"from": limited, "to": used, "reason": reason, "status": status,
+                "cooldown_s": round(router9.cooldown_left(limited)), "text": text}
+        self.fallbacks.append(info)
+        self.emit("model.fallback", info)
+        # Desktop paints status.update kind=fallback as a line in the transcript.
+        self.emit("status.update", {"kind": "fallback", "text": "\u26a0\ufe0f " + text})
+
+
+def _explain(error: str, endpoint: dict, tried: list[str] | None = None) -> str:
     """A 9Router failure the user can act on, in Indonesian."""
     if endpoint.get("provider") != "9router":
         return error
@@ -170,6 +260,10 @@ def _explain(error: str, endpoint: dict) -> str:
     if "HTTP 401" in error:
         return (f"9Router meminta API key. Buka dashboard 9Router ({root}/dashboard) \u25b8 Endpoint, "
                 "buat API key, lalu tempel di Pengaturan \u25b8 Model.")
+    if tried and len(tried) > 1:
+        return ("Semua model gratis yang dicoba sedang dibatasi atau tidak tersedia ("
+                + ", ".join(tried) + "). Coba lagi beberapa menit lagi, atau pilih model lain "
+                "dari pemilih model di kolom chat.")
     if "HTTP 429" in error:
         model = endpoint.get("model") or "model ini"
         if "FreeUsageLimit" in error or str(model).startswith("oc/"):
