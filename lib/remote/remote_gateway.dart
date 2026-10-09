@@ -30,6 +30,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../data/gateway_client.dart';
 import '../models/models.dart';
 import 'attachments.dart';
+import 'composer.dart';
 import 'office_models.dart';
 import 'pairing.dart';
 import 'vault_models.dart';
@@ -585,12 +586,16 @@ class RemoteGateway implements VaultApi {
     if (changed) _approvalsChanged.add(null);
   }
 
-  Future<dynamic> submit(String runtimeId, String text, {List<String> attachments = const []}) => client.call('prompt.submit', {
+  Future<dynamic> submit(String runtimeId, String text, {List<String> attachments = const [], Map<String, dynamic> extra = const {}}) =>
+      client.call('prompt.submit', {
         ..._p,
         'session_id': runtimeId,
         'text': text,
         'surface': 'mobile',
         if (attachments.isNotEmpty) 'attachments': attachments,
+        // Composer picks (skills, reasoning_effort); only fields the PC's
+        // catalog listed, so an older PC never sees them.
+        ...extra,
       });
 
   Future<void> interrupt(String runtimeId) => client.call('session.interrupt', {..._p, 'session_id': runtimeId});
@@ -671,6 +676,34 @@ class RemoteGateway implements VaultApi {
       return const {};
     }
   }
+
+  // ------------------------------------------------------------ composer --
+  /// `GET /api/composer/catalog`: the desktop composer's controls. Null on an
+  /// older PC (404, `{available:false}`, or any error) — the phone then shows
+  /// the plain composer. Never throws.
+  Future<ComposerCatalog?> composerCatalog() async {
+    try {
+      return ComposerCatalog.tryParse(await _json('GET', '/api/composer/catalog'));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// `GET /api/composer/complete`: "@" file/folder refs (kind=path) relative
+  /// to the session folder on the PC, or "/" items (kind=slash).
+  Future<List<ComposerSuggestion>> composerComplete(String kind, String query, {String? sessionId}) async {
+    final j = await _json('GET', '/api/composer/complete', query: {
+      'kind': kind,
+      'q': query,
+      if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
+    });
+    final items = j is Map ? (j['items'] as List? ?? const []) : const [];
+    return [for (final i in items) if (i is Map) ComposerSuggestion.fromJson(Map<String, dynamic>.from(i))];
+  }
+
+  /// `POST /api/model/set` (the same call as the desktop model pill).
+  Future<void> setModel({required String provider, required String model}) =>
+      _json('POST', '/api/model/set', body: {'provider': provider, 'model': model, 'scope': 'main'});
 
   /// `GET /api/office`: the agents ("pegawai") and the activity feed.
   Future<OfficeSnapshot> office() async => OfficeSnapshot.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/office') as Map));

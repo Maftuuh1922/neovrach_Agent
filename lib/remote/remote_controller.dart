@@ -17,6 +17,7 @@ import 'pairing.dart';
 import 'remote_gateway.dart';
 import 'update_check.dart';
 import 'vault_models.dart';
+import 'composer.dart';
 import 'remote_transcript.dart';
 import 'saved_desktops.dart';
 import 'social_models.dart';
@@ -58,6 +59,16 @@ class RemoteController extends ChangeNotifier {
   /// Last notice about attachments (e.g. the model cannot see images).
   String? attachNotice;
   int _attachSeq = 0;
+
+  // composer controls mirrored from the desktop (skills, model, reasoning,
+  // "/" and "@"); null = the PC has no catalog (older version) → plain composer
+  ComposerCatalog? composer;
+  /// Skills picked for the next prompt (cleared after sending, like the
+  /// desktop's `/skill` references that live in the message text).
+  final List<String> selectedSkills = [];
+  /// Reasoning effort for the following prompts; null = the PC's default.
+  String? reasoningEffort;
+  bool modelSwitching = false;
 
   /// Widget-test harness only: vault data without a gateway.
   @visibleForTesting
@@ -200,6 +211,9 @@ class RemoteController extends ChangeNotifier {
     serverInfo = const {};
     office = null;
     officeError = null;
+    composer = null;
+    selectedSkills.clear();
+    reasoningEffort = null;
     status = RemoteStatus.disconnected;
   }
 
@@ -302,7 +316,76 @@ class RemoteController extends ChangeNotifier {
 
   /// Snapshots after (re)connecting; from here on the PC pushes changes.
   Future<void> refreshAll() async {
-    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance()]);
+    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer()]);
+  }
+
+  // ------------------------------------------------------------- composer --
+  Future<void> refreshComposer() async {
+    final g = gateway;
+    if (g == null) return;
+    final c = await g.composerCatalog();
+    if (gateway != g) return;
+    composer = c;
+    if (c != null) {
+      selectedSkills.removeWhere((s) => !c.skills.any((k) => k.name == s));
+      if (reasoningEffort != null && !c.reasoningLevels.contains(reasoningEffort)) reasoningEffort = null;
+    } else {
+      selectedSkills.clear();
+      reasoningEffort = null;
+    }
+    notifyListeners();
+  }
+
+  void toggleSkill(String name) {
+    if (!selectedSkills.remove(name)) selectedSkills.add(name);
+    notifyListeners();
+  }
+
+  void setSkills(Iterable<String> names) {
+    selectedSkills
+      ..clear()
+      ..addAll(names);
+    notifyListeners();
+  }
+
+  void setReasoningEffort(String? level) {
+    reasoningEffort = (level == null || level == 'default') ? null : level;
+    notifyListeners();
+  }
+
+  /// Switch the PC's model (global, like the desktop model pill). Returns an
+  /// error to show, or null.
+  Future<String?> selectModel(String provider, String model) async {
+    final g = gateway, c = composer;
+    if (g == null || c == null) return 'Belum terhubung ke PC.';
+    modelSwitching = true;
+    notifyListeners();
+    try {
+      await g.setModel(provider: provider, model: model);
+      composer = c.withModel(provider, model);
+      return null;
+    } catch (e) {
+      return _friendly('$e');
+    } finally {
+      modelSwitching = false;
+      notifyListeners();
+    }
+  }
+
+  /// "@" / "/" suggestions from the PC (empty when it has no catalog).
+  Future<List<ComposerSuggestion>> completeMentions(String query) async {
+    final g = gateway, c = composer;
+    if (g == null || c == null) return const [];
+    final q = query.toLowerCase();
+    final starters = [for (final m in c.mentions) if (q.isEmpty || m.text.toLowerCase().contains(q)) m];
+    // `@url:` / `@git:` values are typed, not looked up.
+    if (q.startsWith('url:') || q.startsWith('git:')) return starters;
+    try {
+      final files = await g.composerComplete('path', query, sessionId: runtimeId);
+      return [...files, ...starters];
+    } catch (_) {
+      return starters;
+    }
   }
 
   Future<void> _loadAppearance() async {
@@ -408,12 +491,17 @@ class RemoteController extends ChangeNotifier {
     if (runtimeId == null) await newChat();
     final rid = runtimeId;
     if (rid == null) return error ?? 'Gagal membuat sesi di PC.';
-    transcript.addUser(t, attachments: [for (final a in ready) a.remote!.toJson()]);
+    final extra = composerSubmitFields(composer, skills: List.of(selectedSkills), reasoningEffort: reasoningEffort);
+    selectedSkills.clear();
+    // The PC prefixes picked skills as `/name` (the desktop's text form); show
+    // the turn the same way right away.
+    final skills = [for (final s in (extra['skills'] as List? ?? const [])) '/$s'].where((s) => !t.split(RegExp(r'\s+')).contains(s));
+    transcript.addUser(skills.isEmpty ? t : '${skills.join(' ')} $t', attachments: [for (final a in ready) a.remote!.toJson()]);
     pendingAttachments.clear();
     attachNotice = null;
     notifyListeners();
     try {
-      final res = await g.submit(rid, t, attachments: [for (final a in ready) a.remote!.id]);
+      final res = await g.submit(rid, t, attachments: [for (final a in ready) a.remote!.id], extra: extra);
       if (res is Map && res['notice'] != null) {
         attachNotice = '${res['notice']}';
         notifyListeners();
