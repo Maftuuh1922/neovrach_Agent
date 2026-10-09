@@ -56,12 +56,12 @@
                 android:layout_weight="1"
                 android:background="@drawable/nvw_tile"
                 android:orientation="vertical"
-                android:paddingStart="10dp"
+                android:paddingStart="9dp"
                 android:paddingTop="6dp"
-                android:paddingEnd="8dp"
+                android:paddingEnd="3dp"
                 android:paddingBottom="7dp">
                 <TextView android:id="@+id/nvs_s1_num" android:layout_width="wrap_content" android:layout_height="wrap_content" android:includeFontPadding="false" android:text="2" android:textColor="@color/nvw_text" android:textSize="21sp" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:ellipsize="end" android:maxLines="1" android:text="bekerja" android:textColor="@color/nvw_muted" android:textSize="10.5sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:ellipsize="end" android:maxLines="1" android:text="bekerja" android:textColor="@color/nvw_muted" android:textSize="10sp" />
             </LinearLayout>
             <LinearLayout
                 android:id="@+id/nvs_s2"
@@ -71,12 +71,12 @@
                 android:layout_marginStart="6dp"
                 android:background="@drawable/nvw_tile"
                 android:orientation="vertical"
-                android:paddingStart="10dp"
+                android:paddingStart="9dp"
                 android:paddingTop="6dp"
-                android:paddingEnd="8dp"
+                android:paddingEnd="3dp"
                 android:paddingBottom="7dp">
                 <TextView android:id="@+id/nvs_s2_num" android:layout_width="wrap_content" android:layout_height="wrap_content" android:includeFontPadding="false" android:text="1" android:textColor="@color/nvw_text" android:textSize="21sp" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:ellipsize="end" android:maxLines="1" android:text="menunggu" android:textColor="@color/nvw_muted" android:textSize="10.5sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:ellipsize="end" android:maxLines="1" android:text="menunggu" android:textColor="@color/nvw_muted" android:textSize="10sp" />
             </LinearLayout>
         </LinearLayout>
         <TextView
