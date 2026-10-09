@@ -197,6 +197,9 @@ class LiveSession:
                 self.status = "idle"
                 self.gw.broadcast_event("session.status", self.id, {"status": "idle"})
                 self.gw.broadcast_event("sessions.changed", None, {})
+                queued = self.rec.get("queued") or []
+                if queued:  # a message steered in while the turn ran
+                    self.submit(queued.pop(0))
         self.task = asyncio.create_task(run())
 
     def info(self) -> dict:
@@ -479,6 +482,10 @@ class Gateway:
             return {"ok": True, "logged_in": False}
         if method == "plugins.manage":
             return {"plugins": [], "user_count": 0, "bundled_count": 0, "ok": True}
+        from neovarch import rpc_extra
+        res = await rpc_extra.handle(self, method, p)
+        if res is not rpc_extra.NOT_HANDLED:
+            return res
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
 
