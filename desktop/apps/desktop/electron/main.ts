@@ -1285,10 +1285,18 @@ function acquireSingleInstanceLock(): boolean {
   return false
 }
 
+// `Neovarch.AppImage --version` prints the version and exits before
+// any lock, window or backend: scripts and the installer probe it.
+if (process.argv.slice(1).includes('--version')) {
+  process.stdout.write(`${app.getName()} ${app.getVersion()}\n`)
+  app.exit(0)
+  process.exit(0)
+}
+
 const isPrimaryInstance: boolean = acquireSingleInstanceLock()
 
 if (!isPrimaryInstance) {
-  console.error('[hermes] another Hermes Desktop instance holds the single-instance lock; exiting')
+  console.error('[neovarch] another Neovarch instance holds the single-instance lock; exiting')
   app.exit(0)
 }
 
