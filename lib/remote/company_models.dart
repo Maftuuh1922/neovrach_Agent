@@ -3,11 +3,31 @@
 // ones the desktop Kantor uses). The PC pushes `company.changed`; the phone
 // re-reads. See docs/company-flow-design.md in the core branch.
 
+import '../data/gateway_client.dart' show RpcError, jsonRpcMethodNotFound;
+
 /// What the company screens need from the PC. [RemoteGateway] implements it;
 /// widget tests pass a fake through `RemoteController.debugCompanyApi`.
 abstract class CompanyApi {
   /// Calls `company.<method>` with [params]; throws on an RPC error.
   Future<dynamic> companyCall(String method, [Map<String, dynamic> params = const {}]);
+}
+
+/// True when [e] says the paired core has no `company.*` RPCs at all (an
+/// older Neovarch on the PC): JSON-RPC -32601 / "not implemented".
+bool isCompanyUnsupported(Object e) {
+  if (e is RpcError && e.code == jsonRpcMethodNotFound) return true;
+  final s = '$e';
+  return s.contains('-32601') || s.contains('not implemented');
+}
+
+/// Indonesian text for an error from a `company.*` call.
+String companyErrorText(Object e) {
+  if (isCompanyUnsupported(e)) return 'Core di PC belum punya fitur Perusahaan. Perbarui Neovarch di PC.';
+  final s = '$e';
+  if (s.contains('metode tidak dikenal')) return 'Fitur ini belum ada di core PC. Perbarui Neovarch di PC.';
+  if (s.contains('TimeoutException') || s.contains('timed out')) return 'PC tidak menjawab. Cek koneksi lalu coba lagi.';
+  if (s.contains('SocketException') || s.contains('not connected') || s.contains('closed')) return 'Koneksi ke PC terputus.';
+  return s.replaceFirst(RegExp(r'^(Exception|RpcError|GatewayError|StateError)[^:]*:\s*'), '');
 }
 
 int _i(Object? v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0);
@@ -73,10 +93,21 @@ class CompanyAgent {
     this.ticketStatus,
     this.budget = const BudgetState(),
     this.sessionId,
+    this.role = 'pegawai',
+    this.jobDescription = '',
+    this.model = '',
+    this.budgetMonthlyCents = 0,
+    this.budgetMonthlyTokens = 0,
   });
   final int id;
   final String name;
   final String title;
+  final String role;
+  final String jobDescription;
+  final String model;
+  /// Monthly limits on the PC (0 = no limit).
+  final int budgetMonthlyCents;
+  final int budgetMonthlyTokens;
   final String status;
   final int? reportsTo;
   final String? pauseReason;
@@ -100,6 +131,11 @@ class CompanyAgent {
       ticketStatus: cur.isEmpty ? null : _s(cur['status']),
       budget: BudgetState.fromJson(_m(j['budget'])),
       sessionId: j['session_id'] == null ? null : _s(j['session_id']),
+      role: _s(j['role']).isEmpty ? 'pegawai' : _s(j['role']),
+      jobDescription: _s(j['job_description']),
+      model: _s(j['model']),
+      budgetMonthlyCents: _i(j['budget_monthly_cents']),
+      budgetMonthlyTokens: _i(j['budget_monthly_tokens']),
     );
   }
 
@@ -118,8 +154,20 @@ class CompanySnapshot {
     this.ticketCounts = const {},
     this.budget = const BudgetState(),
     this.active = const {},
+    this.goals = const [],
+    this.projects = const [],
+    this.routines = const [],
+    this.requireHireApproval = false,
+    this.budgetMonthlyCents = 0,
+    this.budgetMonthlyTokens = 0,
   });
   final bool exists;
+  final List<CompanyGoal> goals;
+  final List<CompanyProject> projects;
+  final List<CompanyRoutine> routines;
+  final bool requireHireApproval;
+  final int budgetMonthlyCents;
+  final int budgetMonthlyTokens;
   final String name;
   final String mission;
   final bool autorun;
@@ -142,8 +190,36 @@ class CompanySnapshot {
       ticketCounts: {for (final e in _m(j['ticket_counts']).entries) e.key: _i(e.value)},
       budget: BudgetState.fromJson(_m(j['budget'])),
       active: {for (final a in (j['active_agents'] is List ? j['active_agents'] as List : const [])) _i(a)},
+      goals: [for (final g in _l(j['goals'])) CompanyGoal.fromJson(g)],
+      projects: [for (final p in _l(j['projects'])) CompanyProject.fromJson(p)],
+      routines: [for (final r in _l(j['routines'])) CompanyRoutine.fromJson(r)],
+      requireHireApproval: c['require_hire_approval'] == true || c['require_hire_approval'] == 1,
+      budgetMonthlyCents: _i(c['budget_monthly_cents']),
+      budgetMonthlyTokens: _i(c['budget_monthly_tokens']),
     );
   }
+
+  /// Goals as a tree under the mission: parents before children, with depth.
+  List<(CompanyGoal, int)> get goalTree {
+    final ids = {for (final g in goals) g.id};
+    final out = <(CompanyGoal, int)>[];
+    final seen = <int>{};
+    void walk(int? parent, int depth) {
+      for (final g in goals) {
+        final key = g.parentId != null && ids.contains(g.parentId) ? g.parentId : null;
+        if (key != parent || seen.contains(g.id)) continue;
+        seen.add(g.id);
+        out.add((g, depth));
+        walk(g.id, depth + 1);
+      }
+    }
+
+    walk(null, 0);
+    return out;
+  }
+
+  String agentName(int? id) => id == null ? '' : agents.where((a) => a.id == id).map((a) => a.name).firstOrNull ?? '';
+  String projectName(int? id) => id == null ? '' : projects.where((p) => p.id == id).map((p) => p.name).firstOrNull ?? '';
 
   /// Managers before their reports, with depth (strict tree in the core).
   List<(CompanyAgent, int)> get orgTree {
@@ -166,6 +242,96 @@ class CompanySnapshot {
 
   bool isRunning(CompanyAgent a) => a.status == 'running' || active.contains(a.id);
 }
+
+class CompanyGoal {
+  const CompanyGoal({required this.id, required this.title, this.parentId, this.description = '', this.status = 'active'});
+  final int id;
+  final int? parentId;
+  final String title;
+  final String description;
+  final String status;
+  factory CompanyGoal.fromJson(Map<String, dynamic> j) => CompanyGoal(
+        id: _i(j['id']),
+        parentId: _s(j['parent_id']).isEmpty || _i(j['parent_id']) == 0 ? null : _i(j['parent_id']),
+        title: _s(j['title']),
+        description: _s(j['description']),
+        status: _s(j['status']).isEmpty ? 'active' : _s(j['status']),
+      );
+  bool get done => status == 'done' || status == 'achieved';
+}
+
+class CompanyProject {
+  const CompanyProject({required this.id, required this.name, this.goalId, this.description = '', this.status = 'active', this.budgetMonthlyCents = 0});
+  final int id;
+  final int? goalId;
+  final String name;
+  final String description;
+  final String status;
+  final int budgetMonthlyCents;
+  factory CompanyProject.fromJson(Map<String, dynamic> j) => CompanyProject(
+        id: _i(j['id']),
+        goalId: _s(j['goal_id']).isEmpty || _i(j['goal_id']) == 0 ? null : _i(j['goal_id']),
+        name: _s(j['name']),
+        description: _s(j['description']),
+        status: _s(j['status']).isEmpty ? 'active' : _s(j['status']),
+        budgetMonthlyCents: _i(j['budget_monthly_cents']),
+      );
+}
+
+class CompanyRoutine {
+  const CompanyRoutine({
+    required this.id,
+    required this.name,
+    required this.schedule,
+    this.title = '',
+    this.description = '',
+    this.agentId,
+    this.projectId,
+    this.enabled = true,
+    this.nextRunAt,
+  });
+  final int id;
+  final String name;
+  final String schedule;
+  final String title;
+  final String description;
+  final int? agentId;
+  final int? projectId;
+  final bool enabled;
+  /// Unix seconds (PC clock), null when it will not run again.
+  final double? nextRunAt;
+  factory CompanyRoutine.fromJson(Map<String, dynamic> j) => CompanyRoutine(
+        id: _i(j['id']),
+        name: _s(j['name']),
+        schedule: _s(j['schedule']),
+        title: _s(j['title']),
+        description: _s(j['description']),
+        agentId: _s(j['agent_id']).isEmpty || _i(j['agent_id']) == 0 ? null : _i(j['agent_id']),
+        projectId: _s(j['project_id']).isEmpty || _i(j['project_id']) == 0 ? null : _i(j['project_id']),
+        enabled: !(j['enabled'] == false || j['enabled'] == 0),
+        nextRunAt: j['next_run_at'] is num ? (j['next_run_at'] as num).toDouble() : null,
+      );
+
+  /// "Jalan berikutnya 12 Okt 08:00" in the phone's local time.
+  String get nextLabel {
+    final t = nextRunAt;
+    if (!enabled) return 'nonaktif';
+    if (t == null) return 'tidak dijadwalkan lagi';
+    final d = DateTime.fromMillisecondsSinceEpoch((t * 1000).round());
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'berikutnya ${d.day} ${months[d.month - 1]} ${two(d.hour)}:${two(d.minute)}';
+  }
+}
+
+/// Dollars typed on the phone ("2.5", "2,50", "") → whole cents (0 = no limit).
+int dollarsToCents(String text) {
+  final v = double.tryParse(text.trim().replaceAll(',', '.').replaceAll(r'$', ''));
+  return v == null || v <= 0 ? 0 : (v * 100).round();
+}
+
+/// Whole cents → the editable dollars text ("" for no limit).
+String centsToDollars(int cents) => cents <= 0 ? '' : (cents % 100 == 0 ? '${cents ~/ 100}' : (cents / 100).toStringAsFixed(2));
 
 class CompanyTicket {
   const CompanyTicket({
@@ -309,6 +475,19 @@ class CompanyClient {
   Future<void> comment(int id, String body) => api.companyCall('ticket.comment', {'id': id, 'body': body});
   Future<void> createTicket(String title, int? assigneeId) =>
       api.companyCall('ticket.save', {'title': title, 'assignee_id': ?assigneeId});
+  /// New agent (a hire approval when the company requires it) or edits one.
+  /// Returns the agent as the PC saved it (status `pending_approval` when
+  /// the hire waits for approval).
+  Future<CompanyAgent> saveAgent(Map<String, dynamic> body) async => CompanyAgent.fromJson(_m(await api.companyCall('agent.save', body)));
+  Future<void> terminate(int id) => api.companyCall('agent.terminate', {'id': id});
+  Future<void> updateCompany(Map<String, dynamic> fields) => api.companyCall('update', fields);
+  Future<void> saveGoal(Map<String, dynamic> body) => api.companyCall('goal.save', body);
+  Future<void> deleteGoal(int id) => api.companyCall('goal.delete', {'id': id});
+  Future<void> saveProject(Map<String, dynamic> body) => api.companyCall('project.save', body);
+  Future<void> deleteProject(int id) => api.companyCall('project.delete', {'id': id});
+  Future<void> saveRoutine(Map<String, dynamic> body) => api.companyCall('routine.save', body);
+  Future<void> deleteRoutine(int id) => api.companyCall('routine.delete', {'id': id});
+  Future<void> triggerRoutine(int id) => api.companyCall('routine.trigger', {'id': id});
   Future<void> decide(int id, bool approve, {String note = ''}) =>
       api.companyCall('approval.decide', {'id': id, 'decision': approve ? 'approve' : 'reject', 'note': note});
 }

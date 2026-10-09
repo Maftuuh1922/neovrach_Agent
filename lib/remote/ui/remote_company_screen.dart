@@ -1,7 +1,10 @@
 // Kantor → Perusahaan: the PC's company of agents, controlled from the phone.
-// Org chart (wake / pause / resume / stop), tickets (move, assign, comment,
-// new), approvals (approve / reject) and costs. Everything goes through the
-// core's `company.*` RPCs; the PC pushes `company.changed` and this re-reads.
+// Org chart (hire, edit, budgets, wake / pause / resume / stop), tickets
+// (move, assign, comment, new), approvals (approve / reject), costs (company
+// and per-agent budgets) and Rencana (mission, goals, projects, routines).
+// Everything goes through the core's `company.*` RPCs; the PC pushes
+// `company.changed` and this re-reads. Offline PC, network errors and older
+// cores without the RPCs get an Indonesian notice with "Coba lagi".
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -13,9 +16,10 @@ import '../../ui/widgets/common.dart' show toast;
 import '../company_models.dart';
 import '../remote_controller.dart';
 import 'nv_widgets.dart';
+import 'remote_company_forms.dart';
 
 /// Sub-views of the Perusahaan screen.
-const companySegOrg = 0, companySegTickets = 1, companySegApprovals = 2, companySegCosts = 3;
+const companySegOrg = 0, companySegTickets = 1, companySegApprovals = 2, companySegCosts = 3, companySegPlan = 4;
 
 class RemoteCompanyScreen extends ConsumerStatefulWidget {
   const RemoteCompanyScreen({super.key, this.initialSegment = companySegOrg});
@@ -31,8 +35,11 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
   List<CompanyApproval> approvals = const [];
   CompanyCosts? costs;
   String? error;
+  bool unsupported = false;
+  bool loading = false;
   bool busy = false;
   int _rev = -1;
+  bool _wasConnected = false;
 
   CompanyClient? get _client {
     final api = ref.read(remoteProvider).companyApi;
@@ -41,7 +48,8 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
 
   Future<void> load() async {
     final c = _client;
-    if (c == null) return;
+    if (c == null || !ref.read(remoteProvider).connected) return;
+    if (mounted) setState(() => loading = true);
     try {
       final s = await c.snapshot();
       final results = s.exists ? await Future.wait([c.tickets(), c.approvals(), c.costs()]) : const [];
@@ -54,46 +62,69 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
           costs = results[2] as CompanyCosts;
         }
         error = null;
+        unsupported = false;
       });
     } catch (e) {
-      if (mounted) setState(() => error = _msg(e));
+      if (mounted) {
+        setState(() {
+          error = companyErrorText(e);
+          unsupported = isCompanyUnsupported(e);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
-  static String _msg(Object e) {
-    final s = '$e';
-    if (s.contains('-32601') || s.contains('not implemented')) return 'Core di PC belum punya fitur Perusahaan — perbarui Neovarch di PC.';
-    return s.replaceFirst(RegExp(r'^(Exception|RpcError|GatewayError)[^:]*:\s*'), '');
+  /// "Coba lagi": reconnects first when the PC dropped, then re-reads.
+  Future<void> retry() async {
+    final r = ref.read(remoteProvider);
+    if (!r.connected) {
+      await r.reconnect();
+      return; // connecting again triggers a load
+    }
+    if (unsupported) unawaited(r.probeCompany());
+    await load();
   }
 
-  /// Runs one action, toasts its error, then re-reads.
-  Future<void> act(Future<void> Function(CompanyClient c) fn, {String? done}) async {
+  /// Runs one action, toasts its result or error, then re-reads.
+  Future<void> act(Future<Object?> Function(CompanyClient c) fn, {String? done, String Function(Object? result)? doneFor}) async {
     final c = _client;
     if (c == null || busy) return;
+    if (!ref.read(remoteProvider).connected) {
+      toast(context, 'Belum terhubung ke PC.');
+      return;
+    }
     setState(() => busy = true);
     try {
-      await fn(c);
-      if (mounted && done != null) toast(context, done);
+      final res = await fn(c);
+      final msg = doneFor != null ? doneFor(res) : done;
+      if (mounted && msg != null) toast(context, msg);
     } catch (e) {
-      if (mounted) toast(context, _msg(e));
+      if (mounted) toast(context, companyErrorText(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
     await load();
   }
 
+  Widget _retryButton({Key? key}) => TextButton(key: key ?? const ValueKey('company-retry'), onPressed: loading ? null : retry, child: const Text('Coba lagi'));
+
   @override
   Widget build(BuildContext context) {
     final r = ref.watch(remoteProvider);
-    if (r.companyRevision != _rev) {
+    final reconnected = r.connected && !_wasConnected;
+    _wasConnected = r.connected;
+    if (r.companyRevision != _rev || reconnected) {
       _rev = r.companyRevision;
       scheduleMicrotask(load);
     }
     final s = snap;
+    final online = r.connected;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
-        onRefresh: load,
+        onRefresh: online ? load : retry,
         child: ListView(
           key: const ValueKey('company-list'),
           padding: EdgeInsets.only(bottom: 120 + MediaQuery.paddingOf(context).bottom),
@@ -102,17 +133,46 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
               kicker: 'perusahaan · ${r.desktop?.name ?? 'pc'}',
               title: s?.exists == true ? s!.name : 'Perusahaan',
               status: Text(
-                s == null
-                    ? 'memuat…'
-                    : !s.exists
-                        ? 'belum dibuat di PC'
-                        : '${s.agents.length} pegawai · ${s.pendingApprovals} menunggu persetujuan',
+                !online
+                    ? 'tidak terhubung ke PC'
+                    : s == null
+                        ? (error != null ? 'gagal memuat' : 'memuat…')
+                        : !s.exists
+                            ? 'belum dibuat di PC'
+                            : '${s.agents.length} pegawai · ${s.pendingApprovals} menunggu persetujuan',
                 style: NV.monoLabel(size: 10).copyWith(letterSpacing: 0.4),
               ),
-              actions: [NvIconButton(tooltip: 'Segarkan', icon: CupertinoIcons.arrow_clockwise, onPressed: r.connected ? load : null)],
+              actions: [NvIconButton(tooltip: 'Segarkan', icon: CupertinoIcons.arrow_clockwise, onPressed: online ? load : retry)],
             ),
-            if (error != null)
-              Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: NvNotice(error!)),
+            // ---- not loaded: offline / unsupported / failed / loading
+            if (s == null && !online)
+              NvEmpty(
+                key: const ValueKey('company-offline'),
+                kicker: 'perusahaan',
+                title: 'PC tidak terhubung',
+                body: 'Perusahaan berjalan di PC. Sambungkan HP ke PC (Wi-Fi yang sama atau Tailscale) untuk melihat dan mengaturnya.',
+                action: _retryButton(),
+              )
+            else if (s == null && error != null)
+              NvEmpty(
+                key: const ValueKey('company-error'),
+                kicker: 'perusahaan',
+                title: unsupported ? 'Belum didukung PC' : 'Gagal memuat perusahaan',
+                body: error,
+                action: _retryButton(),
+              )
+            else if (s == null)
+              const NvEmpty(key: ValueKey('company-loading'), title: 'Memuat perusahaan…'),
+            // ---- loaded, but the latest read failed or the PC dropped
+            if (s != null && (!online || error != null))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: NvNotice(
+                  !online ? 'Terputus dari PC. Yang tampil data terakhir.' : error!,
+                  key: const ValueKey('company-stale'),
+                  action: _retryButton(),
+                ),
+              ),
             if (s != null && !s.exists)
               NvEmpty(
                 kicker: 'kantor',
@@ -121,7 +181,7 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
                     'Tidak ada agen yang berjalan sendiri sampai kamu menyalakan “Jalan otomatis”.',
                 action: FilledButton(
                   key: const ValueKey('company-seed'),
-                  onPressed: busy || !r.connected ? null : () => act((c) => c.seedDemo(), done: 'Contoh perusahaan dibuat'),
+                  onPressed: busy || !online ? null : () => act((c) => c.seedDemo(), done: 'Contoh perusahaan dibuat'),
                   child: const Text('Buat contoh perusahaan'),
                 ),
               ),
@@ -140,14 +200,14 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
                   title: const Text('Jalan otomatis'),
                   subtitle: Text('Agen bangun sendiri saat ada tiket, komentar, atau jadwal', style: TextStyle(fontSize: 12, color: NV.muted)),
                   value: s.autorun,
-                  onChanged: busy ? null : (v) => act((c) => c.setAutorun(v)),
+                  onChanged: busy || !online ? null : (v) => act((c) => c.setAutorun(v)),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                 child: NvGlassSegmented(
                   key: const ValueKey('company-segments'),
-                  labels: ['Organisasi', 'Tiket', 'Setujui${approvals.isEmpty ? '' : ' (${approvals.length})'}', 'Biaya'],
+                  labels: ['Organisasi', 'Tiket', 'Setujui${approvals.isEmpty ? '' : ' (${approvals.length})'}', 'Biaya', 'Rencana'],
                   index: seg,
                   onChanged: (i) => setState(() => seg = i),
                 ),
@@ -155,7 +215,8 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
               ...switch (seg) {
                 companySegTickets => _tickets(s),
                 companySegApprovals => _approvals(),
-                companySegCosts => _costs(),
+                companySegCosts => _costs(s),
+                companySegPlan => _plan(s),
                 _ => _org(s),
               },
             ],
@@ -165,9 +226,18 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
     );
   }
 
+  bool get _locked => busy || !ref.read(remoteProvider).connected;
+
   // ------------------------------------------------------------------ org --
   List<Widget> _org(CompanySnapshot s) => [
-        NvSection('struktur organisasi', count: s.agents.length),
+        NvSection('organisasi',
+            count: s.agents.length,
+            trailing: TextButton.icon(
+              key: const ValueKey('company-hire'),
+              onPressed: _locked ? null : () => _hire(s),
+              icon: const Icon(CupertinoIcons.person_add, size: 16),
+              label: const Text('Rekrut'),
+            )),
         for (final (a, depth) in s.orgTree)
           NvPanel(
             key: ValueKey('company-agent-${a.id}'),
@@ -188,33 +258,61 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
               ]),
               const SizedBox(height: 6),
               Text(
-                a.ticketKey != null ? '${a.ticketKey} · ${a.ticketTitle} (${ticketStatusLabel[a.ticketStatus] ?? a.ticketStatus})' : 'Tidak memegang tiket',
+                a.status == 'pending_approval'
+                    ? 'Rekrutmen menunggu persetujuanmu di Setujui'
+                    : a.ticketKey != null
+                        ? '${a.ticketKey} · ${a.ticketTitle} (${ticketStatusLabel[a.ticketStatus] ?? a.ticketStatus})'
+                        : 'Tidak memegang tiket',
                 style: TextStyle(fontSize: 12.5, color: NV.muted),
               ),
               if (a.budget.pct != null) ...[
                 const SizedBox(height: 6),
-                _Meter(pct: a.budget.pct!, level: a.budget.level),
+                CompanyMeter(pct: a.budget.pct!, level: a.budget.level),
               ],
               Wrap(spacing: 4, children: [
                 if (!s.isRunning(a) && !a.paused && a.status != 'pending_approval')
-                  TextButton(onPressed: busy ? null : () => act((c) => c.wake(a.id), done: '${a.name} dibangunkan'), child: const Text('Bangunkan')),
+                  TextButton(onPressed: _locked ? null : () => act((c) => c.wake(a.id), done: '${a.name} dibangunkan'), child: const Text('Bangunkan')),
                 if (s.isRunning(a))
-                  TextButton(onPressed: busy ? null : () => act((c) => c.stop(a.id), done: '${a.name} dihentikan'), child: const Text('Hentikan')),
+                  TextButton(onPressed: _locked ? null : () => act((c) => c.stop(a.id), done: '${a.name} dihentikan'), child: const Text('Hentikan')),
                 if (a.paused)
-                  TextButton(onPressed: busy ? null : () => act((c) => c.resume(a.id), done: '${a.name} lanjut'), child: const Text('Lanjutkan'))
+                  TextButton(onPressed: _locked ? null : () => act((c) => c.resume(a.id), done: '${a.name} lanjut'), child: const Text('Lanjutkan'))
                 else if (a.status != 'pending_approval')
-                  TextButton(onPressed: busy ? null : () => act((c) => c.pause(a.id), done: '${a.name} dijeda'), child: const Text('Jeda')),
+                  TextButton(onPressed: _locked ? null : () => act((c) => c.pause(a.id), done: '${a.name} dijeda'), child: const Text('Jeda')),
+                TextButton(
+                  key: ValueKey('company-edit-agent-${a.id}'),
+                  onPressed: _locked ? null : () => _editAgent(s, a),
+                  child: const Text('Ubah'),
+                ),
               ]),
             ]),
           ),
-        if (s.agents.isEmpty) const NvEmpty(title: 'Belum ada pegawai', body: 'Rekrut pegawai dari Kantor di PC.'),
+        if (s.agents.isEmpty) const NvEmpty(title: 'Belum ada pegawai', body: 'Ketuk Rekrut untuk menambah pegawai pertama.'),
       ];
+
+  Future<void> _hire(CompanySnapshot s) async {
+    final body = await showAgentForm(context, snap: s);
+    if (body == null) return;
+    await act((c) => c.saveAgent(body),
+        doneFor: (a) => a is CompanyAgent && a.status == 'pending_approval'
+            ? 'Rekrut ${a.name} menunggu persetujuan di Setujui'
+            : '${body['name']} direkrut');
+  }
+
+  Future<void> _editAgent(CompanySnapshot s, CompanyAgent a) async {
+    final body = await showAgentForm(context, snap: s, agent: a);
+    if (body == null) return;
+    if (body['terminate'] == true) {
+      await act((c) => c.terminate(a.id), done: '${a.name} diberhentikan');
+      return;
+    }
+    await act((c) => c.saveAgent(body), done: 'Profil ${a.name} disimpan');
+  }
 
   // -------------------------------------------------------------- tickets --
   List<Widget> _tickets(CompanySnapshot s) => [
         NvSection('tiket', count: tickets.where((t) => t.status != 'cancelled').length, trailing: TextButton.icon(
           key: const ValueKey('company-new-ticket'),
-          onPressed: busy ? null : () => _newTicket(s),
+          onPressed: _locked ? null : () => _newTicket(s),
           icon: const Icon(CupertinoIcons.add, size: 16),
           label: const Text('Baru'),
         )),
@@ -289,13 +387,17 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
     }
   }
 
-  Future<void> _openTicket(CompanySnapshot s, CompanyTicket t) => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        builder: (ctx) => _TicketSheet(client: _client!, ticket: t, snap: s, onChanged: load),
-      );
+  Future<void> _openTicket(CompanySnapshot s, CompanyTicket t) {
+    final c = _client;
+    if (c == null) return Future.value();
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => _TicketSheet(client: c, ticket: t, snap: s, onChanged: load),
+    );
+  }
 
   // ------------------------------------------------------------ approvals --
   List<Widget> _approvals() => [
@@ -312,46 +414,241 @@ class _RemoteCompanyScreenState extends ConsumerState<RemoteCompanyScreen> {
               if (ap.detail.isNotEmpty) ...[const SizedBox(height: 6), Text(ap.detail, style: TextStyle(fontSize: 13, height: 1.4, color: NV.muted))],
               const SizedBox(height: 10),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                TextButton(onPressed: busy ? null : () => act((c) => c.decide(ap.id, false), done: 'Ditolak'), child: const Text('Tolak')),
+                TextButton(onPressed: _locked ? null : () => act((c) => c.decide(ap.id, false), done: 'Ditolak'), child: const Text('Tolak')),
                 const SizedBox(width: 6),
-                FilledButton(onPressed: busy ? null : () => act((c) => c.decide(ap.id, true), done: 'Disetujui'), child: const Text('Setujui')),
+                FilledButton(onPressed: _locked ? null : () => act((c) => c.decide(ap.id, true), done: 'Disetujui'), child: const Text('Setujui')),
               ]),
             ]),
           ),
       ];
 
   // ---------------------------------------------------------------- costs --
-  List<Widget> _costs() {
+  List<Widget> _costs(CompanySnapshot s) {
     final c = costs;
     if (c == null) return const [NvEmpty(title: 'Memuat biaya…')];
+    String limit(int cents, int tokens) => [
+          if (cents > 0) 'batas ${formatCents(cents.toDouble())}',
+          if (tokens > 0) 'batas ${formatTokens(tokens)}',
+        ].join(' · ');
+    final companyLimit = limit(s.budgetMonthlyCents, s.budgetMonthlyTokens);
     return [
-      NvSection('biaya · ${c.month}'),
+      NvSection('biaya · ${c.month}',
+          trailing: TextButton.icon(
+            key: const ValueKey('company-budget-company'),
+            onPressed: _locked ? null : () => _editBudget(s, null),
+            icon: const Icon(CupertinoIcons.slider_horizontal_3, size: 16),
+            label: const Text('Atur'),
+          )),
       NvPanel(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${formatCents(c.total.cents)} · ${formatTokens(c.total.tokens)}', style: NV.display(size: 26)),
           const SizedBox(height: 6),
-          if (c.total.pct != null) _Meter(pct: c.total.pct!, level: c.total.level) else Text('tanpa batas anggaran', style: TextStyle(fontSize: 12, color: NV.muted)),
+          if (c.total.pct != null) CompanyMeter(pct: c.total.pct!, level: c.total.level) else Text('tanpa batas anggaran', style: TextStyle(fontSize: 12, color: NV.muted)),
+          if (companyLimit.isNotEmpty) ...[const SizedBox(height: 4), Text(companyLimit, style: TextStyle(fontSize: 11.5, color: NV.faint))],
         ]),
       ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+        child: Text('PER PEGAWAI · KETUK UNTUK ATUR ANGGARAN', style: NV.monoLabel(size: 10, color: NV.muted)),
+      ),
       for (final row in c.byAgent)
+        Builder(builder: (context) {
+          final a = s.agents.where((a) => a.name == row.name).firstOrNull;
+          final lim = a == null ? '' : limit(a.budgetMonthlyCents, a.budgetMonthlyTokens);
+          return NvPanel(
+            key: ValueKey('company-cost-${row.name}'),
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.all(12),
+            onTap: a == null || _locked ? null : () => _editBudget(s, a),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(row.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                Text('${formatCents(row.cents)} · ${formatTokens(row.tokens)}', style: NV.code(size: 11, color: NV.muted)),
+              ]),
+              if (row.pct != null) ...[const SizedBox(height: 6), CompanyMeter(pct: row.pct!, level: row.pct! >= 100 ? 'exceeded' : (row.pct! >= 80 ? 'warning' : 'ok'))],
+              const SizedBox(height: 4),
+              Text(lim.isEmpty ? 'tanpa batas' : lim, style: TextStyle(fontSize: 11.5, color: NV.faint)),
+            ]),
+          );
+        }),
+    ];
+  }
+
+  Future<void> _editBudget(CompanySnapshot s, CompanyAgent? a) async {
+    final b = await showBudgetForm(
+      context,
+      title: a == null ? 'Anggaran perusahaan' : 'Anggaran ${a.name}',
+      cents: a?.budgetMonthlyCents ?? s.budgetMonthlyCents,
+      tokens: a?.budgetMonthlyTokens ?? s.budgetMonthlyTokens,
+    );
+    if (b == null) return;
+    if (a == null) {
+      await act((c) => c.updateCompany(b), done: 'Anggaran perusahaan disimpan');
+    } else {
+      await act((c) => c.saveAgent({'id': a.id, ...b}), done: 'Anggaran ${a.name} disimpan');
+    }
+  }
+
+  // ----------------------------------------------------------------- plan --
+  List<Widget> _plan(CompanySnapshot s) => [
+        NvSection('misi',
+            trailing: TextButton.icon(
+              key: const ValueKey('company-edit-mission'),
+              onPressed: _locked ? null : () => _editMission(s),
+              icon: const Icon(CupertinoIcons.pencil, size: 16),
+              label: const Text('Ubah'),
+            )),
         NvPanel(
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text(row.name, style: const TextStyle(fontWeight: FontWeight.w600))),
-              Text('${formatCents(row.cents)} · ${formatTokens(row.tokens)}', style: NV.code(size: 11, color: NV.muted)),
-            ]),
-            if (row.pct != null) ...[const SizedBox(height: 6), _Meter(pct: row.pct!, level: row.pct! >= 100 ? 'exceeded' : 'ok')],
-          ]),
+          padding: const EdgeInsets.all(14),
+          child: Text(s.mission.isEmpty ? 'Belum ada misi. Misi jadi “kenapa” di setiap tiket.' : s.mission,
+              style: TextStyle(fontSize: 14, height: 1.4, color: s.mission.isEmpty ? NV.muted : NV.text)),
         ),
-    ];
+        // goals
+        NvSection('tujuan',
+            count: s.goals.length,
+            trailing: TextButton.icon(
+              key: const ValueKey('company-new-goal'),
+              onPressed: _locked ? null : () => _editGoal(s, null),
+              icon: const Icon(CupertinoIcons.add, size: 16),
+              label: const Text('Baru'),
+            )),
+        for (final (g, depth) in s.goalTree)
+          NvPanel(
+            key: ValueKey('company-goal-${g.id}'),
+            margin: EdgeInsets.fromLTRB(16.0 + depth * 18, 0, 16, 8),
+            padding: const EdgeInsets.all(12),
+            onTap: _locked ? null : () => _editGoal(s, g),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(g.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5))),
+                NvPill(goalStatusLabel[g.status] ?? g.status),
+              ]),
+              if (g.description.isNotEmpty) ...[const SizedBox(height: 4), Text(g.description, style: TextStyle(fontSize: 12.5, color: NV.muted))],
+              for (final p in s.projects.where((p) => p.goalId == g.id))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('▸ ${p.name}', style: TextStyle(fontSize: 12.5, color: NV.muted)),
+                ),
+            ]),
+          ),
+        if (s.goals.isEmpty) const NvEmpty(title: 'Belum ada tujuan', body: 'Pecah misi jadi tujuan; tiket dan proyek menempel ke tujuan.'),
+        // projects
+        NvSection('proyek',
+            count: s.projects.length,
+            trailing: TextButton.icon(
+              key: const ValueKey('company-new-project'),
+              onPressed: _locked ? null : () => _editProject(s, null),
+              icon: const Icon(CupertinoIcons.add, size: 16),
+              label: const Text('Baru'),
+            )),
+        for (final p in s.projects)
+          NvPanel(
+            key: ValueKey('company-project-${p.id}'),
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.all(12),
+            onTap: _locked ? null : () => _editProject(s, p),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5))),
+                NvPill(projectStatusLabel[p.status] ?? p.status),
+              ]),
+              const SizedBox(height: 4),
+              Text(
+                [
+                  if (p.goalId != null) 'tujuan: ${s.goals.where((g) => g.id == p.goalId).map((g) => g.title).firstOrNull ?? '-'}',
+                  p.budgetMonthlyCents > 0 ? 'anggaran ${formatCents(p.budgetMonthlyCents.toDouble())}/bln' : 'tanpa batas anggaran',
+                ].join(' · '),
+                style: TextStyle(fontSize: 12, color: NV.muted),
+              ),
+            ]),
+          ),
+        if (s.projects.isEmpty) const NvEmpty(title: 'Belum ada proyek'),
+        // routines
+        NvSection('rutinitas',
+            count: s.routines.length,
+            trailing: TextButton.icon(
+              key: const ValueKey('company-new-routine'),
+              onPressed: _locked ? null : () => _editRoutine(s, null),
+              icon: const Icon(CupertinoIcons.add, size: 16),
+              label: const Text('Baru'),
+            )),
+        for (final rt in s.routines)
+          NvPanel(
+            key: ValueKey('company-routine-${rt.id}'),
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
+            onTap: _locked ? null : () => _editRoutine(s, rt),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(rt.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${rt.schedule} · ${rt.nextLabel}${rt.agentId != null ? ' · ${s.agentName(rt.agentId)}' : ''}',
+                      style: TextStyle(fontSize: 12, color: NV.muted),
+                    ),
+                  ]),
+                ),
+                Switch(
+                  key: ValueKey('company-routine-enabled-${rt.id}'),
+                  value: rt.enabled,
+                  onChanged: _locked ? null : (v) => act((c) => c.saveRoutine({'id': rt.id, 'enabled': v}), done: v ? '${rt.name} aktif' : '${rt.name} nonaktif'),
+                ),
+              ]),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: ValueKey('company-routine-run-${rt.id}'),
+                  onPressed: _locked ? null : () => act((c) => c.triggerRoutine(rt.id), done: 'Tiket dari ${rt.name} dibuat'),
+                  child: const Text('Jalankan sekarang'),
+                ),
+              ),
+            ]),
+          ),
+        if (s.routines.isEmpty) const NvEmpty(title: 'Belum ada rutinitas', body: 'Rutinitas membuat tiket terjadwal, mis. laporan setiap pagi.'),
+      ];
+
+  Future<void> _editMission(CompanySnapshot s) async {
+    final b = await showMissionForm(context, name: s.name, mission: s.mission);
+    if (b != null) await act((c) => c.updateCompany(b), done: 'Misi disimpan');
+  }
+
+  Future<void> _editGoal(CompanySnapshot s, CompanyGoal? g) async {
+    final b = await showGoalForm(context, snap: s, goal: g);
+    if (b == null) return;
+    if (b['delete'] == true) {
+      await act((c) => c.deleteGoal(g!.id), done: 'Tujuan dihapus');
+    } else {
+      await act((c) => c.saveGoal(b), done: g == null ? 'Tujuan ditambah' : 'Tujuan disimpan');
+    }
+  }
+
+  Future<void> _editProject(CompanySnapshot s, CompanyProject? p) async {
+    final b = await showProjectForm(context, snap: s, project: p);
+    if (b == null) return;
+    if (b['delete'] == true) {
+      await act((c) => c.deleteProject(p!.id), done: 'Proyek dihapus');
+    } else {
+      await act((c) => c.saveProject(b), done: p == null ? 'Proyek dibuat' : 'Proyek disimpan');
+    }
+  }
+
+  Future<void> _editRoutine(CompanySnapshot s, CompanyRoutine? rt) async {
+    final b = await showRoutineForm(context, snap: s, routine: rt);
+    if (b == null) return;
+    if (b['delete'] == true) {
+      await act((c) => c.deleteRoutine(rt!.id), done: 'Rutinitas dihapus');
+    } else {
+      await act((c) => c.saveRoutine(b), done: rt == null ? 'Rutinitas dibuat' : 'Rutinitas disimpan');
+    }
   }
 }
 
-class _Meter extends StatelessWidget {
-  const _Meter({required this.pct, required this.level});
+class CompanyMeter extends StatelessWidget {
+  const CompanyMeter({super.key, required this.pct, required this.level});
   final double pct;
   final String level;
   @override
@@ -384,6 +681,7 @@ class _TicketSheet extends StatefulWidget {
 
 class _TicketSheetState extends State<_TicketSheet> {
   TicketDetail? d;
+  String? error;
   final comment = TextEditingController();
   bool busy = false;
 
@@ -396,9 +694,14 @@ class _TicketSheetState extends State<_TicketSheet> {
   Future<void> _load() async {
     try {
       final x = await widget.client.ticket(widget.ticket.id);
-      if (mounted) setState(() => d = x);
+      if (mounted) {
+        setState(() {
+          d = x;
+          error = null;
+        });
+      }
     } catch (e) {
-      if (mounted) toast(context, '$e');
+      if (mounted) setState(() => error = companyErrorText(e));
     }
   }
 
@@ -410,7 +713,7 @@ class _TicketSheetState extends State<_TicketSheet> {
       await _load();
       await widget.onChanged();
     } catch (e) {
-      if (mounted) toast(context, '$e'.replaceFirst(RegExp(r'^[A-Za-z]*Error[^:]*:\s*'), ''));
+      if (mounted) toast(context, companyErrorText(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -424,6 +727,11 @@ class _TicketSheetState extends State<_TicketSheet> {
       child: SingleChildScrollView(
         child: Column(key: ValueKey('company-ticket-sheet-${t.key}'), crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           NvSheetTitle(kicker: '${t.key} · ${ticketStatusLabel[t.status] ?? t.status}', title: t.title),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: NvNotice(error!, action: TextButton(key: const ValueKey('company-ticket-retry'), onPressed: _load, child: const Text('Coba lagi'))),
+            ),
           if (t.description.isNotEmpty) Text(t.description, style: TextStyle(fontSize: 13, height: 1.4, color: NV.muted)),
           if (d != null && d!.ancestry.isNotEmpty) ...[
             const SizedBox(height: 8),

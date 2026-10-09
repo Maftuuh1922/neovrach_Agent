@@ -1,5 +1,6 @@
 // Kantor → Perusahaan on the phone: org chart, tickets, approvals, costs, all
 // through a fake `company.*` API (the PC core answers the same in production).
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:neovarch_agent/data/gateway_client.dart' show RpcError;
 import 'package:neovarch_agent/remote/appearance.dart';
 import 'package:neovarch_agent/remote/company_models.dart';
 import 'package:neovarch_agent/remote/remote_controller.dart';
@@ -14,6 +16,7 @@ import 'package:neovarch_agent/remote/remote_gateway.dart' show RemoteStatus;
 import 'package:neovarch_agent/remote/saved_desktops.dart';
 import 'package:neovarch_agent/remote/ui/remote_app.dart' show PaletteScope, themeFor;
 import 'package:neovarch_agent/remote/ui/remote_company_screen.dart';
+import 'package:neovarch_agent/remote/ui/remote_kantor_tab.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
 import 'package:neovarch_agent/theme/neovarch_mobile_theme.dart';
@@ -22,6 +25,9 @@ class FakeCompany implements CompanyApi {
   FakeCompany({this.exists = true});
   bool exists;
   final calls = <(String, Map<String, dynamic>)>[];
+
+  /// method → error thrown (once per entry in the list, then answers).
+  final failures = <String, List<Object>>{};
 
   Map<String, dynamic> agent(int id, String name, String title, int? reportsTo, {String status = 'idle', Map<String, dynamic>? ticket, String? pause}) => {
         'id': id,
@@ -33,17 +39,39 @@ class FakeCompany implements CompanyApi {
         'pause_reason': pause,
         'current_ticket': ticket,
         'budget': {'cents': 0, 'tokens': 1200, 'pct': id == 3 ? 85.0 : null, 'level': id == 3 ? 'warning' : 'ok'},
+        'job_description': 'Tugas $name',
+        'budget_monthly_cents': id == 3 ? 500 : 0,
+        'budget_monthly_tokens': 0,
       };
 
   @override
   Future<dynamic> companyCall(String method, [Map<String, dynamic> params = const {}]) async {
     calls.add((method, params));
+    final f = failures[method];
+    if (f != null && f.isNotEmpty) throw f.removeAt(0);
     switch (method) {
       case 'snapshot':
         if (!exists) return {'exists': false};
         return {
           'exists': true,
-          'company': {'name': 'Neovarch Studio', 'mission': 'Bikin aplikasi yang membantu orang', 'autorun': false},
+          'company': {
+            'name': 'Neovarch Studio',
+            'mission': 'Bikin aplikasi yang membantu orang',
+            'autorun': false,
+            'require_hire_approval': true,
+            'budget_monthly_cents': 2500,
+            'budget_monthly_tokens': 0,
+          },
+          'goals': [
+            {'id': 1, 'parent_id': null, 'title': 'Rilis 1.5 stabil', 'description': 'Tanpa crash', 'status': 'active'},
+            {'id': 2, 'parent_id': 1, 'title': 'Nol crash di Android', 'description': '', 'status': 'active'},
+          ],
+          'projects': [
+            {'id': 1, 'goal_id': 1, 'name': 'Aplikasi HP', 'description': '', 'status': 'active', 'budget_monthly_cents': 1000},
+          ],
+          'routines': [
+            {'id': 4, 'name': 'Laporan pagi', 'schedule': 'daily 08:00', 'agent_id': 1, 'project_id': null, 'title': 'Laporan pagi', 'description': '', 'enabled': 1, 'next_run_at': 1791000000.0},
+          ],
           'pending_approvals': 1,
           'active_agents': [3],
           'agents': [
@@ -90,6 +118,10 @@ class FakeCompany implements CompanyApi {
       case 'seed_demo':
         exists = true;
         return {'exists': true};
+      case 'agent.save':
+        final id = params['id'] as int?;
+        return agent(id ?? 7, '${params['name'] ?? 'X'}', '${params['title'] ?? ''}', params['reports_to'] as int?,
+            status: id == null ? 'pending_approval' : 'idle');
       default:
         return {'ok': true};
     }
@@ -175,6 +207,8 @@ void main() {
     await tester.tap(find.descendant(of: find.byKey(const ValueKey('company-agent-2')), matching: find.text('Lanjutkan')));
     await tester.pumpAndSettle();
     expect(called(fake, 'agent.resume', {'id': 2}), isTrue);
+    await tester.ensureVisible(find.byKey(const ValueKey('company-agent-3')));
+    await tester.pumpAndSettle();
     await tester.tap(find.descendant(of: find.byKey(const ValueKey('company-agent-3')), matching: find.text('Hentikan')));
     await tester.pumpAndSettle();
     expect(called(fake, 'agent.stop', {'id': 3}), isTrue);
@@ -259,5 +293,289 @@ void main() {
     expect(const CompanySnapshot(exists: false).orgTree, isEmpty);
     expect(formatCents(0.25), r'$0.0025');
     expect(formatTokens(1500000), '1.5 jt token');
+  });
+
+  // ------------------------------------------------------------ 1.4.5 gaps --
+  Finder scrollable() => find.descendant(of: find.byKey(const ValueKey('company-list')), matching: find.byType(Scrollable)).first;
+
+  Future<void> tapKey(WidgetTester tester, Key key) async {
+    await tester.ensureVisible(find.byKey(key));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> showInList(WidgetTester tester, Key key) async {
+    await tester.scrollUntilVisible(find.byKey(key), 200, scrollable: scrollable());
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('hire from the phone: agent.save without id, hire approval toast', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake));
+    await tapKey(tester, const ValueKey('company-hire'));
+    expect(find.text('Rekrut pegawai'), findsOneWidget);
+    expect(find.textContaining('Rekrutmen perlu persetujuan'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('company-agent-name')), 'Sari');
+    await tester.enterText(find.byKey(const ValueKey('company-agent-title')), 'Penulis');
+    await tester.tap(find.byKey(const ValueKey('company-agent-manager')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dimas · CEO').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('company-budget-cents')), '5');
+    await tester.enterText(find.byKey(const ValueKey('company-budget-tokens')), '200000');
+    await tapKey(tester, const ValueKey('company-agent-save'));
+    expect(called(fake, 'agent.save', {'name': 'Sari', 'title': 'Penulis', 'reports_to': 1, 'budget_monthly_cents': 500, 'budget_monthly_tokens': 200000}), isTrue);
+    expect(fake.calls.firstWhere((c) => c.$1 == 'agent.save').$2.containsKey('id'), isFalse);
+    expect(find.textContaining('menunggu persetujuan di Setujui'), findsOneWidget);
+  });
+
+  testWidgets('hire needs a name', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake));
+    await tapKey(tester, const ValueKey('company-hire'));
+    await tapKey(tester, const ValueKey('company-agent-save'));
+    expect(find.text('Nama pegawai wajib diisi'), findsOneWidget);
+    expect(called(fake, 'agent.save'), isFalse);
+  });
+
+  testWidgets('edit an agent: manager list excludes itself and its reports; terminate asks first', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake));
+    await tapKey(tester, const ValueKey('company-edit-agent-2')); // Hana (CTO), Raka reports to her
+    expect(find.text('Ubah Hana'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('company-agent-manager')));
+    await tester.pumpAndSettle();
+    expect(find.text('Raka · Engineer'), findsNothing);
+    expect(find.text('Hana · CTO'), findsNothing);
+    await tester.tap(find.text('Dimas · CEO').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('company-agent-job')), 'Pimpin tim teknik');
+    await tapKey(tester, const ValueKey('company-agent-save'));
+    expect(called(fake, 'agent.save', {'id': 2, 'job_description': 'Pimpin tim teknik', 'reports_to': 1}), isTrue);
+
+    await tapKey(tester, const ValueKey('company-edit-agent-2'));
+    await tapKey(tester, const ValueKey('company-agent-terminate'));
+    expect(find.text('Berhentikan Hana?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('company-confirm')));
+    await tester.pumpAndSettle();
+    expect(called(fake, 'agent.terminate', {'id': 2}), isTrue);
+  });
+
+  testWidgets('budgets: per agent from Biaya (dollars → cents) and for the company', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake), segment: companySegCosts);
+    expect(find.textContaining(r'batas $25.00'), findsOneWidget);
+    expect(find.textContaining(r'batas $5.00'), findsOneWidget); // Raka
+    await tapKey(tester, const ValueKey('company-cost-Raka'));
+    expect(find.text('Anggaran Raka'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('company-budget-cents')), '2,5');
+    await tapKey(tester, const ValueKey('company-budget-save'));
+    expect(called(fake, 'agent.save', {'id': 3, 'budget_monthly_cents': 250, 'budget_monthly_tokens': 0}), isTrue);
+
+    await tapKey(tester, const ValueKey('company-budget-company'));
+    await tester.enterText(find.byKey(const ValueKey('company-budget-cents')), '');
+    await tester.enterText(find.byKey(const ValueKey('company-budget-tokens')), '1.000.000');
+    await tapKey(tester, const ValueKey('company-budget-save'));
+    expect(called(fake, 'update', {'budget_monthly_cents': 0, 'budget_monthly_tokens': 1000000}), isTrue);
+  });
+
+  testWidgets('Rencana: mission, goal tree, new / edit / delete goal', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake), segment: companySegPlan);
+    final g1 = tester.getTopLeft(find.descendant(of: find.byKey(const ValueKey('company-goal-1')), matching: find.byType(Material)).first);
+    final g2 = tester.getTopLeft(find.descendant(of: find.byKey(const ValueKey('company-goal-2')), matching: find.byType(Material)).first);
+    expect(g1.dy < g2.dy && g1.dx < g2.dx, isTrue);
+    expect(find.text('▸ Aplikasi HP'), findsOneWidget);
+
+    await tapKey(tester, const ValueKey('company-edit-mission'));
+    await tester.enterText(find.byKey(const ValueKey('company-mission')), 'Misi baru');
+    await tapKey(tester, const ValueKey('company-mission-save'));
+    expect(called(fake, 'update', {'name': 'Neovarch Studio', 'mission': 'Misi baru'}), isTrue);
+
+    await tapKey(tester, const ValueKey('company-new-goal'));
+    await tester.enterText(find.byKey(const ValueKey('company-goal-title')), 'Pengguna senang');
+    await tapKey(tester, const ValueKey('company-goal-save'));
+    expect(called(fake, 'goal.save', {'title': 'Pengguna senang'}), isTrue);
+    expect(fake.calls.lastWhere((c) => c.$1 == 'goal.save').$2.containsKey('id'), isFalse);
+
+    await tapKey(tester, const ValueKey('company-goal-2'));
+    await tester.tap(find.byKey(const ValueKey('company-goal-parent')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(DropdownMenuItem<int?>, 'Nol crash di Android'), findsNothing); // not its own parent
+    expect(find.widgetWithText(DropdownMenuItem<int?>, 'Rilis 1.5 stabil'), findsWidgets);
+    await tester.tap(find.text('Langsung di bawah misi').last);
+    await tester.pumpAndSettle();
+    await tapKey(tester, const ValueKey('company-goal-save'));
+    expect(called(fake, 'goal.save', {'id': 2, 'parent_id': null, 'status': 'active'}), isTrue, reason: '${fake.calls.where((c) => c.$1.startsWith('goal'))}');
+
+    await tapKey(tester, const ValueKey('company-goal-1'));
+    await tapKey(tester, const ValueKey('company-goal-delete'));
+    await tester.tap(find.byKey(const ValueKey('company-confirm')));
+    await tester.pumpAndSettle();
+    expect(called(fake, 'goal.delete', {'id': 1}), isTrue);
+  });
+
+  testWidgets('Rencana: projects with goal and budget', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake), segment: companySegPlan);
+    await showInList(tester, const ValueKey('company-new-project'));
+    await tapKey(tester, const ValueKey('company-new-project'));
+    await tester.enterText(find.byKey(const ValueKey('company-project-name')), 'Situs web');
+    await tester.enterText(find.byKey(const ValueKey('company-project-budget')), '12');
+    await tapKey(tester, const ValueKey('company-project-save'));
+    expect(called(fake, 'project.save', {'name': 'Situs web', 'budget_monthly_cents': 1200}), isTrue);
+
+    await showInList(tester, const ValueKey('company-project-1'));
+    expect(find.textContaining(r'tujuan: Rilis 1.5 stabil · anggaran $10.00/bln'), findsOneWidget);
+    await tapKey(tester, const ValueKey('company-project-1'));
+    await tester.enterText(find.byKey(const ValueKey('company-project-name')), 'Aplikasi Android');
+    await tapKey(tester, const ValueKey('company-project-save'));
+    expect(called(fake, 'project.save', {'id': 1, 'name': 'Aplikasi Android', 'goal_id': 1, 'budget_monthly_cents': 1000}), isTrue);
+  });
+
+  testWidgets('Rencana: routines — create, toggle, run now, delete', (tester) async {
+    final fake = FakeCompany();
+    await pump(tester, controller(fake), segment: companySegPlan);
+    await showInList(tester, const ValueKey('company-routine-4'));
+    expect(find.textContaining('daily 08:00 · berikutnya'), findsOneWidget);
+    expect(find.textContaining('· Dimas'), findsOneWidget);
+
+    await tapKey(tester, const ValueKey('company-routine-enabled-4'));
+    expect(called(fake, 'routine.save', {'id': 4, 'enabled': false}), isTrue);
+    await showInList(tester, const ValueKey('company-routine-run-4'));
+    await tapKey(tester, const ValueKey('company-routine-run-4'));
+    expect(called(fake, 'routine.trigger', {'id': 4}), isTrue);
+
+    await showInList(tester, const ValueKey('company-new-routine'));
+    await tapKey(tester, const ValueKey('company-new-routine'));
+    await tester.enterText(find.byKey(const ValueKey('company-routine-name')), 'Cek ulasan');
+    await tapKey(tester, const ValueKey('company-routine-save'));
+    expect(find.text('Jadwal wajib diisi'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('company-routine-schedule')), 'every 2h');
+    await tapKey(tester, const ValueKey('company-routine-save'));
+    expect(called(fake, 'routine.save', {'name': 'Cek ulasan', 'schedule': 'every 2h', 'title': 'Cek ulasan', 'enabled': true}), isTrue);
+
+    await showInList(tester, const ValueKey('company-routine-4'));
+    await tapKey(tester, const ValueKey('company-routine-4'));
+    await tapKey(tester, const ValueKey('company-routine-delete'));
+    await tester.tap(find.byKey(const ValueKey('company-confirm')));
+    await tester.pumpAndSettle();
+    expect(called(fake, 'routine.delete', {'id': 4}), isTrue);
+  });
+
+  testWidgets('PC offline: Indonesian notice with Coba lagi; loads once it connects', (tester) async {
+    final fake = FakeCompany();
+    final r = controller(fake)..status = RemoteStatus.disconnected;
+    await pump(tester, r);
+    expect(find.text('PC tidak terhubung'), findsOneWidget);
+    expect(find.byKey(const ValueKey('company-retry')), findsOneWidget);
+    expect(called(fake, 'snapshot'), isFalse);
+    r.status = RemoteStatus.connected;
+    r.notifyListeners(); // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    await tester.pumpAndSettle();
+    expect(find.text('Neovarch Studio'), findsOneWidget);
+    // dropping again keeps the last data with a stale notice
+    r.status = RemoteStatus.reconnecting;
+    r.notifyListeners(); // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Terputus dari PC'), findsOneWidget);
+    expect(find.text('Neovarch Studio'), findsOneWidget);
+  });
+
+  testWidgets('older core without company.*: "Belum didukung PC" and the Kantor segment hides', (tester) async {
+    final fake = FakeCompany()
+      ..failures['snapshot'] = [
+        const RpcError(-32601, 'method not implemented in the Neovarch core: company.snapshot'),
+        const RpcError(-32601, 'method not implemented in the Neovarch core: company.snapshot'),
+      ];
+    final r = controller(fake);
+    await pump(tester, r);
+    expect(find.text('Belum didukung PC'), findsOneWidget);
+    expect(find.textContaining('Perbarui Neovarch di PC'), findsOneWidget);
+    await r.probeCompany();
+    expect(r.companySupported, isFalse);
+    // Coba lagi: the PC was updated meanwhile
+    await tester.tap(find.byKey(const ValueKey('company-retry')));
+    await tester.pumpAndSettle();
+    expect(find.text('Neovarch Studio'), findsOneWidget);
+  });
+
+  testWidgets('network error then Coba lagi recovers', (tester) async {
+    final fake = FakeCompany()..failures['snapshot'] = [TimeoutException('timed out')];
+    await pump(tester, controller(fake));
+    expect(find.text('Gagal memuat perusahaan'), findsOneWidget);
+    expect(find.textContaining('PC tidak menjawab'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('company-retry')));
+    await tester.pumpAndSettle();
+    expect(find.text('Neovarch Studio'), findsOneWidget);
+  });
+
+  testWidgets('an action error is toasted in Indonesian and the screen stays', (tester) async {
+    final fake = FakeCompany()..failures['agent.wake'] = [const RpcError(-32009, 'Dimas sedang bekerja')];
+    await pump(tester, controller(fake));
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('company-agent-1')), matching: find.text('Bangunkan')));
+    await tester.pumpAndSettle();
+    expect(find.text('Dimas sedang bekerja'), findsOneWidget);
+    expect(find.text('Neovarch Studio'), findsOneWidget);
+  });
+
+  group('Kantor tab', () {
+    Future<void> pumpTab(WidgetTester tester, RemoteController r) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final look = AppearanceController(prefs);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith((ref) => settings),
+          remoteProvider.overrideWith((ref) => r),
+          appearanceProvider.overrideWith((ref) => look),
+        ],
+        child: MaterialApp(
+          theme: themeFor(look),
+          builder: (context, child) => PaletteScope(revision: look.revision, child: child!),
+          home: Scaffold(body: RemoteKantorTab(segment: kantorSegCompany, onSegment: (_) {}, onOpenChat: () {}, onOpenApprovals: () {})),
+        ),
+      ));
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    testWidgets('shows Perusahaan on a core that has it', (tester) async {
+      final r = controller(FakeCompany())..companySupported = true;
+      await pumpTab(tester, r);
+      expect(find.text('PERUSAHAAN'), findsOneWidget);
+    });
+
+    testWidgets('hides Perusahaan on an older core and falls back to Kantor', (tester) async {
+      final r = controller(FakeCompany())..companySupported = false;
+      await pumpTab(tester, r);
+      expect(find.text('PERUSAHAAN'), findsNothing);
+      expect(find.text('KANTOR'), findsOneWidget);
+      expect(find.text('TUGAS'), findsOneWidget);
+      expect(find.byType(RemoteCompanyScreen), findsNothing);
+    });
+  });
+
+  test('1.4.5 models: goal tree, routines, money input', () async {
+    final s = CompanySnapshot.fromJson(Map<String, dynamic>.from(await FakeCompany().companyCall('snapshot') as Map));
+    expect(s.goalTree.map((e) => '${e.$1.title}:${e.$2}').toList(), ['Rilis 1.5 stabil:0', 'Nol crash di Android:1']);
+    expect(s.requireHireApproval, isTrue);
+    expect(s.budgetMonthlyCents, 2500);
+    expect(s.routines.single.enabled, isTrue);
+    expect(s.routines.single.agentId, 1);
+    expect(s.agentName(1), 'Dimas');
+    expect(s.agents.firstWhere((a) => a.id == 3).budgetMonthlyCents, 500);
+    expect(dollarsToCents('2,5'), 250);
+    expect(dollarsToCents(r'$12'), 1200);
+    expect(dollarsToCents(''), 0);
+    expect(dollarsToCents('-3'), 0);
+    expect(centsToDollars(250), '2.50');
+    expect(centsToDollars(1200), '12');
+    expect(centsToDollars(0), '');
+    expect(isCompanyUnsupported(const RpcError(-32601, 'x')), isTrue);
+    expect(isCompanyUnsupported(const RpcError(-32004, 'Pegawai tidak ditemukan')), isFalse);
+    expect(companyErrorText(const RpcError(-32004, 'Pegawai tidak ditemukan')), 'Pegawai tidak ditemukan');
+    expect(companyErrorText(const RpcError(-32601, 'x')), contains('Perbarui Neovarch di PC'));
   });
 }

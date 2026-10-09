@@ -55,6 +55,26 @@ class RemoteController extends ChangeNotifier {
   CompanyApi? debugCompanyApi;
   CompanyApi? get companyApi => debugCompanyApi ?? gateway;
 
+  /// Whether the paired core answers `company.*`: null until checked (or
+  /// unknown after a network error), false on an older core (-32601), where
+  /// the Kantor tab hides its Perusahaan segment.
+  bool? companySupported;
+
+  /// Asks the PC once per connection whether it has the Perusahaan RPCs.
+  Future<void> probeCompany() async {
+    final api = companyApi;
+    if (api == null || (debugCompanyApi == null && !connected)) return;
+    try {
+      await api.companyCall('snapshot');
+      if (companyApi != api) return;
+      companySupported = true;
+    } catch (e) {
+      if (companyApi != api) return;
+      if (isCompanyUnsupported(e)) companySupported = false;
+    }
+    notifyListeners();
+  }
+
   // social: GitHub friends & profile, read through the PC (no phone login)
   SocialProfile? socialProfile;
   FriendsSnapshot? socialFriends;
@@ -231,6 +251,7 @@ class RemoteController extends ChangeNotifier {
     models = null;
     modelsError = null;
     modelsUnsupported = false;
+    companySupported = null;
     composer = null;
     selectedSkills.clear();
     reasoningEffort = null;
@@ -310,6 +331,7 @@ class RemoteController extends ChangeNotifier {
         notifyListeners();
       case 'company.changed':
         companyRevision++;
+        companySupported = true;
         notifyListeners();
       case 'social.changed':
         if (socialProfile != null || socialFriends != null || socialError != null) unawaited(refreshSocial());
@@ -364,7 +386,7 @@ class RemoteController extends ChangeNotifier {
 
   /// Snapshots after (re)connecting; from here on the PC pushes changes.
   Future<void> refreshAll() async {
-    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer(), refreshModels()]);
+    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer(), refreshModels(), probeCompany()]);
   }
 
   // ------------------------------------------------------------- composer --
