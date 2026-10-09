@@ -13,6 +13,7 @@ from neovarch import session_settings
 from neovarch.llm import Completion, LLMError, stream_chat
 from neovarch.store import SessionStore
 from neovarch.tools import ToolContext, list_skills, run_tool, tool_schemas
+from neovarch.logs import log as _log
 
 EmitFn = Callable[[str, dict[str, Any]], Any]
 
@@ -219,6 +220,7 @@ class Agent:
                     t0 = time.monotonic()
                     result = await run_tool(call.name, args, self.ctx) if not self.interrupted else "interrupted"
                     dur = time.monotonic() - t0
+                    _log.info("tool %s session=%s %.2fs", call.name, self.rec.get("id"), dur)
                     messages.append({"role": "tool", "tool_call_id": call.id, "name": call.name,
                                      "content": result, "ts": time.time()})
                     self.store.save(self.rec)
@@ -231,6 +233,7 @@ class Agent:
         except LLMError as exc:
             error = str(exc)
         if error and error != "interrupted":
+            _log.warning("turn error session=%s model=%s: %s", self.rec.get("id"), endpoint.get("model"), error)
             self.emit("error", {"message": error})
         elapsed = max(time.monotonic() - started, 1e-6)
         out_tokens = int(usage.get("completion_tokens") or 0)

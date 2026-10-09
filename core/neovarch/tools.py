@@ -281,6 +281,9 @@ def ensure_builtin_skills(root: Path | None = None) -> None:
     root = root or (neovarch_home() / "skills")
     target = root / BUILTIN_SKILL_NAME / "SKILL.md"
     try:
+        from neovarch import skills_admin
+        if not target.exists() and skills_admin.archived(BUILTIN_SKILL_NAME):
+            return  # the user archived it
         if target.exists():
             text = target.read_text(encoding="utf-8", errors="replace")
             if "builtin: true" not in text or f"version: {BUILTIN_SKILL_VERSION}" in text:
@@ -291,9 +294,12 @@ def ensure_builtin_skills(root: Path | None = None) -> None:
         pass
 
 
-def list_skills() -> list[dict[str, str]]:
+def list_skills(include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Installed skills; disabled ones (Skills tab toggle) only when asked."""
     root = neovarch_home() / "skills"
     ensure_builtin_skills(root)
+    from neovarch import skills_admin
+    off = skills_admin.disabled()
     out = []
     if not root.exists():
         return out
@@ -306,7 +312,9 @@ def list_skills() -> list[dict[str, str]]:
         else:
             body = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith(("---", "#", "name:"))]
             desc = body[0][:160] if body else ""
-        out.append({"name": skill_md.parent.name, "description": desc, "path": str(skill_md)})
+        enabled = skill_md.parent.name not in off
+        if enabled or include_disabled:
+            out.append({"name": skill_md.parent.name, "description": desc, "path": str(skill_md), "enabled": enabled})
     return out
 
 

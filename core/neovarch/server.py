@@ -53,6 +53,8 @@ APPROVAL_TIMEOUT_S = 300
 
 
 def _log_unhandled(kind: str, what: str) -> None:
+    from neovarch.logs import log
+    log.info("unhandled %s %s", kind, what)
     try:
         with (neovarch_home() / "logs" / "unhandled.log").open("a", encoding="utf-8") as fh:
             fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {kind} {what}\n")
@@ -187,9 +189,13 @@ class LiveSession:
         async def run():
             self.status = "running"
             self.gw.broadcast_event("session.status", self.id, {"status": "running"})
+            from neovarch.logs import log
+            log.info("turn start session=%s model=%s", self.id, self.info().get("model"))
             try:
                 await self.agent.run_turn(text)
+                log.info("turn done session=%s", self.id)
             except Exception as exc:  # report, keep the gateway alive
+                log.exception("turn failed session=%s", self.id)
                 traceback.print_exc()
                 self.emit("error", {"message": f"{type(exc).__name__}: {exc}"})
                 self.emit("message.complete", {"text": "", "error": str(exc)})
@@ -225,8 +231,12 @@ def to_ui_messages(rec: dict) -> list[dict]:
         role = m.get("role")
         if role not in ("user", "assistant", "tool"):
             continue
-        item: dict[str, Any] = {"id": f"{rec['id']}:{i}", "role": role, "content": m.get("content") or "",
-                                "text": m.get("content") or "", "timestamp": m.get("ts")}
+        # row_id: the message's durable 1-based position in the stored
+        # transcript (messages are append-only), used by the timeline and
+        # the around-window history reads.
+        item: dict[str, Any] = {"id": f"{rec['id']}:{i}", "row_id": i + 1, "role": role,
+                                "content": m.get("content") or "", "text": m.get("content") or "",
+                                "timestamp": m.get("ts")}
         if m.get("tool_calls"):
             item["tool_calls"] = m["tool_calls"]
         if role == "tool":
@@ -839,6 +849,43 @@ def build_app(gw: Gateway) -> web.Application:
             return web.json_response({"detail": "not found"}, status=404)
         return web.json_response({"session_id": rec["id"], "messages": to_ui_messages(rec)})
 
+    def _int(q, key: str, default: int, lo: int = 0, hi: int = 10**9) -> int:
+        try:
+            return max(lo, min(int(q.get(key) or default), hi))
+        except (TypeError, ValueError):
+            return default
+
+    async def session_timeline(request):
+        """User prompts of a stored chat (the thread's jump marks), paged by row id."""
+        rec = gw.store.find(request.match_info["sid"])
+        if not rec:
+            return web.json_response({"detail": "not found"}, status=404)
+        after = _int(request.query, "after_row_id", 0)
+        limit = _int(request.query, "limit", 500, 1, 2000)
+        marks = [{"row_id": m["row_id"], "preview": " ".join(str(m["content"]).split())[:160],
+                  "timestamp": m.get("timestamp")}
+                 for m in to_ui_messages(rec) if m["role"] == "user" and m["row_id"] > after]
+        page, more = marks[:limit], len(marks) > limit
+        return web.json_response({"session_id": rec["id"], "entries": page,
+                                  "pagination": {"next_cursor": page[-1]["row_id"] if page else None,
+                                                 "has_more": more}})
+
+    async def session_messages_around(request):
+        """A bounded page of a stored chat centred on ``row_id``."""
+        rec = gw.store.find(request.match_info["sid"])
+        if not rec:
+            return web.json_response({"detail": "not found"}, status=404)
+        rows = to_ui_messages(rec)
+        limit = _int(request.query, "limit", 120, 1, 500)
+        row_id = _int(request.query, "row_id", 0)
+        idx = next((i for i, m in enumerate(rows) if m["row_id"] >= row_id), max(len(rows) - 1, 0))
+        start = max(0, min(idx - limit // 2, len(rows) - limit))
+        page = rows[start:start + limit]
+        return web.json_response({"session_id": rec["id"], "messages": page,
+                                  "pagination": {"limit": limit, "offset": start, "returned": len(page),
+                                                 "order": "oldest", "has_older": start > 0,
+                                                 "has_newer": start + len(page) < len(rows)}})
+
     async def session_delete(request):
         ok = gw.store.delete(request.match_info["sid"])
         gw.live.pop(request.match_info["sid"], None)
@@ -1009,7 +1056,8 @@ def build_app(gw: Gateway) -> web.Application:
     async def skills(_):
         # The renderer expects SkillInfo[]
         return web.json_response([{"name": s["name"], "description": s["description"], "category": "neovarch",
-                                   "enabled": True, "provenance": "agent", "path": s["path"]} for s in list_skills()])
+                                   "enabled": s["enabled"], "provenance": "agent", "path": s["path"]}
+                                  for s in list_skills(include_disabled=True)])
 
     async def skill_content(request):
         name = request.query.get("name") or ""
@@ -1342,6 +1390,60 @@ def build_app(gw: Gateway) -> web.Application:
         from neovarch import account
         return web.json_response(account.disconnect())
 
+    async def logs_get(request):
+        from neovarch import logs as logmod
+        return web.json_response(logmod.read(request.query))
+
+    from neovarch import skills_admin
+
+    async def skills_toggle(request):
+        body = await _json(request)
+        return web.json_response(skills_admin.set_enabled(str(body.get("name") or ""), bool(body.get("enabled"))))
+
+    async def learning_node_get(request):
+        return web.json_response(skills_admin.node(request.query.get("id") or ""))
+
+    async def learning_node_put(request):
+        body = await _json(request)
+        return web.json_response(skills_admin.edit(str(body.get("id") or ""), str(body.get("content") or "")))
+
+    async def learning_node_delete(request):
+        return web.json_response(skills_admin.archive(str((await _json(request)).get("id") or "")))
+
+    async def memory_get(_):
+        return web.json_response(skills_admin.memory_status())
+
+    async def memory_reset(request):
+        return web.json_response(skills_admin.memory_reset(str((await _json(request)).get("target") or "all")))
+
+    async def agent_model_put(request):
+        """Kantor popover: switch one desk's model. A chat desk
+        (``session:<id>``) gets a chat-only pick; any other desk (the PC
+        itself) changes the default model."""
+        body = await _json(request)
+        model, provider = str(body.get("model") or "").strip(), str(body.get("provider") or "").strip()
+        if not model:
+            return web.json_response({"ok": False, "detail": "model wajib diisi"}, status=422)
+        aid = request.match_info["aid"]
+        sid = aid.split(":", 1)[1] if aid.startswith("session:") else ""
+        if sid and not (sid in gw.live or gw.store.find(sid)):
+            return web.json_response({"ok": False, "detail": f"agen tidak ditemukan: {aid}"}, status=404)
+        value = model + (f" --provider {provider}" if provider else "") + (" --session" if sid else " --global")
+        try:
+            res = gw._config_set({"session_id": sid, "key": "model", "value": value})
+        except RpcError as exc:
+            return web.json_response({"ok": False, "detail": exc.message}, status=422)
+        gw.office.schedule()
+        return web.json_response({**res, "agent_id": aid})
+
+    r.add_put("/api/agents/{aid}/model", agent_model_put)
+    r.add_put("/api/skills/toggle", skills_toggle)
+    r.add_get("/api/learning/node", learning_node_get)
+    r.add_put("/api/learning/node", learning_node_put)
+    r.add_delete("/api/learning/node", learning_node_delete)
+    r.add_get("/api/memory", memory_get)
+    r.add_post("/api/memory/reset", memory_reset)
+    r.add_get("/api/logs", logs_get)
     r.add_get("/api/account/github", account_get)
     r.add_post("/api/account/github", account_connect)
     r.add_delete("/api/account/github", account_disconnect)
@@ -1356,6 +1458,8 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/profiles/sessions", sessions_list)
     r.add_get("/api/sessions/{sid}", session_get)
     r.add_get("/api/sessions/{sid}/messages", session_messages)
+    r.add_get("/api/sessions/{sid}/messages/around", session_messages_around)
+    r.add_get("/api/sessions/{sid}/timeline", session_timeline)
     r.add_delete("/api/sessions/{sid}", session_delete)
     r.add_patch("/api/sessions/{sid}", session_patch)
     r.add_get("/api/config", config_get)
@@ -1547,6 +1651,8 @@ def serve(host: str, port: int, *, isolated: bool = False) -> int:
             raise SystemExit(98)
         sockets = getattr(site._server, "sockets", None) or []
         gw.port = sockets[0].getsockname()[1] if sockets else port
+        from neovarch import logs as logmod
+        logmod.setup().info("gateway listening on %s:%s (version %s)", host, gw.port, __version__)
         # The desktop waits for this exact sentinel (legacy wire name, kept for compatibility).
         print(f"HERMES_BACKEND_READY port={gw.port}", flush=True)
         print(f"Neovarch gateway listening on {host}:{gw.port} (home {neovarch_home()})", flush=True)
