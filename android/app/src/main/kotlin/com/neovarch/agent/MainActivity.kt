@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -46,6 +47,7 @@ class MainActivity : FlutterActivity() {
     private val channelName = "neovarch/device"
     private val permRequests = HashMap<Int, MethodChannel.Result>()
     private val docRequests = HashMap<Int, MethodChannel.Result>()
+    private val uploadRequests = HashMap<Int, MethodChannel.Result>()
     private var nextCode = 4100
     /** Where a tapped notification wants the app to go ("approvals"); taken once by Dart. */
     private var pendingRoute: String? = null
@@ -184,6 +186,43 @@ class MainActivity : FlutterActivity() {
                 @Suppress("DEPRECATION")
                 startActivityForResult(i, code)
             }
+            // Chat attachments: copy a picked document into the app cache (no size
+            // clipping below the 25 MB upload limit) and hand Dart its path.
+            "pickFileForUpload" -> {
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = call.argument<String>("mime") ?: "*/*"
+                }
+                val code = nextCode++
+                uploadRequests[code] = result
+                @Suppress("DEPRECATION")
+                startActivityForResult(i, code)
+            }
+            // An image on the clipboard (copied from a browser / gallery / screenshot).
+            "clipboardImage" -> Thread {
+                val out = try { clipboardImage() } catch (e: Exception) { null }
+                Handler(Looper.getMainLooper()).post { result.success(out) }
+            }.start()
+            "hasClipboardImage" -> result.success(hasClipboardImage())
+            "shareImage" -> {
+                val f = java.io.File(call.argument<String>("path") ?: "")
+                val share = java.io.File(cacheDir, "share").apply { mkdirs() }
+                val target = if (f.parentFile?.canonicalPath == share.canonicalPath) f else java.io.File(share, f.name).also { f.copyTo(it, true) }
+                val uri = Uri.parse("content://$packageName.nvshare/${Uri.encode(target.name)}")
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = call.argument<String>("mime") ?: "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    call.argument<String>("text")?.let { putExtra(Intent.EXTRA_TEXT, it) }
+                    clipData = android.content.ClipData.newRawUri("profil", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(send, "Bagikan profil").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                result.success(true)
+            }
+            "saveImageToGallery" -> Thread {
+                val out = try { saveToGallery(java.io.File(call.argument<String>("path") ?: ""), call.argument<String>("name") ?: "neovarch.png") } catch (e: Exception) { null }
+                Handler(Looper.getMainLooper()).post { result.success(out) }
+            }.start()
             "openIntent" -> result.success(openIntent(call))
             "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: "", call.argument<String>("route")))
             "location" -> location(result)
@@ -219,9 +258,109 @@ class MainActivity : FlutterActivity() {
         r.success(out)
     }
 
+    private val uploadLimit = 25L * 1024 * 1024
+
+    /** Copy a content:// URI into cache/uploads; {path, name, mime, size} or {error, size}. */
+    private fun copyForUpload(uri: Uri, fallbackName: String): Map<String, Any?> {
+        var name = uri.lastPathSegment?.substringAfterLast('/') ?: fallbackName
+        var size = -1L
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val ni = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val si = c.getColumnIndex(OpenableColumns.SIZE)
+                if (ni >= 0) name = c.getString(ni) ?: name
+                if (si >= 0 && !c.isNull(si)) size = c.getLong(si)
+            }
+        }
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+        if (size > uploadLimit) return mapOf("error" to "too_big", "size" to size, "name" to name)
+        val dir = java.io.File(cacheDir, "uploads").apply { mkdirs() }
+        val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").ifEmpty { fallbackName }
+        val f = java.io.File(dir, "${System.currentTimeMillis()}-$safe")
+        var copied = 0L
+        contentResolver.openInputStream(uri)?.use { input ->
+            f.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    copied += n
+                    if (copied > uploadLimit) {
+                        out.close(); f.delete()
+                        return mapOf("error" to "too_big", "size" to copied, "name" to name)
+                    }
+                    out.write(buf, 0, n)
+                }
+            }
+        } ?: return mapOf("error" to "unreadable", "name" to name)
+        return mapOf("path" to f.absolutePath, "name" to name, "mime" to mime, "size" to copied)
+    }
+
+    /** Copy a PNG into Pictures/Neovarch via MediaStore (no permission on API 29+). */
+    private fun saveToGallery(src: java.io.File, name: String): String? {
+        if (!src.isFile) return null
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Neovarch")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+            contentResolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+            values.clear()
+            values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            return uri.toString()
+        }
+        @Suppress("DEPRECATION")
+        val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Neovarch").apply { mkdirs() }
+        val f = java.io.File(dir, name)
+        src.copyTo(f, true)
+        android.media.MediaScannerConnection.scanFile(this, arrayOf(f.absolutePath), arrayOf("image/png"), null)
+        return f.absolutePath
+    }
+
+    private fun clipItemUri(): Uri? {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = cm.primaryClip ?: return null
+        for (i in 0 until clip.itemCount) {
+            val uri = clip.getItemAt(i).uri ?: continue
+            val type = contentResolver.getType(uri) ?: ""
+            if (type.startsWith("image/")) return uri
+        }
+        return null
+    }
+
+    private fun hasClipboardImage(): Boolean {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val d = cm.primaryClipDescription ?: return false
+        for (i in 0 until d.mimeTypeCount) if (d.getMimeType(i).startsWith("image/")) return true
+        return false
+    }
+
+    private fun clipboardImage(): Map<String, Any?>? {
+        val uri = clipItemUri() ?: return null
+        return copyForUpload(uri, "tempel.png")
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val up = uploadRequests.remove(requestCode)
+        if (up != null) {
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) { up.success(null); return }
+            Thread {
+                try {
+                    val out = copyForUpload(uri, "berkas")
+                    Handler(Looper.getMainLooper()).post { up.success(out) }
+                } catch (e: Exception) {
+                    Handler(Looper.getMainLooper()).post { up.error("failed", e.message, null) }
+                }
+            }.start()
+            return
+        }
         val r = docRequests.remove(requestCode) ?: return
         val uri = data?.data
         if (resultCode != Activity.RESULT_OK || uri == null) {

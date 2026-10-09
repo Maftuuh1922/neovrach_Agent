@@ -1,5 +1,5 @@
-// 1.4.2: Profil tab. Top: [ProfileHeaderSlot] (placeholder for the GitHub
-// profile / friends feature from the social branch). Below: the phone's
+// 1.4.3: Profil tab. Top: [ProfileHeaderSlot] = Profil & Teman (GitHub
+// profile, heatmap, stack, friends, Bagikan profil; through the PC). Below: the phone's
 // appearance — the whole Tampilan section that used to live on the PC tab
 // (accent, custom colour, Gelap/Terang/Sistem, Latar belakang + sliders,
 // Ikuti tema PC) plus Warna dari wallpaper, Gaya kaca and the launcher icon
@@ -22,7 +22,7 @@ class RemoteProfileScreen extends StatelessWidget {
           padding: EdgeInsets.only(bottom: 24 + MediaQuery.paddingOf(context).bottom),
           children: const [
             NvHeader(kicker: 'hp ini', title: 'Profil'),
-            Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ProfileHeaderSlot()),
+            ProfileHeaderSlot(),
             NvSection('tampilan'),
             // NvAppearanceSection hosts its own NvPanelToneHost (wallpaper tone)
             NvAppearanceSection(),

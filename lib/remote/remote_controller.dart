@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../data/device_tools.dart';
 import '../data/gateway_client.dart';
 import '../models/models.dart';
+import 'attachments.dart';
 import 'office_models.dart';
 import 'pairing.dart';
 import 'remote_gateway.dart';
@@ -18,6 +19,7 @@ import 'update_check.dart';
 import 'vault_models.dart';
 import 'remote_transcript.dart';
 import 'saved_desktops.dart';
+import 'social_models.dart';
 
 class RemoteController extends ChangeNotifier {
   RemoteController(this.desktops);
@@ -42,6 +44,20 @@ class RemoteController extends ChangeNotifier {
 
   /// Bumped on `vault.changed` so an open vault screen re-reads its note.
   int vaultRevision = 0;
+
+  // social: GitHub friends & profile, read through the PC (no phone login)
+  SocialProfile? socialProfile;
+  FriendsSnapshot? socialFriends;
+  bool socialSignedIn = false;
+  bool socialLoading = false;
+  String? socialError;
+
+  // composer attachments (uploaded to the PC as soon as they are picked)
+  final List<PendingAttachment> pendingAttachments = [];
+
+  /// Last notice about attachments (e.g. the model cannot see images).
+  String? attachNotice;
+  int _attachSeq = 0;
 
   /// Widget-test harness only: vault data without a gateway.
   @visibleForTesting
@@ -246,6 +262,13 @@ class RemoteController extends ChangeNotifier {
       case 'vault.changed':
         vaultRevision++;
         notifyListeners();
+      case 'social.changed':
+        if (socialProfile != null || socialFriends != null || socialError != null) unawaited(refreshSocial());
+      case 'attachment.notice':
+        if (f.sessionId == null || f.sessionId == runtimeId) {
+          attachNotice = '${f.payload['message'] ?? ''}';
+          notifyListeners();
+        }
       case 'resync.required':
         unawaited(refreshAll());
         if (storedId != null) unawaited(openSession(storedId!, quiet: true));
@@ -379,15 +402,23 @@ class RemoteController extends ChangeNotifier {
   Future<String?> send(String text) async {
     final t = text.trim();
     final g = gateway;
-    if (t.isEmpty || g == null) return null;
+    final ready = pendingAttachments.where((a) => a.state == AttachState.done && a.remote != null).toList();
+    if ((t.isEmpty && ready.isEmpty) || g == null) return null;
     if (!connected) return 'Belum terhubung ke PC.';
+    if (pendingAttachments.any((a) => a.state == AttachState.uploading)) return 'Tunggu lampiran selesai diunggah.';
     if (runtimeId == null) await newChat();
     final rid = runtimeId;
     if (rid == null) return error ?? 'Gagal membuat sesi di PC.';
-    transcript.addUser(t);
+    transcript.addUser(t, attachments: [for (final a in ready) a.remote!.toJson()]);
+    pendingAttachments.clear();
+    attachNotice = null;
     notifyListeners();
     try {
-      await g.submit(rid, t);
+      final res = await g.submit(rid, t, attachments: [for (final a in ready) a.remote!.id]);
+      if (res is Map && res['notice'] != null) {
+        attachNotice = '${res['notice']}';
+        notifyListeners();
+      }
       return null;
     } catch (e) {
       transcript.interrupted();
@@ -395,6 +426,89 @@ class RemoteController extends ChangeNotifier {
       notifyListeners();
       return transcript.error;
     }
+  }
+
+  // ------------------------------------------------------------ attachments --
+  /// Add a picked / pasted / shot file to the composer and upload it to the PC
+  /// right away (progress on the chip). Returns an error to show, or null.
+  Future<String?> addAttachment(String name, Uint8List bytes, {String? mime}) async {
+    final g = gateway;
+    if (g == null || !connected) return 'Belum terhubung ke PC.';
+    if (bytes.isEmpty) return 'File kosong.';
+    if (bytes.length > kMaxAttachmentBytes) return '$name terlalu besar (maks 25 MB).';
+    if (runtimeId == null) await newChat();
+    final rid = runtimeId;
+    if (rid == null) return error ?? 'Gagal membuat sesi di PC.';
+    final type = sniffImageMime(bytes) ?? mime ?? mimeForName(name);
+    final p = PendingAttachment(localId: 'att${_attachSeq++}', name: name, mime: type, bytes: bytes);
+    pendingAttachments.add(p);
+    notifyListeners();
+    var lastTick = 0.0;
+    try {
+      p.remote = await g.uploadAttachment(
+        sessionId: rid,
+        name: name,
+        mime: type,
+        bytes: bytes,
+        onProgress: (v) {
+          p.progress = v;
+          if (v - lastTick >= 0.05 || v >= 1) {
+            lastTick = v;
+            notifyListeners();
+          }
+        },
+      );
+      p.state = AttachState.done;
+      p.progress = 1;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      p.state = AttachState.failed;
+      p.error = _friendly('$e');
+      notifyListeners();
+      return p.error;
+    }
+  }
+
+  void removeAttachment(String localId) {
+    final p = pendingAttachments.where((a) => a.localId == localId).firstOrNull;
+    if (p == null) return;
+    pendingAttachments.remove(p);
+    final id = p.remote?.id;
+    if (id != null) unawaited(gateway?.deleteAttachment(id).catchError((_) {}));
+    notifyListeners();
+  }
+
+  // ----------------------------------------------------------------- social --
+  /// Profile + friends from the PC (`/api/social/*`); the PC signs in to GitHub.
+  Future<void> refreshSocial() async {
+    final g = gateway;
+    if (g == null || !connected) return;
+    socialLoading = true;
+    notifyListeners();
+    try {
+      final st = await g.socialStatus();
+      socialSignedIn = st['signed_in'] == true;
+      if (socialSignedIn) {
+        final res = await Future.wait([g.socialProfile(), g.socialFriends()]);
+        socialProfile = res[0] as SocialProfile;
+        socialFriends = res[1] as FriendsSnapshot;
+      } else {
+        socialProfile = null;
+        socialFriends = const FriendsSnapshot();
+      }
+      socialError = null;
+    } catch (e) {
+      socialError = _friendly('$e');
+    }
+    socialLoading = false;
+    notifyListeners();
+  }
+
+  Future<FriendDetail> friendDetail(String login) async {
+    final g = gateway;
+    if (g == null) throw StateError('Belum terhubung ke PC.');
+    return g.socialFriend(login);
   }
 
   Future<void> stop() async {

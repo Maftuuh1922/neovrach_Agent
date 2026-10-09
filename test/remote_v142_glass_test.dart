@@ -273,7 +273,7 @@ void main() {
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
       expect(find.byType(ProfileHeaderSlot), findsOneWidget);
-      expect(find.text('Profil & teman — segera'), findsOneWidget);
+      expect(find.byKey(const ValueKey('social-section')), findsOneWidget);
       expect(find.byType(NvAppearanceSection), findsOneWidget);
       expect(find.text('Ikuti tema PC'), findsOneWidget);
       expect(find.byKey(const ValueKey('corner-card')), findsOneWidget);
