@@ -36,6 +36,7 @@ import { isApprovalActivity, isCurrentTurnMessage } from '@/components/assistant
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
 import { formatElapsed } from '@/components/chat/activity-timer'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
+import { AgentSenderPill, opensAgentTurn } from '@/components/neovarch/agent-identity'
 import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useI18n } from '@/i18n'
@@ -303,6 +304,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
+          <NvSenderPill />
           <div
             className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
             data-slot="aui_assistant-message-content"
@@ -1220,4 +1222,21 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number }> = ({ dura
       <AssistantActionBar durationS={durationS} {...props} />
     </div>
   )
+}
+
+/** Who is speaking: the session's Office agent (avatar + name · PC), with a
+ *  pulse while the turn streams. Same pill as the phone remote; shown once per
+ *  turn (on the assistant message that opens it), not on every tool round. */
+function NvSenderPill() {
+  const view = useSessionView()
+  const runtimeId = useStore(view.$runtimeId)
+  const storedId = useStore(view.$storedId)
+  const opens = useAuiState(s => opensAgentTurn(s.thread.messages, s.message.id))
+  const live = useAuiState(s => s.thread.isRunning && isCurrentTurnMessage(s.thread.messages, s.message.id))
+
+  if (!opens) {
+    return null
+  }
+
+  return <AgentSenderPill live={live} sessionIds={[runtimeId, storedId]} />
 }
