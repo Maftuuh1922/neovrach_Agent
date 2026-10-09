@@ -11,6 +11,7 @@ const scene = vi.hoisted(() => ({
   fail: false,
   resetCamera: vi.fn(),
   setAgents: vi.fn(),
+  setPaused: vi.fn(),
   setSelected: vi.fn()
 }))
 
@@ -26,6 +27,7 @@ vi.mock('./office3d-scene', () => ({
       dispose: scene.dispose,
       resetCamera: scene.resetCamera,
       setAgents: scene.setAgents,
+      setPaused: scene.setPaused,
       setSelected: scene.setSelected
     }
   }

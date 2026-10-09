@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 
 import { OfficeAgentAvatar } from './agent-identity'
 import { Office3D } from './office-3d'
+import { MiniOffice3D } from './office-mini-3d'
 import { OfficeModelSelect } from './office-model-select'
 import {
   $office,
@@ -251,6 +252,7 @@ export function NeovarchOfficeMini() {
         <Users className="size-3.5" /> Kantor
         <span className="nv-office-mini-count">{office ? `${office.counts.working} bekerja` : ''}</span>
       </span>
+      <MiniOffice3D office={office} />
       {agents.length === 0 ? (
         <span className="nv-context-empty">Belum ada agen yang bekerja.</span>
       ) : (

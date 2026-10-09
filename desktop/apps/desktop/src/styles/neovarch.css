@@ -40,7 +40,7 @@
   --nv-line: #d4cec4;
   --nv-text: #120d0d;
   --nv-text-2: #4a4240;
-  --nv-text-3: #857c78;
+  --nv-text-3: #665e5a; /* WCAG AA: ≥4.5:1 on ink, ink-2 and ink-3 */
   --nv-red-text: #8f0a0a;
   --nv-red-wash: #f6dcd8;
 }
@@ -149,7 +149,7 @@
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.32em;
-  color: var(--nv-paper);
+  color: var(--nv-on-accent, var(--nv-paper));
   background: var(--nv-red);
   padding: 0.18rem 0.3rem 0.14rem 0.4rem;
   transform: translateY(-0.1rem);
@@ -664,7 +664,7 @@
 }
 .btn-arc {
   background-color: var(--nv-red);
-  color: var(--nv-paper);
+  color: var(--nv-on-accent, var(--nv-paper));
 }
 .btn-arc:hover:not(:disabled) {
   filter: none;
@@ -800,7 +800,7 @@
   padding: 0.45rem 0.7rem;
   border-radius: var(--nv-r-control);
   background: var(--nv-red);
-  color: var(--nv-paper);
+  color: var(--nv-on-accent, var(--nv-paper));
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -1536,7 +1536,7 @@
   padding: 0.2rem 0.7rem;
   border-radius: 999px;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-weight: 600;
 }
 .nv-update-close {
@@ -1623,7 +1623,7 @@
 .nv-vault-tabs .nv-vault-tab-on {
   background: var(--nv-red);
   border-color: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
 }
 .nv-vault-tree,
 .nv-vault-tree ul {
@@ -1689,7 +1689,7 @@
 }
 .nv-vault-btn:hover {
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
 }
 .nv-vault-md {
   max-width: 46rem;
@@ -1834,7 +1834,7 @@
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-weight: 600;
   font-size: 0.8rem;
 }
@@ -1935,7 +1935,7 @@
   border-radius: 999px;
   padding: 0.25rem 0.75rem;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-weight: 600;
 }
 .nv-doc-preview-close {
@@ -2406,7 +2406,7 @@
 }
 .nv-office-view-toggle button[aria-pressed='true'] {
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
 }
 .nv-office3d {
   position: relative;
@@ -2600,7 +2600,7 @@
   padding: 0.35rem 0.7rem;
   border-radius: var(--nv-r-control);
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-size: 0.76rem;
 }
 .nv-office3d-assign button:disabled {
@@ -2733,7 +2733,7 @@
   height: 18px;
   border-radius: 999px;
   background: var(--nv-red);
-  color: #fff;
+  color: var(--nv-on-accent, #fff);
   font-family: var(--nv-font-display);
   font-size: 12px;
   font-weight: 700;
@@ -3172,4 +3172,29 @@
 }
 :root[data-nv-scheme='light'] .nv-office3d-label-task {
   color: #4a4240;
+}
+
+/* ── Mini Kantor 3D (right sidebar, bottom) ───────────────────────────────── */
+.nv-office-mini {
+  margin-top: auto;
+  border-radius: 20px;
+}
+.nv-office-mini3d {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 8.5rem;
+  overflow: hidden;
+  border: 1px solid var(--nv-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--nv-ink) 70%, transparent);
+}
+.nv-office-mini3d canvas {
+  pointer-events: none;
+}
+.nv-office-mini:hover .nv-office-mini3d {
+  border-color: color-mix(in srgb, var(--nv-red) 55%, var(--nv-line));
+}
+.nv-context[data-cards-collapsed] .nv-office-mini3d {
+  display: none;
 }

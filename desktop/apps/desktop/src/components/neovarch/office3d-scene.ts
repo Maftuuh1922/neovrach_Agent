@@ -25,6 +25,9 @@ export interface OfficeSceneOptions {
   onSelect?: (id: null | string) => void
   /** Calmer motion (prefers-reduced-motion). */
   reducedMotion?: boolean
+  /** Thumbnail mode (right-sidebar mini Kantor): no orbit/picking, no
+   *  shadows or antialiasing, capped pixel ratio and frame rate. */
+  thumbnail?: { fps?: number; pixelRatio?: number }
 }
 
 export interface OfficeScene {
@@ -33,6 +36,8 @@ export interface OfficeScene {
   resetCamera: () => void
   setAgents: (agents: SceneAgent[]) => void
   setSelected: (id: null | string) => void
+  /** Stop / resume the render loop (hidden or offscreen). */
+  setPaused: (paused: boolean) => void
 }
 
 const LABEL_HEIGHT = 1.75
@@ -55,17 +60,20 @@ interface Figure {
 export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
   const { container, labelLayer } = options
   const motion = options.reducedMotion ? 0.35 : 1
+  const thumb = options.thumbnail
+  const frameGap = thumb ? 1000 / Math.max(1, thumb.fps ?? 15) : 0
 
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
-    antialias: true,
+    antialias: !thumb,
     powerPreference: 'low-power'
   })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
+
+  renderer.setPixelRatio(thumb ? (thumb.pixelRatio ?? 0.75) : Math.min(window.devicePixelRatio || 1, 1.5))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
-  renderer.shadowMap.enabled = true
+  renderer.shadowMap.enabled = !thumb
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.setClearColor(0x000000, 0)
   renderer.domElement.setAttribute('data-slot', 'nv-office3d-canvas')
@@ -84,14 +92,17 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
   controls.minAzimuthAngle = OFFICE3D_CAMERA.minAzimuthAngle
   controls.maxAzimuthAngle = OFFICE3D_CAMERA.maxAzimuthAngle
   controls.screenSpacePanning = false
+  controls.enabled = !thumb
 
   // Everything we allocate, so dispose() frees it.
   const disposables: { dispose: () => void }[] = []
+
   const track = <T extends { dispose: () => void }>(thing: T): T => {
     disposables.push(thing)
 
     return thing
   }
+
   const mat = (color: string, extra: THREE.MeshStandardMaterialParameters = {}) =>
     track(
       new THREE.MeshStandardMaterial({
@@ -128,6 +139,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     trunk: mat(P.bonsaiTrunk),
     pot: mat(P.pot, { roughness: 0.5 })
   }
+
   const G = {
     box: track(new THREE.BoxGeometry(1, 1, 1)),
     cyl: track(new THREE.CylinderGeometry(0.5, 0.5, 1, 10)),
@@ -202,6 +214,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
         roughness: 0.95
       })
     )
+
     const mats: { x: number; z: number; w: number; d: number }[] = []
 
     for (let row = 0, z = -hd; z < hd - 0.01; row++, z += 1) {
@@ -227,6 +240,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
         new THREE.Vector3(tile.w - 0.02, 0.04, tile.d - 0.02)
       )
       matMesh.setMatrixAt(i, m4)
+
       // Heri run along the long sides of each mat.
       for (const side of [-1, 1]) {
         m4.compose(
@@ -260,6 +274,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
         })
       )
     )
+
     scroll.position.set(hw - 1.6, 1.75, -hd + 0.09)
     room.add(scroll)
     box(room, M.woodDark, [1.05, 0.06, 0.06], [hw - 1.6, 2.63, -hd + 0.1])
@@ -310,6 +325,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     const paperH = 2.1
     const base = 0.32
     const frames: THREE.Matrix4[] = []
+
     const add = (sx: number, sy: number, sz: number, x: number, y: number, z: number) =>
       frames.push(
         new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(sx, sy, sz))
@@ -378,6 +394,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     trunk.rotation.z = -0.35
     trunk.castShadow = true
     g.add(trunk)
+
     const pads: [number, number, number, number][] = [
       [0.14, 0.58, 0, 0.36],
       [-0.12, 0.5, 0.05, 0.28],
@@ -428,6 +445,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
 
     // Low desk (in front of the agent, toward +z) with a laptop on it.
     box(group, M.deskTop, [1.5, 0.06, 0.75], [0, 0.42, 0.55])
+
     for (const sx of [-0.68, 0.68]) {
       for (const sz of [0.25, 0.85]) {
         box(group, M.woodDark, [0.06, 0.39, 0.06], [sx, 0.2, sz])
@@ -437,6 +455,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     box(group, M.laptop, [0.5, 0.025, 0.34], [0, 0.465, 0.5])
     const lid = box(group, M.laptop, [0.5, 0.32, 0.02], [0, 0.63, 0.67])
     lid.rotation.x = 0.25
+
     // A status light on the back of the lid, facing the camera.
     const lidLight = track(
       new THREE.MeshStandardMaterial({
@@ -445,6 +464,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
         emissiveIntensity: 1.4
       })
     )
+
     const lamp = new THREE.Mesh(G.box, lidLight)
     lamp.scale.set(0.12, 0.05, 0.01)
     lamp.position.set(0, 0.64, 0.69)
@@ -466,6 +486,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
         })
       )
     )
+
     ring.rotation.x = -Math.PI / 2
     ring.position.set(0, 0.05, -0.15)
     ring.scale.setScalar(0.85)
@@ -669,9 +690,12 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
   }
 
   renderer.domElement.style.cursor = 'grab'
-  renderer.domElement.addEventListener('pointerdown', onPointerDown)
-  renderer.domElement.addEventListener('pointerup', onPointerUp)
-  renderer.domElement.addEventListener('pointermove', onPointerMove)
+
+  if (!thumb) {
+    renderer.domElement.addEventListener('pointerdown', onPointerDown)
+    renderer.domElement.addEventListener('pointerup', onPointerUp)
+    renderer.domElement.addEventListener('pointermove', onPointerMove)
+  }
 
   function setSelected(id: null | string) {
     selected = id
@@ -696,9 +720,11 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
   const projected = new THREE.Vector3()
   let frame = 0
   let disposed = false
+  let paused = false
+  let lastFrame = 0
 
-  function animate() {
-    if (disposed) {
+  function animate(now = performance.now()) {
+    if (disposed || paused) {
       return
     }
 
@@ -707,6 +733,12 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     if (document.hidden) {
       return
     }
+
+    if (frameGap && now - lastFrame < frameGap) {
+      return
+    }
+
+    lastFrame = now
 
     const t = clock.getElapsedTime()
     controls.update()
@@ -839,6 +871,18 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     },
     resetCamera,
     setAgents,
+    setPaused(next: boolean) {
+      if (next === paused || disposed) {
+        return
+      }
+
+      paused = next
+      cancelAnimationFrame(frame)
+
+      if (!paused) {
+        animate()
+      }
+    },
     setSelected
   }
 }
