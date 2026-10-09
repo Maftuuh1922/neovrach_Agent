@@ -37,7 +37,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
 
   // 1.4.2: 4 tabs. Setujui merged into Chat (pinned chip + sheet), Tugas
   // into Kantor (segmented), Tampilan moved from PC to the new Profil tab.
-  static const tabChat = 0, tabKantor = 1, tabProfile = 2, tabPc = 3;
+  static const tabChat = 0, tabKantor = 1, tabPc = 2, tabProfile = 3;
   int _lastApprovals = 0;
   bool _sheetOpen = false;
 
@@ -109,8 +109,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   static const _dest = <(IconData, IconData, String)>[
     (CupertinoIcons.chat_bubble, CupertinoIcons.chat_bubble_fill, 'Chat'),
     (CupertinoIcons.building_2_fill, CupertinoIcons.building_2_fill, 'Kantor'),
-    (CupertinoIcons.person_crop_circle, CupertinoIcons.person_crop_circle_fill, 'Profil'),
     (CupertinoIcons.desktopcomputer, CupertinoIcons.desktopcomputer, 'PC'),
+    (CupertinoIcons.person_crop_circle, CupertinoIcons.person_crop_circle_fill, 'Profil'),
   ];
 
   @override
@@ -139,8 +139,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
           onOpenChat: () => setState(() => index = tabChat),
           onOpenApprovals: openApprovals,
         ),
-        const RemoteProfileScreen(),
         RemotePcScreen(onOpenChat: () => setState(() => index = tabChat)),
+        const RemoteProfileScreen(),
       ].indexed)
         TabFade(active: index == i, child: w),
     ]);

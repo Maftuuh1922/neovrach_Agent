@@ -302,7 +302,7 @@ void main() {
   });
 
   testWidgets('08 pc', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 2;
     await run(tester, '08_pc', () => const RemoteShell());
   });
 
@@ -317,7 +317,7 @@ void main() {
   });
 
   testWidgets('10 confirm dialog', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 2;
     await run(tester, '10_dialog', () => const RemoteShell(), act: () async {
       await tester.tap(find.byTooltip('Lupakan').first);
     });
@@ -459,7 +459,7 @@ void main() {
   });
 
   testWidgets('27 PC tab · Cupertino icons + Inter', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 2;
     await run(tester, '27_pc_icons_font', () => const RemoteShell());
   });
 
@@ -472,7 +472,7 @@ void main() {
     ..storedId = null
     ..debugApprovals = [];
 
-  for (final (tab, name) in [(1, 'kantor'), (2, 'profil')]) {
+  for (final (tab, name) in [(1, 'kantor'), (3, 'profil')]) {
     for (final w in [390.0, 360.0]) {
       testWidgets('28 nav at rest · $name · ${w.toInt()} dp', (tester) async {
         await background('assets/art/feat-remote.webp', dim: 0.4, blur: 4);
@@ -515,13 +515,13 @@ void main() {
 
   testWidgets('37 Profil tab', (tester) async {
     await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
-    app.previewTab = 2;
+    app.previewTab = 3;
     await run(tester, '37_profil', () => const RemoteShell());
   });
 
   testWidgets('38 Profil · icon picker + Gaya kaca', (tester) async {
     await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
-    app.previewTab = 2;
+    app.previewTab = 3;
     await run(tester, '38_profil_icon_glass', () => const RemoteShell(), act: () async {
       await tester.drag(find.byKey(const ValueKey('profile-list')), const Offset(0, -1500));
     });

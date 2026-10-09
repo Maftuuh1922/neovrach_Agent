@@ -1,4 +1,4 @@
-// v1.4.2 (second batch): 4-tab nav (Chat · Kantor · Profil · PC) with a lens
+// v1.4.2 (second batch): 4-tab nav (Chat · Kantor · PC · Profil) with a lens
 // wide enough for its labels, approvals merged into Chat (chip + sheet),
 // Kantor | Tugas segments, Profil (Tampilan + launcher icon + social slot),
 // nav avatar, liquid-glass greeting and the glass/animated intro.
@@ -137,7 +137,7 @@ void main() {
   Finder inNav(String t) => find.descendant(of: navBar, matching: find.text(t));
 
   group('4-tab nav', () {
-    testWidgets('Chat · Kantor · Profil · PC; no Tugas / Setujui tabs', (tester) async {
+    testWidgets('Chat · Kantor · PC · Profil; no Tugas / Setujui tabs', (tester) async {
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
       for (final t in ['CHAT', 'KANTOR', 'PROFIL', 'PC']) {
@@ -148,7 +148,7 @@ void main() {
     });
 
     for (final width in [390.0, 360.0]) {
-      for (final (tab, label) in [(1, 'KANTOR'), (2, 'PROFIL'), (0, 'CHAT')]) {
+      for (final (tab, label) in [(1, 'KANTOR'), (3, 'PROFIL'), (0, 'CHAT')]) {
         testWidgets('lens fits the magnified $label with padding · ${width.toInt()} dp', (tester) async {
           app.previewTab = tab;
           await pump(tester, const RemoteShell(), width: width);
@@ -182,25 +182,25 @@ void main() {
       double lensX() => tester.getRect(find.byKey(const ValueKey('nv-nav-lens'))).center.dx;
       final g = await tester.startGesture(Offset(bar.left + 4 + tabW * 0.5, bar.center.dy));
       for (var i = 0; i < 10; i++) {
-        await g.moveBy(Offset(tabW * 2 / 10, 0));
+        await g.moveBy(Offset(tabW * 3 / 10, 0));
         await tester.pump(const Duration(milliseconds: 16));
       }
-      expect(lensX(), closeTo(bar.left + 4 + tabW * 2.5, tabW * 0.2));
+      expect(lensX(), closeTo(bar.left + 4 + tabW * 3.5, tabW * 0.2));
       await g.up();
       await settle(tester);
-      expect(lensX(), closeTo(bar.left + 4 + tabW * 2.5, 1.5));
+      expect(lensX(), closeTo(bar.left + 4 + tabW * 3.5, 1.5));
       expect(find.byKey(const ValueKey('profile-header-slot')), findsOneWidget);
     });
 
     testWidgets('Profil item: person icon by default, avatar (ring when active, dimmed when not) when set', (tester) async {
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
-      expect(find.byKey(const ValueKey('nv-nav-avatar-2')), findsNothing);
+      expect(find.byKey(const ValueKey('nv-nav-avatar-3')), findsNothing);
       final ctx = tester.element(find.byType(RemoteShell));
       final container = ProviderScope.containerOf(ctx);
       container.read(profileAvatarProvider.notifier).state = MemoryImage(_png);
       await settle(tester, 3);
-      final av = find.byKey(const ValueKey('nv-nav-avatar-2'));
+      final av = find.byKey(const ValueKey('nv-nav-avatar-3'));
       expect(av, findsOneWidget);
       expect(tester.getSize(av), const Size(NvNavBar.avatarSize, NvNavBar.avatarSize));
       double opacity() => tester.widget<Opacity>(find.descendant(of: av, matching: find.byType(Opacity)).first).opacity;
@@ -231,7 +231,7 @@ void main() {
     });
 
     testWidgets('a tapped approval notification (route "approvals") opens Chat + the sheet', (tester) async {
-      app.previewTab = 3; // on PC
+      app.previewTab = 2; // on PC
       await pump(tester, const RemoteShell(), r: controller(approvals: true));
       await settle(tester, 4);
       final state = tester.state(find.byType(RemoteShell)) as dynamic;
@@ -269,7 +269,7 @@ void main() {
 
   group('Profil', () {
     testWidgets('holds the social slot, the whole Tampilan section and the icon picker; PC tab has no theme settings', (tester) async {
-      app.previewTab = 2;
+      app.previewTab = 3;
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
       expect(find.byType(ProfileHeaderSlot), findsOneWidget);
