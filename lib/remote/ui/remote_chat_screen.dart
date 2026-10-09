@@ -13,6 +13,8 @@ import '../../ui/screens/chat/message_widgets.dart';
 import '../../ui/widgets/common.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
+import 'glass/backdrop_luminance.dart';
+import 'glass/glass_chat.dart';
 import 'nv_widgets.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
@@ -29,6 +31,28 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   double _dockH = 0;
   double _lastKb = 0;
   bool _dictating = false;
+  /// Message ids already on screen; ids that arrive later play the glass
+  /// "materialize" entrance once ([_fresh]).
+  final _known = <String>{};
+  final _fresh = <String>{};
+  String? _knownSession;
+
+  void _track(RemoteController r) {
+    final session = '${r.storedId}|${r.runtimeId}';
+    final msgs = r.transcript.messages;
+    if (session != _knownSession || r.opening) {
+      // a (re)opened session shows its history without animation
+      _knownSession = session;
+      _known
+        ..clear()
+        ..addAll(msgs.map((m) => m.id));
+      _fresh.clear();
+      return;
+    }
+    for (final m in msgs) {
+      if (_known.add(m.id)) _fresh.add(m.id);
+    }
+  }
 
   @override
   void dispose() {
@@ -94,6 +118,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final pc = r.desktop?.name ?? 'PC';
     final tps = r.transcript.tokensPerSecond;
 
+    _track(r);
     final empty = msgs.isEmpty && !r.opening;
     // Keyboard: the shell hides the nav pill and this screen does NOT let the
     // Scaffold shrink for it (the composer adds the keyboard inset itself);
@@ -102,7 +127,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final kb = MediaQuery.viewInsetsOf(context).bottom;
     if ((kb > 0) != (_lastKb > 0)) WidgetsBinding.instance.addPostFrameCallback((_) => _toBottom());
     _lastKb = kb;
-    return Scaffold(
+    return GlassBackdrop(child: Scaffold(
       resizeToAvoidBottomInset: false,
       body: Column(children: [
         if (empty)
@@ -111,34 +136,23 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             onNew: r.connected ? r.newChat : null,
           )
         else ...[
-        NvHeader(
+        GlassChatHeader(
           kicker: 'chat · $pc',
           title: r.title.isNotEmpty ? r.title : (r.storedId == null ? 'Sesi baru' : 'Percakapan'),
-          status: Row(children: [
-            NvDot(r.connected ? NV.ok : NV.warn, size: 7),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                '${r.statusLabel}${r.running ? ' · agen bekerja' : ''}${tps != null ? ' · ${tps.toStringAsFixed(0)} tok/s' : ''}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: NV.monoLabel(size: 10, color: NV.muted).copyWith(letterSpacing: 0.4),
-              ),
-            ),
-          ]),
+          online: r.connected,
+          status: '${r.statusLabel}${r.running ? ' · agen bekerja' : ''}${tps != null ? ' · ${tps.toStringAsFixed(0)} tok/s' : ''}',
           actions: [
-            NvIconButton(tooltip: 'Riwayat sesi di PC', icon: CupertinoIcons.clock, onPressed: r.connected ? _sessions : null),
-            NvIconButton(tooltip: 'Sesi baru', icon: CupertinoIcons.add, onPressed: r.connected ? r.newChat : null),
+            GlassHeaderAction(tooltip: 'Riwayat sesi di PC', icon: CupertinoIcons.clock, onPressed: r.connected ? _sessions : null),
+            GlassHeaderAction(tooltip: 'Sesi baru', icon: CupertinoIcons.add, onPressed: r.connected ? r.newChat : null),
           ],
         ),
-        Divider(height: 1, color: NV.border),
         ],
         if (others > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: NvNotice(
+            child: GlassNotice(
               '$others persetujuan menunggu di sesi lain',
-              color: NV.warn,
+              error: false,
               icon: CupertinoIcons.checkmark_shield,
               action: TextButton(onPressed: widget.onOpenApprovals, child: const Text('Lihat')),
             ),
@@ -152,7 +166,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
               ? const CenterLoader(label: 'membuka sesi di PC…')
               : msgs.isEmpty
                   ? _empty(context, r)
-                  : ListView.builder(
+                  : BackdropGroup(child: ListView.builder(
                       controller: _scroll,
                       padding: EdgeInsets.fromLTRB(16, 16, 16, 12 + _dockH),
                       itemCount: msgs.length,
@@ -161,10 +175,12 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 18),
                           child: m.role == 'user'
-                              ? NvUserMessage(msg: m, scale: s.chatScale)
-                              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                                  NvAgentLabel('neovarch · $pc', live: m.streaming),
-                                  AssistantMessage(
+                              ? GlassUserMessage(msg: m, scale: s.chatScale, appear: _fresh.remove(m.id))
+                              : GlassAgentTurn(
+                                  label: 'neovarch · $pc',
+                                  live: m.streaming,
+                                  appear: _fresh.remove(m.id),
+                                  child: AssistantMessage(
                                     msg: m,
                                     scale: s.chatScale,
                                     showReasoning: s.showReasoning,
@@ -172,10 +188,10 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                                     onLink: (u) => launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication),
                                     onOpenFile: (p) => toast(context, 'Berkas ada di PC: $p'),
                                   ),
-                                ]),
+                                ),
                         );
                       },
-                    ),
+                    )),
             ),
             Positioned(
               left: 0,
@@ -204,7 +220,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
         if (r.transcript.error != null && !r.running)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: DecoratedBox(decoration: BoxDecoration(color: NV.bg, borderRadius: NV.ctl), child: NvNotice(r.transcript.error!)),
+            child: GlassNotice(r.transcript.error!),
           ),
                   _composer(context, r),
                 ]),
@@ -213,7 +229,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
           ]),
         ),
       ]),
-    );
+    ));
   }
 
   /// Minimal start: only a time-based greeting (the composer sits below).
@@ -224,7 +240,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             child: Center(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(28, 0, 28, _dockH),
-                child: Text(greetingFor(DateTime.now()),
+                child: GlassLegibleText(greetingFor(DateTime.now()),
                     key: const ValueKey('chat-greeting'), textAlign: TextAlign.center, style: NV.display(size: 40)),
               ),
             ),
