@@ -546,7 +546,7 @@ export function ProvidersSettings({
   const hasOauth = oauthProviders.length > 0
   // The sidebar subnav owns the Accounts/API-keys split now; with no OAuth
   // providers there's nothing for the "Accounts" view to show, so fall to keys.
-  const showApiKeys = view === 'keys' || (!hasOauth && view !== 'custom-endpoints')
+  const showApiKeys = view === 'keys' || !hasOauth
 
   const keyGroups = buildProviderKeyGroups(vars)
 
