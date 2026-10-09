@@ -1,56 +1,56 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Logo Neovarch Agent" width="160" height="160">
+  <img src="docs/assets/logo.png" alt="Neovarch Agent logo" width="160" height="160">
 </p>
 
 <h1 align="center">Neovarch Agent</h1>
 
 <p align="center">
-  <a href="https://maftuuh1922.github.io/neorachAgent_lp/">Situs</a> ·
-  <a href="https://maftuuh1922.github.io/neorachAgent_lp/docs/">Dokumentasi</a> ·
-  <a href="https://github.com/Maftuuh1922/neovrach_Agent/releases/latest">Unduh</a> ·
-  <a href="docs/remote-protocol.md">Protokol remote</a> ·
-  <a href="CONTRIBUTING.md">Kontribusi</a>
+  <a href="https://maftuuh1922.github.io/neorachAgent_lp/">Website</a> ·
+  <a href="https://maftuuh1922.github.io/neorachAgent_lp/docs/">Docs</a> ·
+  <a href="https://github.com/Maftuuh1922/neovrach_Agent/releases/latest">Download</a> ·
+  <a href="docs/remote-protocol.md">Remote protocol</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 <p align="center">
-  <a href="https://maftuuh1922.github.io/neorachAgent_lp/docs/"><img src="https://img.shields.io/badge/docs-situs-C8101A" alt="Dokumentasi"></a>
-  <a href="https://github.com/Maftuuh1922/neovrach_Agent/releases/latest"><img src="https://img.shields.io/github/v/release/Maftuuh1922/neovrach_Agent?label=rilis&color=C8101A" alt="Rilis terbaru"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/lisensi-MIT-informational" alt="Lisensi MIT"></a>
+  <a href="https://maftuuh1922.github.io/neorachAgent_lp/docs/"><img src="https://img.shields.io/badge/docs-website-C8101A" alt="Docs"></a>
+  <a href="https://github.com/Maftuuh1922/neovrach_Agent/releases/latest"><img src="https://img.shields.io/github/v/release/Maftuuh1922/neovrach_Agent?label=release&color=C8101A" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-informational" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Android-0A0A0A" alt="Platform">
 </p>
 
-**Agen AI dari NeovarchLabs yang bekerja di PC kamu sendiri (Windows, Linux) dan bisa kamu kendalikan dari HP Android.
-Desktop adalah intinya: chat dengan alat, sesi, skill, memori, dan papan Kanban, semua datanya di `~/.neovarch`.
-HP hanya remote: dipasangkan lewat QR, lalu mengendalikan agen di PC.**
+**An AI agent by NeovarchLabs that runs on your own PC (Windows, Linux) and that you can control from your Android phone.
+The desktop is the core: chat with tools, sessions, skills, memory, and a Kanban board, with all data kept in `~/.neovarch`.
+The phone is just a remote: pair it with a QR code and drive the agent on your PC.**
 
-Pakai model apa pun yang kompatibel dengan OpenAI `/chat/completions`: OpenAI, OpenRouter, Groq, DeepSeek, Ollama,
-atau endpoint kustom (termasuk server lokal). Pilih penyedia dengan `neovarch setup`; API key disimpan di
+Use any model that speaks the OpenAI `/chat/completions` API: OpenAI, OpenRouter, Groq, DeepSeek, Ollama,
+or a custom endpoint (including a local server). Pick a provider with `neovarch setup`; API keys are stored in
 `~/.neovarch/.env`.
 
 <table>
   <tr>
-    <td><b>Inti di PC sendiri</b></td>
-    <td>Aplikasi desktop Electron menjalankan inti Neovarch (Python, perintah <code>neovarch</code>); data tetap di komputermu.</td>
+    <td><b>Core on your own PC</b></td>
+    <td>The Electron desktop app runs the Neovarch core (Python, the <code>neovarch</code> command); your data stays on your machine.</td>
   </tr>
   <tr>
-    <td><b>Remote dari HP</b></td>
-    <td>Pasangkan HP lewat QR, lalu chat, setujui perintah, dan pantau tugas serta status PC lewat LAN atau Tailscale.</td>
+    <td><b>Phone remote</b></td>
+    <td>Pair your phone by QR, then chat, approve commands, and watch tasks and PC status over LAN or Tailscale.</td>
   </tr>
   <tr>
-    <td><b>Chat dengan alat</b></td>
-    <td>Streaming dengan alat <code>shell</code>, <code>read_file</code>, <code>write_file</code>, <code>edit_file</code>, <code>web_fetch</code>, <code>memory</code>, dan <code>skill</code>.</td>
+    <td><b>Chat with tools</b></td>
+    <td>Streaming chat with the <code>shell</code>, <code>read_file</code>, <code>write_file</code>, <code>edit_file</code>, <code>web_fetch</code>, <code>memory</code>, and <code>skill</code> tools.</td>
   </tr>
   <tr>
-    <td><b>Persetujuan perintah</b></td>
-    <td>Perintah berbahaya menunggu izinmu (mode <code>ask</code> / <code>off</code>), juga dari notifikasi Android.</td>
+    <td><b>Command approvals</b></td>
+    <td>Risky commands wait for your OK (<code>ask</code> / <code>off</code> modes), including from an Android notification.</td>
   </tr>
   <tr>
-    <td><b>Sesi, skill, memori, Kanban</b></td>
-    <td>Chat tersimpan dan bisa dilanjutkan, skill lokal, memori catatan, dan papan Kanban untuk tugas.</td>
+    <td><b>Sessions, skills, memory, Kanban</b></td>
+    <td>Saved chats you can resume, local skills, note-based memory, and a Kanban board for tasks.</td>
   </tr>
   <tr>
-    <td><b>Gateway terkunci token</b></td>
-    <td>Akses remote memakai gateway terpisah yang dikunci token; buat token baru untuk mencabut akses semua HP.</td>
+    <td><b>Token-locked gateway</b></td>
+    <td>Remote access goes through a separate token-locked gateway; generate a new token to revoke every paired phone.</td>
   </tr>
 </table>
 
@@ -70,34 +70,34 @@ curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scr
 irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1 | iex
 ```
 
-**Android:** unduh `neovarch-agent-android-arm64.apk` (kebanyakan HP modern) atau
-`neovarch-agent-android-universal.apk` dari [Releases](https://github.com/Maftuuh1922/neovrach_Agent/releases/latest).
+**Android:** download `neovarch-agent-android-arm64.apk` (most modern phones) or
+`neovarch-agent-android-universal.apk` from [Releases](https://github.com/Maftuuh1922/neovrach_Agent/releases/latest).
 
-Installer Windows `.exe`, AppImage/`.deb` Linux, dan peluncur npm juga ada di Releases. macOS dan Linux ARM64 belum tersedia.
+The Windows `.exe` installer, Linux AppImage/`.deb`, and the npm launcher are on Releases too. macOS and Linux ARM64 are not available yet.
 
 ---
 
 ## Getting Started
 
 ```bash
-neovarch setup              # pilih penyedia model dan simpan API key
-neovarch                    # chat di terminal
-neovarch -q "halo"          # jalankan satu prompt lalu keluar
-neovarch --resume <id>      # lanjutkan sesi
-neovarch sessions           # daftar, lihat, atau hapus chat tersimpan
-neovarch config show        # lihat atau ubah config.yaml
-neovarch desktop            # buka aplikasi desktop
-neovarch update             # cara memperbarui Neovarch
-neovarch version            # tampilkan versi
+neovarch setup              # pick a model provider and save your API key
+neovarch                    # chat in the terminal
+neovarch -q "hello"         # run a single prompt and exit
+neovarch --resume <id>      # resume a session
+neovarch sessions           # list, view, or delete saved chats
+neovarch config show        # view or edit config.yaml
+neovarch desktop            # open the desktop app
+neovarch update             # how to update Neovarch
+neovarch version            # print the version
 ```
 
-Pasangkan HP: di PC buka **Pengaturan ▸ Remote / Perangkat ▸ Aktifkan akses remote**, lalu di HP pilih
-**Pindai QR dari PC**.
+Pair your phone: on the PC open **Pengaturan ▸ Remote / Perangkat ▸ Aktifkan akses remote** (Settings ▸ Remote / Devices ▸ Enable remote access), then on the phone choose
+**Pindai QR dari PC** (Scan QR from PC).
 
-Panduan lengkap (konfigurasi model, pairing HP, build dari source): <https://maftuuh1922.github.io/neorachAgent_lp/docs/>
+Full guide (model setup, phone pairing, building from source): <https://maftuuh1922.github.io/neorachAgent_lp/docs/>
 
 ---
 
 ## License
 
-MIT, © 2026 Maftuuh1922 / NeovarchLabs. Lihat [`LICENSE`](LICENSE) dan [`NOTICE`](NOTICE).
+MIT, © 2026 Maftuuh1922 / NeovarchLabs. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
