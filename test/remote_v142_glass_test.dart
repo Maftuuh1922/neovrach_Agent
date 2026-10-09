@@ -323,6 +323,10 @@ void main() {
       // collapsed: the big appearance section is not built until opened
       expect(find.byType(NvAppearanceSection), findsNothing);
       expect(find.byKey(const ValueKey('social-section')), findsNothing);
+      // 1.4.5: "Pamerkan" sits under the header, so the group may start below the fold
+      expect(y('profile-stack'), lessThan(y('profile-pamerkan')));
+      await tester.ensureVisible(find.byKey(const ValueKey('profile-group-appearance')));
+      await settle(tester, 2);
       await tester.tap(find.byKey(const ValueKey('profile-group-appearance')));
       await settle(tester, 4);
       expect(find.byType(NvAppearanceSection), findsOneWidget);
