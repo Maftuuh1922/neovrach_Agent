@@ -103,7 +103,7 @@ void main() {
     }
   }
 
-  test('version is 1.4.3', () => expect(SettingsController.appVersion, '1.4.3'));
+  test('version is 1.4.4', () => expect(SettingsController.appVersion, '1.4.4'));
 
   group('Onboarding theme step', () {
     testWidgets('4th page "Pilih tema": picker without "Ikuti tema PC", pick = local override, applied live', (tester) async {
@@ -318,8 +318,9 @@ void main() {
       }
       expect(lensX(), closeTo(start.dx + tabW * 2, tabW * 0.15));
       expect(stack().index, 0); // not switched until release
-      // the tab under the lens is highlighted (filled icon)
-      expect(find.byIcon(CupertinoIcons.person_crop_circle_fill), findsOneWidget);
+      // the highlight follows the lens: Chat is no longer filled (tab 2 = PC)
+      expect(find.byIcon(CupertinoIcons.chat_bubble_fill), findsNothing);
+      expect(find.byIcon(CupertinoIcons.person_crop_circle_fill), findsNothing);
       expect(haptics.where((h) => h.contains('selectionClick')).length, 2); // crossed into tab 1, then 2
       await g.up();
       await settle(tester);

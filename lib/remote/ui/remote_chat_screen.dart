@@ -13,7 +13,9 @@ import '../../state/voice_service.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/screens/chat/message_widgets.dart';
 import '../../ui/widgets/common.dart';
+import '../agent_identity.dart';
 import '../composer.dart';
+import '../home_widget.dart' show remoteLaunchAction;
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'nv_glass_text.dart';
@@ -22,6 +24,7 @@ import 'glass/glass_chat.dart';
 import 'glass/liquid_glass.dart';
 import 'nv_widgets.dart';
 import 'remote_attachments.dart';
+import 'model_picker.dart';
 import 'remote_composer.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
@@ -74,10 +77,35 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   void initState() {
     super.initState();
     _input.addListener(_onInput);
+    remoteLaunchAction.addListener(_onLaunchAction);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunchAction());
+  }
+
+  /// Home-screen widget "Suara": start dictation once the PC is connected.
+  bool _awaitLaunch = false;
+  void _onLaunchAction() {
+    if (!mounted || remoteLaunchAction.value != 'voice') return;
+    final r = ref.read(remoteProvider);
+    if (!r.connected) {
+      // wait for the connection (the controller notifies on connect)
+      if (_awaitLaunch) return;
+      _awaitLaunch = true;
+      void later() {
+        if (mounted && (!r.connected)) return;
+        r.removeListener(later);
+        _awaitLaunch = false;
+        _onLaunchAction();
+      }
+      r.addListener(later);
+      return;
+    }
+    remoteLaunchAction.value = null;
+    if (!_dictating) _dictate();
   }
 
   @override
   void dispose() {
+    remoteLaunchAction.removeListener(_onLaunchAction);
     _input.removeListener(_onInput);
     _input.dispose();
     _scroll.dispose();
@@ -184,26 +212,45 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     _toBottom();
   }
 
+  /// Mic: Android SpeechRecognizer (speech_to_text), Indonesian or English;
+  /// partial words fill the field, the final result is sent to the agent.
+  /// Long-press switches ID ↔ EN.
   Future<void> _dictate() async {
     final v = VoiceService.instance;
     if (_dictating) {
       await v.stopDictation();
-      setState(() => _dictating = false);
+      if (mounted) setState(() => _dictating = false);
       return;
     }
     setState(() => _dictating = true);
+    var sent = false;
     await v.startDictation(
       locale: ref.read(settingsProvider).sttLocale,
       onText: (t, done) {
+        if (!mounted) return;
         _input.text = t;
         _input.selection = TextSelection.collapsed(offset: t.length);
-        if (done && mounted) setState(() => _dictating = false);
+        if (done) {
+          setState(() => _dictating = false);
+          if (!sent && t.trim().isNotEmpty) {
+            sent = true;
+            _send();
+          }
+        }
       },
     );
     if (v.error != null && mounted) {
       setState(() => _dictating = false);
       toast(context, v.error!);
     }
+  }
+
+  void _switchSttLanguage() {
+    final s = ref.read(settingsProvider);
+    final en = s.sttLocale.startsWith('en');
+    s.update((x) => x.sttLocale = en ? 'id_ID' : 'en_US');
+    setState(() {});
+    toast(context, en ? 'Dikte: Bahasa Indonesia' : 'Dictation: English');
   }
 
   void _sessions() => showPaperSheet(
@@ -224,6 +271,8 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final others = r.approvals.length - mine.length;
     if (r.running) _toBottom();
     final pc = r.desktop?.name ?? 'PC';
+    // the open session's pegawai (same name + avatar as Kantor and the desktop)
+    final agent = r.office?.agents.where((a) => a.sessionId != null && (a.sessionId == r.storedId || a.sessionId == r.runtimeId)).firstOrNull;
     final tps = r.transcript.tokensPerSecond;
 
     _track(r);
@@ -298,7 +347,8 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                                       ],
                                     ]))
                               : GlassAgentTurn(
-                                  label: 'neovarch · $pc',
+                                  label: '${agent?.name ?? 'neovarch'} · $pc',
+                                  avatar: agent == null ? null : NvAgentAvatar.of(agent, size: 18, dot: false),
                                   live: m.streaming,
                                   appear: _fresh.remove(m.id),
                                   child: AssistantMessage(
@@ -370,6 +420,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
       );
 
   Widget _composer(BuildContext context, RemoteController r) {
+    final s = ref.watch(settingsProvider);
     // At rest: above the nav pill (the shell reserves it in padding.bottom).
     // Keyboard open: 8px above the keyboard top (pill hidden).
     final bottom = MediaQuery.paddingOf(context).bottom;
@@ -398,6 +449,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
             child: Text(r.attachNotice!, key: const ValueKey('attach-notice'), style: TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
           ),
+        const Align(alignment: Alignment.centerLeft, child: ModelChip()),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           // "+": uploads, and on a PC with the composer catalog also skills,
           // model, reasoning, mentions, URL and snippets (desktop parity).
@@ -407,12 +459,29 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             onPressed: r.connected ? () => _openMenu(r) : null,
           ),
           const SizedBox(width: 4),
-          if (canDictate)
-            NvIconButton(
-              tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah',
-              icon: _dictating ? CupertinoIcons.mic_fill : CupertinoIcons.mic,
-              accent: _dictating,
-              onPressed: r.connected ? _dictate : null,
+          if (canDictate || VoiceService.hasTestEngine)
+            KeyedSubtree(
+              key: const ValueKey('composer-mic'),
+              child: Stack(clipBehavior: Clip.none, children: [
+                NvIconButton(
+                  tooltip: _dictating ? 'Berhenti dikte' : 'Dikte perintah (tekan lama: ganti bahasa)',
+                  icon: _dictating ? CupertinoIcons.mic_fill : CupertinoIcons.mic,
+                  accent: _dictating,
+                  onPressed: r.connected ? _dictate : null,
+                  onLongPress: _switchSttLanguage,
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      decoration: BoxDecoration(color: NV.raised, borderRadius: BorderRadius.circular(5), border: Border.all(color: NV.border)),
+                      child: Text(s.sttLocale.startsWith('en') ? 'EN' : 'ID', key: const ValueKey('composer-mic-lang'), style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: NV.muted)),
+                    ),
+                  ),
+                ),
+              ]),
             ),
           Expanded(
             child: TextField(

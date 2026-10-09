@@ -97,7 +97,9 @@ class NvAppBackground extends ConsumerWidget {
         ColoredBox(color: NV.bg),
         ClipRect(child: pic),
         if (b.tint > 0) ColoredBox(color: NV.red.withValues(alpha: b.tint)),
-        if (b.dim > 0) ColoredBox(color: NV.bg.withValues(alpha: b.dim)),
+        // light mode: at least a light veil, so dark text over a dark photo stays readable
+        if (b.dim > 0 || !NV.palette.dark)
+          ColoredBox(color: NV.bg.withValues(alpha: NV.palette.dark ? b.dim : (b.dim > NV.lightWallpaperVeil ? b.dim : NV.lightWallpaperVeil))),
       ]),
     );
   }

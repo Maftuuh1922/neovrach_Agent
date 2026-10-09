@@ -1,4 +1,4 @@
-// v1.4.2 (second batch): 4-tab nav (Chat · Kantor · Profil · PC) with a lens
+// v1.4.2 (second batch): 4-tab nav (Chat · Kantor · PC · Profil) with a lens
 // wide enough for its labels, approvals merged into Chat (chip + sheet),
 // Kantor | Tugas segments, Profil (Tampilan + launcher icon + social slot),
 // nav avatar, liquid-glass greeting and the glass/animated intro.
@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neovarch_agent/remote/social_models.dart';
+import 'package:neovarch_agent/remote/ui/remote_profile_screen.dart' show ProfileGroup;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/main.dart' as app;
@@ -137,7 +139,7 @@ void main() {
   Finder inNav(String t) => find.descendant(of: navBar, matching: find.text(t));
 
   group('4-tab nav', () {
-    testWidgets('Chat · Kantor · Profil · PC; no Tugas / Setujui tabs', (tester) async {
+    testWidgets('Chat · Kantor · PC · Profil; no Tugas / Setujui tabs', (tester) async {
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
       for (final t in ['CHAT', 'KANTOR', 'PROFIL', 'PC']) {
@@ -148,7 +150,7 @@ void main() {
     });
 
     for (final width in [390.0, 360.0]) {
-      for (final (tab, label) in [(1, 'KANTOR'), (2, 'PROFIL'), (0, 'CHAT')]) {
+      for (final (tab, label) in [(1, 'KANTOR'), (3, 'PROFIL'), (0, 'CHAT')]) {
         testWidgets('lens fits the magnified $label with padding · ${width.toInt()} dp', (tester) async {
           app.previewTab = tab;
           await pump(tester, const RemoteShell(), width: width);
@@ -182,25 +184,25 @@ void main() {
       double lensX() => tester.getRect(find.byKey(const ValueKey('nv-nav-lens'))).center.dx;
       final g = await tester.startGesture(Offset(bar.left + 4 + tabW * 0.5, bar.center.dy));
       for (var i = 0; i < 10; i++) {
-        await g.moveBy(Offset(tabW * 2 / 10, 0));
+        await g.moveBy(Offset(tabW * 3 / 10, 0));
         await tester.pump(const Duration(milliseconds: 16));
       }
-      expect(lensX(), closeTo(bar.left + 4 + tabW * 2.5, tabW * 0.2));
+      expect(lensX(), closeTo(bar.left + 4 + tabW * 3.5, tabW * 0.2));
       await g.up();
       await settle(tester);
-      expect(lensX(), closeTo(bar.left + 4 + tabW * 2.5, 1.5));
+      expect(lensX(), closeTo(bar.left + 4 + tabW * 3.5, 1.5));
       expect(find.byKey(const ValueKey('profile-header-slot')), findsOneWidget);
     });
 
     testWidgets('Profil item: person icon by default, avatar (ring when active, dimmed when not) when set', (tester) async {
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
-      expect(find.byKey(const ValueKey('nv-nav-avatar-2')), findsNothing);
+      expect(find.byKey(const ValueKey('nv-nav-avatar-3')), findsNothing);
       final ctx = tester.element(find.byType(RemoteShell));
       final container = ProviderScope.containerOf(ctx);
       container.read(profileAvatarProvider.notifier).state = MemoryImage(_png);
       await settle(tester, 3);
-      final av = find.byKey(const ValueKey('nv-nav-avatar-2'));
+      final av = find.byKey(const ValueKey('nv-nav-avatar-3'));
       expect(av, findsOneWidget);
       expect(tester.getSize(av), const Size(NvNavBar.avatarSize, NvNavBar.avatarSize));
       double opacity() => tester.widget<Opacity>(find.descendant(of: av, matching: find.byType(Opacity)).first).opacity;
@@ -231,7 +233,7 @@ void main() {
     });
 
     testWidgets('a tapped approval notification (route "approvals") opens Chat + the sheet', (tester) async {
-      app.previewTab = 3; // on PC
+      app.previewTab = 2; // on PC
       await pump(tester, const RemoteShell(), r: controller(approvals: true));
       await settle(tester, 4);
       final state = tester.state(find.byType(RemoteShell)) as dynamic;
@@ -269,11 +271,12 @@ void main() {
 
   group('Profil', () {
     testWidgets('holds the social slot, the whole Tampilan section and the icon picker; PC tab has no theme settings', (tester) async {
-      app.previewTab = 2;
+      app.previewTab = 3;
+      ProfileGroup.debugOpen = {'appearance', 'glass', 'icon', 'friends'};
+      addTearDown(() => ProfileGroup.debugOpen = {});
       await pump(tester, const RemoteShell());
       await settle(tester, 4);
       expect(find.byType(ProfileHeaderSlot), findsOneWidget);
-      expect(find.byKey(const ValueKey('social-section')), findsOneWidget);
       expect(find.byType(NvAppearanceSection), findsOneWidget);
       expect(find.text('Ikuti tema PC'), findsOneWidget);
       expect(find.byKey(const ValueKey('corner-card')), findsOneWidget);
@@ -281,12 +284,76 @@ void main() {
           scrollable: find.descendant(of: find.byKey(const ValueKey('profile-list')), matching: find.byType(Scrollable)).first);
       expect(find.byType(AppIconPanel), findsOneWidget);
       expect(find.byKey(const ValueKey('app-icon-note')), findsOneWidget);
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('social-section')), 300,
+          scrollable: find.descendant(of: find.byKey(const ValueKey('profile-list')), matching: find.byType(Scrollable)).first);
+      expect(find.byKey(const ValueKey('social-section')), findsOneWidget);
       await tester.tap(inNav('PC'));
       await settle(tester, 4);
       // the Tampilan section is gone from PC (only the Profil one, offstage, remains)
       expect(find.byType(NvAppearanceSection, skipOffstage: true), findsNothing);
       expect(find.byKey(const ValueKey('pc-licenses'), skipOffstage: false), findsOneWidget);
     });
+  });
+
+  group('Profil 1.4.4', () {
+    SocialProfile sample() => SocialProfile.fromJson({
+          'login': 'maftuuh', 'name': 'Maftuh', 'bio': 'Bikin agen di Bandung',
+          'heatmap': {'start': '2025-10-05', 'end': '2026-10-08', 'counts': [for (var i = 0; i < 370; i++) i % 5]},
+          'stack': {'languages': [{'name': 'Dart', 'share': 0.5}, {'name': 'Python', 'share': 0.3}, {'name': 'TypeScript', 'share': 0.2}]},
+        });
+
+    testWidgets('header, graph and stack on top; settings start collapsed and unfold', (tester) async {
+      app.previewTab = 3;
+      final r = controller()
+        ..socialSignedIn = true
+        ..socialProfile = sample();
+      await pump(tester, const RemoteShell(), r: r);
+      await settle(tester, 4);
+      expect(find.byKey(const ValueKey('github-header')), findsOneWidget);
+      expect(find.text('Maftuh'), findsOneWidget);
+      expect(find.text('@maftuuh · lewat PC'), findsOneWidget);
+      expect(find.text('Bikin agen di Bandung'), findsOneWidget);
+      expect(find.byKey(const ValueKey('contribution-graph')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chip-Dart')), findsOneWidget);
+      // order: header above graph above stack above the settings
+      double y(String k) => tester.getTopLeft(find.byKey(ValueKey(k))).dy;
+      expect(y('github-header'), lessThan(y('contribution-card')));
+      expect(y('contribution-card'), lessThan(y('profile-stack')));
+      expect(y('profile-stack'), lessThan(y('profile-group-appearance')));
+      // collapsed: the big appearance section is not built until opened
+      expect(find.byType(NvAppearanceSection), findsNothing);
+      expect(find.byKey(const ValueKey('social-section')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('profile-group-appearance')));
+      await settle(tester, 4);
+      expect(find.byType(NvAppearanceSection), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('profile-group-appearance')));
+      await settle(tester, 4);
+      expect(find.byType(NvAppearanceSection), findsNothing);
+    });
+
+    for (final open in [false, true]) {
+      testWidgets('last Profil item scrolls fully above the floating nav · 390 dp${open ? ' · groups open' : ''}', (tester) async {
+        app.previewTab = 3;
+        if (open) {
+          ProfileGroup.debugOpen = {'appearance', 'glass', 'icon', 'friends'};
+          addTearDown(() => ProfileGroup.debugOpen = {});
+        }
+        final r = controller()
+          ..socialSignedIn = true
+          ..socialProfile = sample();
+        await pump(tester, const RemoteShell(), r: r, width: 390);
+        await settle(tester, 4);
+        final list = find.byKey(const ValueKey('profile-list'));
+        for (var i = 0; i < 30; i++) {
+          await tester.drag(list, const Offset(0, -600));
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        await settle(tester, 6);
+        final last = find.byKey(open ? const ValueKey('profile-group-body-friends') : const ValueKey('profile-group-friends'));
+        final nav = tester.getRect(navBar);
+        expect(tester.getRect(last).bottom, lessThanOrEqualTo(nav.top), reason: 'last item ${tester.getRect(last)} vs nav $nav');
+      });
+    }
   });
 
   group('Launcher icon', () {

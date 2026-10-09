@@ -1,3 +1,5 @@
+import 'models_api.dart';
+
 // The PC's Office (`GET /api/office`, pushed as `office.update`): the agents
 // as "pegawai" at their desks, with status, current task and an activity feed.
 // Pure Dart.
@@ -43,7 +45,13 @@ class OfficeAgent {
     this.lastActivityText,
     this.messageCount = 0,
     this.pendingCommand,
+    this.modelOverride,
+    this.modelSource = 'global',
   });
+
+  /// 9Router contract: the agent's own model (null = follows the PC default).
+  final ModelRef? modelOverride;
+  final String modelSource;
 
   bool get working => status == 'working';
   bool get waiting => status == 'waiting-approval';
@@ -73,6 +81,8 @@ class OfficeAgent {
       lastActivityText: _str(j['last_activity_text']),
       messageCount: (j['message_count'] as num?)?.toInt() ?? 0,
       pendingCommand: pa is Map ? _str(pa['command']) ?? _str(pa['description']) : null,
+      modelOverride: ModelRef.maybe(j['model_override']),
+      modelSource: _str(j['model_source']) ?? 'global',
     );
   }
 }
@@ -113,7 +123,9 @@ class OfficeSnapshot {
     this.counts = const {},
     this.kanban = const {},
     this.vault = const {},
+    this.defaultModel,
   });
+  final ModelRef? defaultModel;
 
   int get working => counts['working'] ?? agents.where((a) => a.working).length;
   int get waiting => counts['waiting-approval'] ?? agents.where((a) => a.waiting).length;
@@ -131,5 +143,6 @@ class OfficeSnapshot {
         counts: _ints(j['counts']),
         kanban: _ints(j['kanban']),
         vault: j['vault'] is Map ? Map<String, dynamic>.from(j['vault'] as Map) : const {},
+        defaultModel: ModelRef.maybe(j['default_model']),
       );
 }

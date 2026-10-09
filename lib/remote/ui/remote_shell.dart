@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../main.dart' show previewTab;
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/motion.dart';
+import '../home_widget.dart';
+import '../wake_word.dart' show wakeWordProvider;
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import '../../data/device_tools.dart' show deviceCall;
@@ -37,9 +39,10 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
 
   // 1.4.2: 4 tabs. Setujui merged into Chat (pinned chip + sheet), Tugas
   // into Kantor (segmented), Tampilan moved from PC to the new Profil tab.
-  static const tabChat = 0, tabKantor = 1, tabProfile = 2, tabPc = 3;
+  static const tabChat = 0, tabKantor = 1, tabPc = 2, tabProfile = 3;
   int _lastApprovals = 0;
   bool _sheetOpen = false;
+  final _widget = HomeWidgetSync();
 
   @override
   void initState() {
@@ -82,6 +85,17 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
         openTasks();
       case 'chat':
         setState(() => index = tabChat);
+      // home-screen widget buttons
+      case 'voice':
+        setState(() => index = tabChat);
+        remoteLaunchAction.value = 'voice';
+      case 'newtask':
+        openTasks();
+        remoteLaunchAction.value = 'newtask';
+      // "Hey Neo" after a reboot: restart the listener from the foreground
+      case 'wake':
+        setState(() => index = tabProfile);
+        ref.read(wakeWordProvider).resume();
       case 'profile':
         setState(() => index = tabProfile);
     }
@@ -99,7 +113,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     // Back in the foreground: phones drop sockets in the background.
     if (state == AppLifecycleState.resumed) {
       final r = ref.read(remoteProvider);
-      if (!r.connected) r.reconnect();
+      r.resyncOnResume();
       _takeRoute();
     }
   }
@@ -109,13 +123,14 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   static const _dest = <(IconData, IconData, String)>[
     (CupertinoIcons.chat_bubble, CupertinoIcons.chat_bubble_fill, 'Chat'),
     (CupertinoIcons.building_2_fill, CupertinoIcons.building_2_fill, 'Kantor'),
-    (CupertinoIcons.person_crop_circle, CupertinoIcons.person_crop_circle_fill, 'Profil'),
     (CupertinoIcons.desktopcomputer, CupertinoIcons.desktopcomputer, 'PC'),
+    (CupertinoIcons.person_crop_circle, CupertinoIcons.person_crop_circle_fill, 'Profil'),
   ];
 
   @override
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
+    _widget.update(remote); // home-screen widget summary (sent only when it changed)
     final pending = remote.approvals.length;
     if (pending > _lastApprovals && index != tabChat) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -139,8 +154,8 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
           onOpenChat: () => setState(() => index = tabChat),
           onOpenApprovals: openApprovals,
         ),
-        const RemoteProfileScreen(),
         RemotePcScreen(onOpenChat: () => setState(() => index = tabChat)),
+        const RemoteProfileScreen(),
       ].indexed)
         TabFade(active: index == i, child: w),
     ]);

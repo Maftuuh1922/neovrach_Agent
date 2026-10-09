@@ -13,6 +13,7 @@ import '../remote_controller.dart';
 import '../social_models.dart';
 import 'nv_widgets.dart';
 import 'tech_logo.dart';
+import 'profile_header_slot.dart' show contributionColor;
 import 'profile_share_card.dart' show showProfileShareSheet;
 
 /// Test seam for avatars (network by default).
@@ -41,7 +42,7 @@ class _RemoteSocialScreenState extends ConsumerState<RemoteSocialScreen> {
                 onPressed: () => Navigator.maybePop(context),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(CupertinoIcons.chevron_back, size: 20, color: NV.red),
-                  Text('PC', style: TextStyle(color: NV.red, fontSize: 16)),
+                  Text('PC', style: TextStyle(color: NV.redInk, fontSize: 16)),
                 ]),
               ),
             ]),
@@ -57,8 +58,10 @@ class _RemoteSocialScreenState extends ConsumerState<RemoteSocialScreen> {
 /// The embeddable profile + friends block (no Scaffold): the Profil tab puts it
 /// at its top; [RemoteSocialScreen] wraps it as a pushed page.
 class SocialSection extends ConsumerStatefulWidget {
-  const SocialSection({super.key, this.autoLoad = true});
+  const SocialSection({super.key, this.autoLoad = true, this.showProfile = true});
   final bool autoLoad;
+  /// False on the Profil tab, whose header already shows the profile.
+  final bool showProfile;
   @override
   ConsumerState<SocialSection> createState() => _SocialSectionState();
 }
@@ -92,8 +95,8 @@ class _SocialSectionState extends ConsumerState<SocialSection> {
           ),
         )
       else ...[
-        if (p != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SocialProfileCard(profile: p)),
-        if (p != null)
+        if (p != null && widget.showProfile) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SocialProfileCard(profile: p)),
+        if (p != null && widget.showProfile)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: OutlinedButton.icon(
@@ -137,18 +140,29 @@ class NvAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final img = socialAvatarProvider(url);
+    // The initial is always painted underneath, so the circle never shows up
+    // blank while the photo loads or when it can't be fetched (offline).
+    final initial = Text(name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+        style: TextStyle(color: NV.onRed, fontWeight: FontWeight.w600, fontSize: size * 0.4));
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: NV.red,
-        image: img == null ? null : DecorationImage(image: img, fit: BoxFit.cover, onError: (_, _) {}),
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: NV.red),
       alignment: Alignment.center,
       child: img == null
-          ? Text(name.isEmpty ? '?' : name[0].toUpperCase(), style: TextStyle(color: NV.onRed, fontWeight: FontWeight.w600, fontSize: size * 0.4))
-          : null,
+          ? initial
+          : Stack(fit: StackFit.expand, alignment: Alignment.center, children: [
+              Center(child: initial),
+              ClipOval(
+                child: Image(
+                  image: img,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  frameBuilder: (_, child, frame, sync) => sync || frame != null ? child : const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ]),
     );
   }
 }
@@ -183,13 +197,8 @@ class SocialHeatmapView extends StatelessWidget {
   final SocialHeatmap heatmap;
   final double cell, gap;
 
-  static Color levelColor(int level) => switch (level) {
-        0 => Color.lerp(NV.raised, NV.text, 0.07)!,
-        1 => Color.lerp(NV.raised, NV.red, 0.30)!,
-        2 => Color.lerp(NV.raised, NV.red, 0.55)!,
-        3 => Color.lerp(NV.raised, NV.red, 0.78)!,
-        _ => NV.red,
-      };
+  /// Same accent mapping as the Profil contribution graph.
+  static Color levelColor(int level) => contributionColor(level);
 
   @override
   Widget build(BuildContext context) {
@@ -358,7 +367,7 @@ class FriendTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, color: NV.text, fontWeight: FontWeight.w500)),
               const SizedBox(height: 2),
-              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: f.coding ? NV.red : NV.muted)),
+              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: f.coding ? NV.redInk : NV.muted)),
             ]),
           ),
           if (f.topStack.isNotEmpty)
@@ -422,7 +431,7 @@ class _RemoteFriendScreenState extends ConsumerState<RemoteFriendScreen> {
               onPressed: () => Navigator.maybePop(context),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(CupertinoIcons.chevron_back, size: 20, color: NV.red),
-                Text('Teman', style: TextStyle(color: NV.red, fontSize: 16)),
+                Text('Teman', style: TextStyle(color: NV.redInk, fontSize: 16)),
               ]),
             ),
             const Spacer(),

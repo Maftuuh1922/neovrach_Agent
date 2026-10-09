@@ -6,29 +6,121 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../data/device_tools.dart' show ensurePermissions;
 import '../data/platform_caps.dart';
+
+/// The speech recogniser behind dictation (Android SpeechRecognizer through
+/// speech_to_text in the app; a fake in tests).
+abstract class SpeechEngine {
+  Future<bool> initialize({required void Function(String error) onError, required void Function(String status) onStatus});
+  Future<List<String>> localeIds();
+  Future<void> listen({required String localeId, required void Function(String words, bool isFinal) onResult});
+  Future<void> stop();
+}
+
+class _SttEngine implements SpeechEngine {
+  final SpeechToText _stt = SpeechToText();
+  @override
+  Future<bool> initialize({required void Function(String error) onError, required void Function(String status) onStatus}) =>
+      _stt.initialize(onError: (e) => onError(e.errorMsg), onStatus: onStatus);
+  @override
+  Future<List<String>> localeIds() async => [for (final l in await _stt.locales()) l.localeId];
+  @override
+  Future<void> listen({required String localeId, required void Function(String words, bool isFinal) onResult}) => _stt.listen(
+        onResult: (SpeechRecognitionResult r) => onResult(r.recognizedWords, r.finalResult),
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: true,
+          listenMode: ListenMode.dictation,
+          localeId: localeId,
+          pauseFor: const Duration(seconds: 4),
+          listenFor: const Duration(minutes: 2),
+        ),
+      );
+  @override
+  Future<void> stop() => _stt.stop();
+}
+
+/// Picks the recogniser locale for [wanted] ("id_ID", "en-US"): exact, then
+/// the same language, else null (the recogniser's default).
+String? resolveSttLocale(List<String> available, String wanted) {
+  String norm(String x) => x.replaceAll('-', '_').toLowerCase();
+  final w = norm(wanted);
+  for (final a in available) {
+    if (norm(a) == w) return a;
+  }
+  final lang = w.split('_').first;
+  for (final a in available) {
+    if (norm(a).split('_').first == lang) return a;
+  }
+  return null;
+}
+
+/// Friendly Indonesian text for SpeechRecognizer error codes.
+String sttErrorText(String code) => switch (code) {
+      'error_permission' || 'error_insufficient_permissions' => 'Izin mikrofon ditolak. Buka Pengaturan → Aplikasi → Neovarch → Izin → Mikrofon.',
+      'error_no_match' || 'error_speech_timeout' => 'Suara tidak tertangkap. Coba lagi lebih dekat ke mikrofon.',
+      'error_network' || 'error_network_timeout' || 'error_server' => 'Pengenalan suara butuh internet (atau unduh paket bahasa offline di pengaturan Google).',
+      'error_language_not_supported' || 'error_language_unavailable' => 'Bahasa ini belum tersedia di pengenal suara HP. Ganti ID/EN (tekan lama tombol mik).',
+      'error_busy' || 'error_recognizer_busy' => 'Pengenal suara sedang dipakai aplikasi lain.',
+      _ => 'Dikte gagal ($code).',
+    };
 
 class VoiceService extends ChangeNotifier {
   VoiceService._();
   static final VoiceService instance = VoiceService._();
 
-  final SpeechToText _stt = SpeechToText();
+  /// Tests: a fake recogniser and permission answer.
+  @visibleForTesting
+  static SpeechEngine? debugEngine;
+  /// True when a test engine stands in (shows the mic on any platform).
+  static bool get hasTestEngine => debugEngine != null;
+  @visibleForTesting
+  static Future<bool> Function()? debugMicPermission;
+
+  SpeechEngine? _engine;
+  SpeechEngine get _e => _engine ??= debugEngine ?? _SttEngine();
   FlutterTts? _tts;
   bool _sttReady = false;
   bool listening = false;
   bool speaking = false;
   String? error;
+  List<String>? _locales;
+
+  @visibleForTesting
+  void debugReset() {
+    _engine = null;
+    _sttReady = false;
+    _locales = null;
+    listening = false;
+    error = null;
+  }
+
+  Future<bool> _micPermission() async {
+    final f = debugMicPermission;
+    if (f != null) return f();
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return true;
+    try {
+      return await ensurePermissions(const ['android.permission.RECORD_AUDIO']);
+    } catch (_) {
+      return true; // no bridge: let the recogniser ask
+    }
+  }
 
   Future<bool> _initStt() async {
     if (_sttReady) return true;
-    if (!canDictate) {
+    if (!canDictate && debugEngine == null) {
       error = 'dikte suara belum tersedia di platform ini';
       return false;
     }
+    if (!await _micPermission()) {
+      error = sttErrorText('error_permission');
+      return false;
+    }
     try {
-      _sttReady = await _stt.initialize(
+      _sttReady = await _e.initialize(
         onError: (e) {
-          error = e.errorMsg;
+          error = sttErrorText(e);
           listening = false;
           notifyListeners();
         },
@@ -39,6 +131,7 @@ class VoiceService extends ChangeNotifier {
           }
         },
       );
+      if (!_sttReady) error = 'Pengenal suara tidak tersedia. Pasang/aktifkan aplikasi Google (Speech Services).';
     } catch (e) {
       error = 'pengenalan suara tidak tersedia: $e';
       _sttReady = false;
@@ -53,20 +146,16 @@ class VoiceService extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    try {
+      _locales ??= await _e.localeIds();
+    } catch (_) {
+      _locales = const [];
+    }
+    final id = resolveSttLocale(_locales!, locale) ?? locale;
     listening = true;
     notifyListeners();
     try {
-      await _stt.listen(
-      onResult: (SpeechRecognitionResult r) => onText(r.recognizedWords, r.finalResult),
-      listenOptions: SpeechListenOptions(
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: ListenMode.dictation,
-        localeId: locale,
-        pauseFor: const Duration(seconds: 4),
-        listenFor: const Duration(minutes: 2),
-      ),
-    );
+      await _e.listen(localeId: id, onResult: onText);
     } catch (e) {
       listening = false;
       error = 'dikte gagal: $e';
@@ -76,7 +165,7 @@ class VoiceService extends ChangeNotifier {
 
   Future<void> stopDictation() async {
     try {
-      await _stt.stop();
+      await _e.stop();
     } catch (_) {}
     listening = false;
     notifyListeners();

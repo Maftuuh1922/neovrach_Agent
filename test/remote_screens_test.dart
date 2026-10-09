@@ -10,7 +10,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:neovarch_agent/remote/github_public.dart';
+import 'package:neovarch_agent/remote/models_api.dart';
+import 'package:neovarch_agent/remote/ui/remote_office_3d.dart' show debugOfficeSceneBuilder;
+import 'package:neovarch_agent/remote/ui/remote_office_screen.dart' show previewOfficeList;
+import 'package:neovarch_agent/remote/ui/remote_profile_screen.dart' show ProfileGroup;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/main.dart' as app;
@@ -158,8 +166,9 @@ Future<void> _shot(WidgetTester tester, String name) async {
   await expectLater(find.byKey(const ValueKey('shot')), matchesGoldenFile('$dir/$name.png'));
 }
 
-Widget _host(SettingsController settings, RemoteController remote, Widget home, AppearanceController look) => ProviderScope(
+Widget _host(SettingsController settings, RemoteController remote, Widget home, AppearanceController look, {List<Override> extra = const []}) => ProviderScope(
       overrides: [
+        ...extra,
         settingsProvider.overrideWith((ref) => settings),
         remoteProvider.overrideWith((ref) => remote),
         appearanceProvider.overrideWith((ref) => look),
@@ -214,13 +223,13 @@ void main() {
   });
 
   Future<void> run(WidgetTester tester, String name, Widget Function() home,
-      {RemoteController? remote, Future<void> Function()? act, double width = 390, bool settleAfterAct = true}) async {
+      {RemoteController? remote, Future<void> Function()? act, double width = 390, bool settleAfterAct = true, List<Override> extra = const []}) async {
     tester.view.physicalSize = Size(width * 3, 2532);
     tester.view.devicePixelRatio = 3;
     tester.view.padding = const FakeViewPadding(top: 141, bottom: 102);
     tester.view.viewPadding = const FakeViewPadding(top: 141, bottom: 102);
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(_host(settings, remote ?? _controller(prefs), home(), AppearanceController(prefs)));
+    await tester.pumpWidget(_host(settings, remote ?? _controller(prefs), home(), AppearanceController(prefs), extra: extra));
     debugPrint('[$name] pumped');
     await _precache(tester);
     debugPrint('[$name] precached');
@@ -302,7 +311,7 @@ void main() {
   });
 
   testWidgets('08 pc', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 2;
     await run(tester, '08_pc', () => const RemoteShell());
   });
 
@@ -317,7 +326,7 @@ void main() {
   });
 
   testWidgets('10 confirm dialog', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 2;
     await run(tester, '10_dialog', () => const RemoteShell(), act: () async {
       await tester.tap(find.byTooltip('Lupakan').first);
     });
@@ -459,7 +468,7 @@ void main() {
   });
 
   testWidgets('27 PC tab · Cupertino icons + Inter', (tester) async {
-    app.previewTab = 3;
+    app.previewTab = 2;
     await run(tester, '27_pc_icons_font', () => const RemoteShell());
   });
 
@@ -472,7 +481,7 @@ void main() {
     ..storedId = null
     ..debugApprovals = [];
 
-  for (final (tab, name) in [(1, 'kantor'), (2, 'profil')]) {
+  for (final (tab, name) in [(1, 'kantor'), (3, 'profil')]) {
     for (final w in [390.0, 360.0]) {
       testWidgets('28 nav at rest · $name · ${w.toInt()} dp', (tester) async {
         await background('assets/art/feat-remote.webp', dim: 0.4, blur: 4);
@@ -514,14 +523,18 @@ void main() {
   });
 
   testWidgets('37 Profil tab', (tester) async {
+    ProfileGroup.debugOpen = {'appearance', 'glass', 'icon'};
+    addTearDown(() => ProfileGroup.debugOpen = {});
     await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
-    app.previewTab = 2;
+    app.previewTab = 3;
     await run(tester, '37_profil', () => const RemoteShell());
   });
 
   testWidgets('38 Profil · icon picker + Gaya kaca', (tester) async {
+    ProfileGroup.debugOpen = {'appearance', 'glass', 'icon'};
+    addTearDown(() => ProfileGroup.debugOpen = {});
     await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
-    app.previewTab = 2;
+    app.previewTab = 3;
     await run(tester, '38_profil_icon_glass', () => const RemoteShell(), act: () async {
       await tester.drag(find.byKey(const ValueKey('profile-list')), const Offset(0, -1500));
     });
@@ -556,6 +569,124 @@ void main() {
     });
   }
 
+
+  // v1.4.4: sender pills/avatars, Kantor 3D (headless Chromium render of
+  // assets/office3d/index.html composited through debugOfficeSceneBuilder;
+  // $NV_SCENE_DIR/scene_{dark,light}.png, a placeholder without it), Kantor
+  // list, agent sheet (Kasih tugas + Model), Profil GitHub, model switcher;
+  // dark and light.
+  group('1.4.4', () {
+    late GithubPublicController gh;
+    setUp(() async {
+      final client = MockClient((req) async {
+        final u = req.url.toString().toLowerCase();
+        if (u.endsWith('/users/maftuuh1922')) {
+          return http.Response(jsonEncode({'login': 'Maftuuh1922', 'name': 'Maftuh', 'bio': 'Flutter · Python · agen AI', 'public_repos': 24, 'followers': 31, 'following': 12}), 200);
+        }
+        if (u.contains('/contributions')) return http.Response(_contribHtml(), 200);
+        if (u.contains('/repos')) {
+          return http.Response(jsonEncode([for (final l in ['Dart', 'Dart', 'Dart', 'Python', 'Python', 'TypeScript', 'Kotlin']) {'language': l}]), 200);
+        }
+        return http.Response('', 404);
+      });
+      gh = GithubPublicController(prefs: prefs, client: client);
+      await gh.setLogin('Maftuuh1922');
+    });
+    tearDown(() {
+      debugOfficeSceneBuilder = null;
+      previewOfficeList = false;
+      NV.palette = NvPalette.red;
+    });
+
+    RemoteController withModels() => _controller(prefs)..debugModelsApi = _ShotModels();
+
+    ImageProvider? scene(String mode) {
+      final dir = Platform.environment['NV_SCENE_DIR'];
+      final f = dir == null ? null : File('$dir/scene_$mode.png');
+      return f != null && f.existsSync() ? MemoryImage(f.readAsBytesSync()) : null;
+    }
+
+    void useScene(String mode) {
+      final img = scene(mode);
+      debugOfficeSceneBuilder = (state, onTap) {
+        final agents = (state['agents'] as List).cast<Map<String, Object?>>();
+        return Stack(fit: StackFit.expand, children: [
+          if (img != null) Image(image: img, fit: BoxFit.cover, gaplessPlayback: true) else const ColoredBox(color: Color(0x332A1A10)),
+          // invisible tap targets (one per agent) like the WebView's picker
+          Row(children: [
+            for (final a in agents)
+              Expanded(child: GestureDetector(key: ValueKey('figure-${a['id']}'), behavior: HitTestBehavior.translucent, onTap: () => onTap('${a['id']}'))),
+          ]),
+        ]);
+      };
+    }
+
+    Future<void> precacheScene(WidgetTester tester, String mode) async {
+      final img = scene(mode);
+      if (img == null) return;
+      await tester.runAsync(() => precacheImage(img, tester.element(find.byType(MaterialApp))));
+      await tester.pump();
+    }
+
+    for (final mode in ['dark', 'light']) {
+      Future<void> look() async {
+        if (mode == 'light') await accent('#EE1C1C', 'light');
+      }
+
+      testWidgets('44 chat · sender pills + avatars · $mode', (tester) async {
+        await look();
+        app.previewTab = 0;
+        final r = withModels()..debugApprovals = [];
+        await r.refreshModels();
+        await run(tester, '44_chat_senders_$mode', () => const RemoteShell(), remote: r);
+      });
+
+      testWidgets('45 Kantor 3D · $mode', (tester) async {
+        await look();
+        useScene(mode);
+        app.previewTab = 1;
+        await run(tester, '45_kantor_3d_$mode', () => const RemoteShell(), act: () => precacheScene(tester, mode));
+      });
+
+      testWidgets('46 Kantor list · $mode', (tester) async {
+        await look();
+        previewOfficeList = true;
+        app.previewTab = 1;
+        await run(tester, '46_kantor_list_$mode', () => const RemoteShell());
+      });
+
+      testWidgets('47 agent sheet · Kasih tugas + Model · $mode', (tester) async {
+        await look();
+        useScene(mode);
+        app.previewTab = 1;
+        final r = withModels();
+        await r.refreshModels();
+        await run(tester, '47_agent_sheet_$mode', () => const RemoteShell(), remote: r, act: () async {
+          await precacheScene(tester, mode);
+          await tester.tap(find.byKey(const ValueKey('figure-session:s1')));
+        });
+      });
+
+      testWidgets('48 Profil GitHub · $mode', (tester) async {
+        await look();
+        app.previewTab = 3;
+        // no pending approval, so the approval banner doesn't cover the settings
+        final r = _controller(prefs)..debugApprovals = [];
+        await run(tester, '48_profil_github_$mode', () => const RemoteShell(), remote: r, extra: [githubPublicProvider.overrideWith((ref) => gh)]);
+      });
+
+      testWidgets('49 model switcher · $mode', (tester) async {
+        await look();
+        app.previewTab = 0;
+        final r = withModels();
+        await r.refreshModels();
+        await run(tester, '49_model_switcher_$mode', () => const RemoteShell(), remote: r, act: () async {
+          await tester.tap(find.byKey(const ValueKey('model-chip')));
+        });
+      });
+    }
+  });
+
 }
 
 
@@ -567,4 +698,38 @@ class NvSectionShim extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
         child: Text('TAMPILAN', style: NV.monoLabel()),
       );
+}
+String _contribHtml() {
+  final b = StringBuffer('<table>');
+  final start = DateTime.utc(2025, 10, 5);
+  for (var i = 0; i < 371; i++) {
+    final d = start.add(Duration(days: i));
+    final date = d.toIso8601String().substring(0, 10);
+    final n = (i * 7919) % 11 < 3 ? 0 : ((i * 31) % 13) + (i > 300 ? 6 : 0);
+    final lvl = n == 0 ? 0 : (n > 14 ? 4 : n > 9 ? 3 : n > 4 ? 2 : 1);
+    b.write('<td tabindex="0" data-date="$date" id="contribution-day-component-${i % 7}-${i ~/ 7}" data-level="$lvl" class="ContributionCalendar-day"></td>');
+    b.write('<tool-tip id="t$i" for="contribution-day-component-${i % 7}-${i ~/ 7}" class="sr-only">${n == 0 ? 'No contributions' : '$n contributions'} on day.</tool-tip>');
+  }
+  return '$b</table>';
+}
+
+class _ShotModels implements ModelsApi {
+  static final json = <String, dynamic>{
+    'models': [
+      {'id': 'oc/big-pickle', 'label': 'Big Pickle', 'provider': '9router', 'group': 'OpenCode Free', 'free': true, 'recommended': true},
+      {'id': 'oc/nemotron-3-ultra-free', 'label': 'Nemotron 3 Ultra', 'provider': '9router', 'group': 'OpenCode Free', 'free': true},
+      {'id': 'oc/qwen3-coder-free', 'label': 'Qwen3 Coder', 'provider': '9router', 'group': 'OpenCode Free', 'free': true},
+      {'id': 'kr/claude-sonnet-4.5', 'label': 'Claude Sonnet 4.5', 'provider': '9router', 'group': 'Kiro'},
+      {'id': 'kr/claude-haiku-4.5', 'label': 'Claude Haiku 4.5', 'provider': '9router', 'group': 'Kiro'},
+    ],
+    'default': {'model': 'oc/big-pickle', 'provider': '9router'},
+    'router': {'setup': {'ready': true}},
+  };
+  @override
+  Future<ModelsSnapshot> listModels({bool refresh = false}) async => ModelsSnapshot.fromJson(json);
+  @override
+  Future<ModelRef> setDefaultModel(String model, {String? provider}) async => ModelRef(model, provider ?? '9router');
+  @override
+  Future<AgentModel> setAgentModel(String agentId, String? model, {String? provider}) async =>
+      AgentModel(agentId: agentId, model: model ?? 'oc/big-pickle', provider: '9router');
 }

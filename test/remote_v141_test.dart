@@ -90,7 +90,11 @@ void main() {
         for (final b in Brightness.values) {
           NV.palette = NvPalette.from(c, b);
           final theme = buildNeovarchMobileTheme();
-          expect(theme.colorScheme.primary, c, reason: name);
+          // 1.4.4: light mode deepens pale accents for contrast (same hue)
+          expect(theme.colorScheme.primary, b == Brightness.dark ? c : NV.red, reason: name);
+          if (b == Brightness.light && c.toARGB32() != NV.red.toARGB32()) {
+            expect(NvPalette.contrast(NV.red, NV.bg), greaterThanOrEqualTo(3.0), reason: name);
+          }
           expect(theme.scaffoldBackgroundColor, NV.bg, reason: name);
           expect(theme.chipTheme.selectedColor, NV.redWash, reason: name);
           bgs.add(NV.bg.toARGB32());

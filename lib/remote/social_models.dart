@@ -66,8 +66,61 @@ class CodingStatus {
       );
 }
 
+/// A pinned repository on the GitHub profile (or a top-starred fallback).
+/// Same JSON shape from the phone's public parse and from the PC (`pinned`).
+class PinnedRepo {
+  const PinnedRepo({required this.name, this.owner, this.description = '', this.language, this.languageColor, this.stars = 0, this.forks = 0, required this.url});
+  final String name;
+  final String? owner, language, languageColor;
+  final String description, url;
+  final int stars, forks;
+
+  factory PinnedRepo.fromJson(Map<String, dynamic> j) {
+    final nwo = _s(j['name_with_owner']) ?? _s(j['nameWithOwner']);
+    final lang = j['language'] ?? _m(j['primaryLanguage'])['name'];
+    final color = j['language_color'] ?? _m(j['primaryLanguage'])['color'];
+    final name = _s(j['name']) ?? (nwo?.split('/').last ?? '');
+    final owner = _s(j['owner']) ?? (nwo != null && nwo.contains('/') ? nwo.split('/').first : null);
+    return PinnedRepo(
+      name: name,
+      owner: owner,
+      description: '${j['description'] ?? ''}',
+      language: _s(lang),
+      languageColor: _s(color),
+      stars: _i(j['stars'] ?? j['stargazerCount'] ?? j['stargazers_count']),
+      forks: _i(j['forks'] ?? j['forkCount'] ?? j['forks_count']),
+      url: _s(j['url']) ?? _s(j['html_url']) ?? (owner == null ? '' : 'https://github.com/$owner/$name'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        if (owner != null) 'owner': owner,
+        'description': description,
+        if (language != null) 'language': language,
+        if (languageColor != null) 'language_color': languageColor,
+        'stars': stars,
+        'forks': forks,
+        'url': url,
+      };
+
+  /// `#RRGGBB` -> ARGB int, null when absent or malformed.
+  int? get languageArgb {
+    final c = languageColor?.replaceFirst('#', '');
+    if (c == null || c.length != 6) return null;
+    final v = int.tryParse(c, radix: 16);
+    return v == null ? null : 0xFF000000 | v;
+  }
+
+  @override
+  bool operator ==(Object other) => other is PinnedRepo && other.name == name && other.owner == owner && other.description == description && other.language == language && other.languageColor == languageColor && other.stars == stars && other.forks == forks && other.url == url;
+  @override
+  int get hashCode => Object.hash(name, owner, description, language, languageColor, stars, forks, url);
+}
+
 class SocialProfile {
   const SocialProfile({
+    this.pinned = const [],
     this.login,
     this.name,
     this.bio = '',
@@ -88,6 +141,9 @@ class SocialProfile {
   final CodingStatus? status;
   final DateTime? lastPublishedAt;
   final bool paused;
+
+  /// Pinned repositories (max 6), newest data from GitHub or the PC.
+  final List<PinnedRepo> pinned;
 
   /// Public gist that holds the published profile (own profile only).
   final String? gistUrl;
@@ -110,6 +166,7 @@ class SocialProfile {
       lastPublishedAt: DateTime.tryParse('${pub['last_published_at'] ?? ''}'),
       paused: pub['paused'] == true,
       gistUrl: _s(pub['gist_url']) ?? _s(j['gist_url']),
+      pinned: [for (final r in (j['pinned'] as List? ?? const []).whereType<Map>()) PinnedRepo.fromJson(Map<String, dynamic>.from(r))],
     );
   }
 }

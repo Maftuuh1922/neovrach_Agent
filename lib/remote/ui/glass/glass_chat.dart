@@ -135,9 +135,11 @@ class GlassUserMessage extends StatelessWidget {
 
 /// Sender label ("NEOVARCH · PC KANTOR") on a small glass capsule.
 class GlassSenderLabel extends StatelessWidget {
-  const GlassSenderLabel(this.label, {super.key, this.live = false});
+  const GlassSenderLabel(this.label, {super.key, this.live = false, this.avatar});
   final String label;
   final bool live;
+  /// The agent's avatar (agent-identity-spec, 18 dp); null = the Neovarch mark.
+  final Widget? avatar;
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
@@ -151,13 +153,14 @@ class GlassSenderLabel extends StatelessWidget {
             child: Builder(builder: (context) {
               final t = GlassForeground.maybeOf(context)!.tone;
               return Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: NV.red, shape: BoxShape.circle),
-                  child: Text('N', style: TextStyle(fontFamily: NV.serif, fontSize: 12, height: 1.1, color: NV.onRed, fontWeight: FontWeight.w700)),
-                ),
+                avatar ??
+                    Container(
+                      width: 18,
+                      height: 18,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: NV.red, shape: BoxShape.circle),
+                      child: Text('N', style: TextStyle(fontFamily: NV.serif, fontSize: 12, height: 1.1, color: NV.onRed, fontWeight: FontWeight.w700)),
+                    ),
                 const SizedBox(width: 7),
                 Flexible(child: Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 9.5, color: t.secondary))),
                 if (live) ...[const SizedBox(width: 7), _LiveDot(color: t.accent)],
@@ -199,14 +202,15 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
 /// An agent turn: sender capsule + the turn on neutral, themed glass (the
 /// shared AssistantMessage / MarkdownView / FailureCard follow the glass).
 class GlassAgentTurn extends StatelessWidget {
-  const GlassAgentTurn({super.key, required this.label, required this.child, this.live = false, this.appear = false});
+  const GlassAgentTurn({super.key, required this.label, required this.child, this.live = false, this.appear = false, this.avatar});
   final String label;
+  final Widget? avatar;
   final bool live;
   final bool appear;
   final Widget child;
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        GlassSenderLabel(label, live: live),
+        GlassSenderLabel(label, live: live, avatar: avatar),
         LiquidGlass(
           key: const ValueKey('glass-agent-turn'),
           themed: true,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/common.dart';
+import '../home_widget.dart' show remoteLaunchAction;
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'nv_widgets.dart';
@@ -44,6 +45,41 @@ class RemoteTasksScreen extends ConsumerStatefulWidget {
 
 class _RemoteTasksScreenState extends ConsumerState<RemoteTasksScreen> {
   String? lane;
+
+  @override
+  void initState() {
+    super.initState();
+    remoteLaunchAction.addListener(_onLaunchAction);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunchAction());
+  }
+
+  @override
+  void dispose() {
+    remoteLaunchAction.removeListener(_onLaunchAction);
+    super.dispose();
+  }
+
+  /// Home-screen widget "Tugas baru": open the sheet once the board is in.
+  bool _awaitLaunch = false;
+  void _onLaunchAction() {
+    if (!mounted || remoteLaunchAction.value != 'newtask') return;
+    final r = ref.read(remoteProvider);
+    final b = r.board;
+    if (b == null || !r.connected) {
+      if (_awaitLaunch) return;
+      _awaitLaunch = true;
+      void later() {
+        if (mounted && (r.board == null || !r.connected)) return;
+        r.removeListener(later);
+        _awaitLaunch = false;
+        _onLaunchAction();
+      }
+      r.addListener(later);
+      return;
+    }
+    remoteLaunchAction.value = null;
+    _newTask(context, b);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +179,7 @@ class _LaneTile extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 84),
             padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(laneLabel(lane.name).toUpperCase(), style: NV.monoLabel(size: 9.5, color: selected ? NV.red : NV.muted)),
+              Text(laneLabel(lane.name).toUpperCase(), style: NV.monoLabel(size: 9.5, color: selected ? NV.redInk : NV.muted)),
               const SizedBox(height: 2),
               Text('${lane.cards.length}', style: NV.display(size: 28, color: lane.cards.isEmpty && !selected ? NV.faint : NV.text)),
             ]),
@@ -303,12 +339,13 @@ class _NewTaskSheetState extends ConsumerState<_NewTaskSheet> {
           const SizedBox(height: 10),
           DropdownButtonFormField<String?>(
             initialValue: assignee,
+            isExpanded: true, // long names / large text: ellipsis instead of overflow
             dropdownColor: NV.raised,
             borderRadius: BorderRadius.circular(NV.rCtl),
             decoration: const InputDecoration(labelText: 'Penanggung'),
             items: [
-              const DropdownMenuItem(value: null, child: Text('Belum ditugaskan (triase)')),
-              for (final a in widget.assignees) DropdownMenuItem(value: a, child: Text(a)),
+              const DropdownMenuItem(value: null, child: Text('Belum ditugaskan (triase)', overflow: TextOverflow.ellipsis)),
+              for (final a in widget.assignees) DropdownMenuItem(value: a, child: Text(a, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: (v) => setState(() => assignee = v),
           ),

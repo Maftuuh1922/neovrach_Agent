@@ -232,6 +232,16 @@ class MainActivity : FlutterActivity() {
             "launcherIcon" -> result.success(launcherIcon())
             "setLauncherIcon" -> result.success(setLauncherIcon(call.argument<String>("id") ?: ""))
             "takeRoute" -> { result.success(pendingRoute); pendingRoute = null }
+            "wakeWord" -> {
+                NvWakeService.setEnabled(this, call.argument<Boolean>("enable") == true)
+                result.success(NvWakeService.status(this))
+            }
+            "wakeStatus" -> result.success(NvWakeService.status(this))
+            "wakeBackground" -> result.success(openBackgroundSettings(call.argument<String>("kind") ?: "autostart"))
+            "updateWidget" -> {
+                NvHomeWidget.save(this, (call.arguments as? Map<*, *>) ?: emptyMap<String, Any?>())
+                result.success(true)
+            }
             else -> result.notImplemented()
         }
     }
@@ -570,5 +580,26 @@ class MainActivity : FlutterActivity() {
         private const val EXTRA_ROUTE = "nv_route"
         /** Order = the Dart picker (lib/remote/app_icon.dart); first is the manifest default. */
         private val ICON_IDS = listOf("merah", "biru", "ungu", "toska", "hijau", "oranye", "monokrom")
+    }
+
+    /** MIUI autostart / battery / overlay pages so Hey Neo can run and open the app from the background. */
+    private fun openBackgroundSettings(kind: String): String {
+        val pkg = Uri.parse("package:$packageName")
+        val tries = mutableListOf<Pair<String, Intent>>()
+        if (kind == "overlay") {
+            tries += "overlay" to Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg)
+            tries += "miui-perms" to Intent("miui.intent.action.APP_PERM_EDITOR").setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity").putExtra("extra_pkgname", packageName)
+        } else {
+            tries += "miui-autostart" to Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
+            tries += "battery" to Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        }
+        tries += "app-details" to Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
+        for ((name, i) in tries) {
+            try {
+                startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return name
+            } catch (_: Exception) {}
+        }
+        return "none"
     }
 }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nvw_label">Neovarch</string>
+    <string name="nvw_description">Status PC, agen yang bekerja, dan tombol Chat, Suara, Tugas baru</string>
+</resources>

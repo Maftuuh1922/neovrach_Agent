@@ -93,6 +93,8 @@ android {
         }
         release {
             signingConfig = appSigning
+            // Vosk (Hey Neo) goes through JNA: keep its classes from R8.
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
@@ -105,4 +107,13 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // "Hey Neo" wake word: offline Vosk recogniser (Apache-2.0); JNA as an AAR
+    // so its native dispatch library is packaged per ABI.
+    implementation("com.alphacephei:vosk-android:0.3.47") {
+        exclude(group = "net.java.dev.jna")
+    }
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 }

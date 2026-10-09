@@ -32,7 +32,7 @@ class NvHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    final kick = Text(kicker.toUpperCase(), style: NV.monoLabel(color: NV.red));
+    final kick = Text(kicker.toUpperCase(), style: NV.monoLabel(color: NV.redInk));
     final head = Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.display(size: 34));
     final Widget body;
     if (onBack != null) {
@@ -71,9 +71,10 @@ class NvHeader extends StatelessWidget {
 
 /// Square-ish 40px icon button on a bordered rounded tile.
 class NvIconButton extends StatelessWidget {
-  const NvIconButton({super.key, required this.icon, required this.onPressed, this.tooltip, this.accent = false, this.size = 40});
+  const NvIconButton({super.key, required this.icon, required this.onPressed, this.tooltip, this.accent = false, this.size = 40, this.onLongPress});
   final IconData icon;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
   final String? tooltip;
   final bool accent;
   final double size;
@@ -89,6 +90,7 @@ class NvIconButton extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onPressed,
+        onLongPress: onLongPress,
         child: SizedBox(
           width: size,
           height: size,
@@ -275,7 +277,7 @@ class NvEmpty extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 18),
-          if (kicker != null) ...[Text(kicker!.toUpperCase(), style: NV.monoLabel(color: NV.red)), const SizedBox(height: 8)],
+          if (kicker != null) ...[Text(kicker!.toUpperCase(), style: NV.monoLabel(color: NV.redInk)), const SizedBox(height: 8)],
           Text(title, style: NV.display(size: 28)),
           if (body != null) ...[
             const SizedBox(height: 8),
@@ -340,7 +342,7 @@ class NvUserMessage extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(13, 10, 14, 12),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                      Text('KAMU${msg.ts > 0 ? '  ·  ${clockOf(msg.ts)}' : ''}', style: NV.monoLabel(size: 9.5, color: NV.red)),
+                      Text('KAMU${msg.ts > 0 ? '  ·  ${clockOf(msg.ts)}' : ''}', style: NV.monoLabel(size: 9.5, color: NV.redInk)),
                       const SizedBox(height: 5),
                       SelectableText(msg.content, style: TextStyle(fontSize: 14.5 * scale, height: 1.5, color: NV.text)),
                     ]),
@@ -436,7 +438,7 @@ class NvApprovalCard extends StatelessWidget {
         Row(children: [
           Icon(CupertinoIcons.checkmark_shield, size: 16, color: NV.red),
           const SizedBox(width: 8),
-          Text('PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.red)),
+          Text('PERLU PERSETUJUAN', style: NV.monoLabel(color: NV.redInk)),
           const SizedBox(width: 10),
           Expanded(
             child: origin != null && origin!.isNotEmpty
@@ -798,7 +800,7 @@ class NvSheetTitle extends StatelessWidget {
   Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(kicker.toUpperCase(), style: NV.monoLabel(color: NV.red)),
+            Text(kicker.toUpperCase(), style: NV.monoLabel(color: NV.redInk)),
             const SizedBox(height: 6),
             Text(title, style: NV.display(size: 28)),
           ]),
