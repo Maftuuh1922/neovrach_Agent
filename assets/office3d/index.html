@@ -724,7 +724,7 @@
         var df = ((fg - v.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
         v.face += df * Math.min(1, dt * 6);
       }
-      if (Math.hypot(v.pos.x - GARDEN.L, v.pos.z - GARDEN.door.z) < 1.6) nearDoor = true;
+      if (Math.hypot(v.pos.x - GARDEN.L, v.pos.z - GARDEN.door.z) < 1.3 && v.outing) nearDoor = true;
       v.group.position.copy(v.pos);
       // one step down into the garden; sitting up on the bench
       var perched = o && o.phase === 'stay' && o.kind === 'bench' && !walking;
