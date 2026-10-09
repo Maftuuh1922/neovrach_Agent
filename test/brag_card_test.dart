@@ -6,7 +6,6 @@
 // NV_SCENE_DIR=… for a real Kantor 3D render).
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart' show CupertinoSwitch;
 import 'package:flutter/material.dart';
@@ -17,7 +16,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/models/models.dart' show ChatSessionInfo;
 import 'package:neovarch_agent/remote/appearance.dart';
-import 'package:neovarch_agent/remote/models_api.dart' show ModelRef;
 import 'package:neovarch_agent/remote/office_models.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart' show KanbanSnapshot;
 import 'package:neovarch_agent/remote/share/brag_card_data.dart';
