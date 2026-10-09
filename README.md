@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/logo-halo.png" alt="Logo Neovarch Agent" width="128" height="128">
+<img src="docs/assets/logo.png" alt="Logo Neovarch Agent" width="128" height="128">
 
 # Neovarch Agent
 
