@@ -67,7 +67,7 @@ test('baked runtime identity never evaluates ambient build selectors', async ():
       platform: 'node',
       format: 'esm',
       write: false,
-      define: { __HERMES_PRODUCT_IDENTITY__: JSON.stringify(identity) }
+      define: { __NEOVARCH_PRODUCT_IDENTITY__: JSON.stringify(identity) }
     })
 
     const file: string = path.join(dir, 'identity.mjs')

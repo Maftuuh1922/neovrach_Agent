@@ -229,7 +229,7 @@ try {
       platform: 'node',
       format: 'esm',
       external: ['electron'],
-      define: { __HERMES_PRODUCT_IDENTITY__: JSON.stringify(identity) }
+      define: { __NEOVARCH_PRODUCT_IDENTITY__: JSON.stringify(identity) }
     })
     const row = {
       label,
