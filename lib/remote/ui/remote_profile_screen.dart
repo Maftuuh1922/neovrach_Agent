@@ -8,10 +8,12 @@
 // scrolls fully above the bar.
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/motion.dart' show reduceMotion;
 import 'app_icon_panel.dart';
+import 'brag_share_sheet.dart' show showBragShareSheet;
 import 'appearance/appearance_section.dart' show NvAppearanceSection;
 import 'glass_style_picker.dart';
 import 'model_picker.dart';
@@ -43,6 +45,7 @@ class RemoteProfileScreen extends StatelessWidget {
         children: [
           const NvHeader(kicker: 'hp ini', title: 'Profil'),
           ProfileHeaderSlot(autoLoad: autoLoad),
+          const PamerkanButton(),
           const NvSection('pengaturan'),
           const ProfileGroup(
             id: 'model',
@@ -161,4 +164,19 @@ class _ProfileGroupState extends State<ProfileGroup> {
       ),
     ]);
   }
+}
+
+/// "Pamerkan": opens the Kartu Neovarch sheet (shareable brag card).
+class PamerkanButton extends ConsumerWidget {
+  const PamerkanButton({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: FilledButton.icon(
+          key: const ValueKey('profile-pamerkan'),
+          onPressed: () => showBragShareSheet(context, ref),
+          icon: const Icon(CupertinoIcons.sparkles, size: 18),
+          label: const Text('Pamerkan'),
+        ),
+      );
 }

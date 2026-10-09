@@ -15,6 +15,7 @@ import '../models_api.dart' show modelShort;
 import '../office_models.dart';
 import '../office_scene_state.dart';
 import '../remote_controller.dart';
+import 'brag_share_sheet.dart' show showBragShareSheet;
 import 'nv_widgets.dart';
 import 'model_picker.dart';
 import 'remote_office_3d.dart';
@@ -68,6 +69,13 @@ class _RemoteOfficeScreenState extends ConsumerState<RemoteOfficeScreen> {
             kicker: 'kantor · $pc',
             title: 'Kantor',
             actions: [
+              NvIconButton(
+                key: const ValueKey('office-pamerkan'),
+                tooltip: 'Pamerkan kantor',
+                icon: CupertinoIcons.share,
+                onPressed: () => showBragShareSheet(context, ref),
+              ),
+              const SizedBox(width: 8),
               _ViewToggle(
                 visual: _visual,
                 onChanged: (v) => setState(() {

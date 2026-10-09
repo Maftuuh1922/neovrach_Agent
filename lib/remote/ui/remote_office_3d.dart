@@ -28,6 +28,40 @@ Widget Function(Map<String, Object?> state, ValueChanged<String> onTap)? debugOf
 @visibleForTesting
 ValueChanged<bool>? debugOfficeActiveChanged;
 
+/// Kartu Neovarch: a JPEG of the live Kantor 3D scene (WebGL canvas via
+/// `nvOffice.snapshot()`), or null when no scene is on screen / ready.
+/// Tests can replace it with [debugOfficeSnapshot].
+Future<Uint8List?> captureOfficeSnapshot() async {
+  final d = debugOfficeSnapshot;
+  if (d != null) return d();
+  final s = _RemoteOffice3DState._live;
+  if (s == null) return null;
+  return s._snapshot();
+}
+
+@visibleForTesting
+Future<Uint8List?> Function()? debugOfficeSnapshot;
+
+/// "data:image/jpeg;base64,…" (possibly JSON-quoted by the WebView) -> bytes.
+Uint8List? decodeDataUrl(Object? raw) {
+  var s = '$raw'.trim();
+  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
+    try {
+      s = jsonDecode(s) as String;
+    } catch (_) {
+      s = s.substring(1, s.length - 1);
+    }
+  }
+  final i = s.indexOf('base64,');
+  if (!s.startsWith('data:image/') || i < 0) return null;
+  try {
+    final b = base64Decode(s.substring(i + 7));
+    return b.length < 64 ? null : b;
+  } catch (_) {
+    return null;
+  }
+}
+
 class RemoteOffice3D extends StatefulWidget {
   const RemoteOffice3D({super.key, required this.state, required this.onAgentTap, required this.onUnavailable});
   final Map<String, Object?> state;
@@ -41,6 +75,18 @@ class RemoteOffice3D extends StatefulWidget {
 }
 
 class _RemoteOffice3DState extends State<RemoteOffice3D> {
+  static _RemoteOffice3DState? _live;
+
+  Future<Uint8List?> _snapshot() async {
+    final c = _c;
+    if (c == null || !_ready) return null;
+    try {
+      return decodeDataUrl(await c.runJavaScriptReturningResult('window.nvOffice&&window.nvOffice.snapshot?window.nvOffice.snapshot():""'));
+    } catch (_) {
+      return null;
+    }
+  }
+
   WebViewController? _c;
   bool _ready = false;
   String? _pushed;
@@ -81,6 +127,7 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
   @override
   void initState() {
     super.initState();
+    _live = this;
     final st = WidgetsBinding.instance.lifecycleState;
     _resumed = st == null || st == AppLifecycleState.resumed;
     _life = AppLifecycleListener(onStateChange: (s) {
@@ -160,6 +207,7 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
 
   @override
   void dispose() {
+    if (_live == this) _live = null;
     _watchdog?.cancel();
     _tickerMode?.removeListener(_syncActive);
     _life?.dispose();
