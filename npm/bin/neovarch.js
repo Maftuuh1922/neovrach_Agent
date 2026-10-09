@@ -15,6 +15,8 @@ Usage:
   neovarch desktop         Same as above
   neovarch <command> ...   Run the Neovarch core CLI (e.g. neovarch chat, neovarch --version)
   neovarch --install-core  Install or update the Neovarch core in ${app.CORE_DIR}
+  neovarch --install-9router  Install 9Router (free default models) and start it
+  neovarch router          9Router status (dashboard: ${app.ROUTER_DASHBOARD})
   neovarch --update        Re-download the desktop app and update the core
   neovarch --uninstall     Remove Neovarch Agent completely (${app.HOME_DIR})
   neovarch --help          Show this help
@@ -23,6 +25,7 @@ Environment:
   NEOVARCH_HOME            Data home (default ${app.HOME_DIR})
   NEOVARCH_VERSION         Desktop release tag, e.g. v1.3.0 (default: v${app.PKG_VERSION})
   NEOVARCH_REF             Git ref of the repo to take the core from (default: the release tag, else main)
+  NEOVARCH_NO_9ROUTER      Set to skip installing 9Router
 `;
 
 async function ensureCore() {
@@ -70,6 +73,10 @@ async function main(argv) {
   if (first === '-h' || first === '--help') { process.stdout.write(HELP); return 0; }
   if (first === '--uninstall') { app.uninstallAll(); return 0; }
   if (first === '--install-core') { await app.installCore(); return 0; }
+  if (first === '--install-9router') {
+    if (!(await ensureCore())) return 1;
+    return app.install9Router() && app.setup9Router() ? 0 : 1;
+  }
   if (first === '--update') {
     const target = app.detectTarget();
     if (!target.unsupported) await app.installApp(target, { force: true });

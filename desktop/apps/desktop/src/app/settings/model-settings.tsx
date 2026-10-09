@@ -4,6 +4,7 @@ import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
+import { Router9Card } from '@/components/neovarch/router9-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -994,6 +995,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile, subpage }: Mod
   return (
     <div className="grid gap-6">
       {!showMain && errorNotice}
+      {showMain && <Router9Card />}
       {showMain && (
         <section>
           <p className="mb-3 text-xs text-muted-foreground">{m.appliesDesc}</p>

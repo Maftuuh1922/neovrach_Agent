@@ -11,7 +11,11 @@
 #   * the Neovarch core (original Python agent in core/ of this repo) into
 #     %LOCALAPPDATA%\neovarch\neovarch-agent with its own Python + venv (uv);
 #   * the `neovarch` command (%LOCALAPPDATA%\Programs\NeovarchAgent\bin\neovarch.cmd, on the user PATH);
-#   * the desktop app (NSIS, %LOCALAPPDATA%\Programs\Neovarch Agent; or -Portable).
+#   * the desktop app (NSIS, %LOCALAPPDATA%\Programs\Neovarch Agent; or -Portable);
+#   * 9Router (https://9router.com, MIT), the default model provider: `npm install -g 9router`
+#     (portable Node.js LTS into %LOCALAPPDATA%\neovarch\tools\node when Node 18+ is missing),
+#     started in the background with the free default model oc/big-pickle (no API key).
+#     Skip with -No9Router.
 #
 # Neovarch never uses, reads or changes a Hermes Agent install: no `hermes` command,
 # no %LOCALAPPDATA%\hermes or ~\.hermes, no HERMES_HOME. Both can be installed side by side.
@@ -28,6 +32,7 @@ param(
     [switch]$Uninstall,
     [switch]$Portable,
     [switch]$CoreOnly,
+    [switch]$No9Router,
     [switch]$Manifest,
     [string]$Stage = '',
     [switch]$NonInteractive,
@@ -249,7 +254,7 @@ function Install-Core {
 }
 
 function Write-Manifest {
-    $m = '{"protocol_version":1,"stages":[{"name":"uv","title":"Alat Python (uv)","category":"tooling","needs_user_input":false},{"name":"core","title":"Inti Neovarch","category":"source","needs_user_input":false},{"name":"python","title":"Lingkungan Python","category":"dependencies","needs_user_input":false},{"name":"cli","title":"Perintah neovarch","category":"launcher","needs_user_input":false}]}'
+    $m = '{"protocol_version":1,"stages":[{"name":"uv","title":"Alat Python (uv)","category":"tooling","needs_user_input":false},{"name":"core","title":"Inti Neovarch","category":"source","needs_user_input":false},{"name":"python","title":"Lingkungan Python","category":"dependencies","needs_user_input":false},{"name":"cli","title":"Perintah neovarch","category":"launcher","needs_user_input":false},{"name":"9router","title":"9Router (model gratis)","category":"provider","needs_user_input":false}]}'
     [Console]::Out.WriteLine($m)
 }
 
@@ -260,9 +265,72 @@ function Invoke-Stage($name) {
         'core'   { Install-CoreFiles }
         'python' { Install-CorePython }
         'cli'    { Install-CoreCli }
+        '9router' { Install-9Router }
         default  { Stop-WithError "unknown stage: $name" }
     }
     if ($Json) { [Console]::Out.WriteLine((@{ ok = $true; stage = $name } | ConvertTo-Json -Compress)) }
+}
+
+# --------------------------------------------------------------- 9Router ---
+
+$NodeMajor = 22   # Node.js LTS line installed when Node 18+ is missing
+
+function Test-NodeOk($node) {
+    try { $v = & $node -p 'process.versions.node.split(".")[0]' 2>$null; return ([int]$v -ge 18) } catch { return $false }
+}
+
+function Install-Node {
+    $sys = Get-Command node -ErrorAction SilentlyContinue
+    $sysNpm = Get-Command npm -ErrorAction SilentlyContinue
+    if ($sys -and $sysNpm -and (Test-NodeOk $sys.Source)) { Write-Ok "Node.js $(& $sys.Source -v)"; return $sysNpm.Source }
+    $own = Join-Path $ToolsDir 'node\node.exe'
+    if ((Test-Path $own) -and (Test-NodeOk $own)) { Write-Ok "Node.js $(& $own -v) ($ToolsDir\node)"; return (Join-Path $ToolsDir 'node\npm.cmd') }
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+    Write-Step "Installing Node.js $NodeMajor LTS into $ToolsDir\node (needed by 9Router)"
+    $base = "https://nodejs.org/dist/latest-v$NodeMajor.x"
+    $sums = (Invoke-WebRequest -UseBasicParsing "$base/SHASUMS256.txt").Content
+    $line = ($sums -split "`n") | Where-Object { $_ -match "node-v[0-9.]+-win-$arch\.zip$" } | Select-Object -First 1
+    if (-not $line) { throw "Node.js zip for win-$arch not found" }
+    $want, $file = ($line.Trim() -split '\s+')
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ("neovarch-node-" + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+    try {
+        Invoke-WebRequest -UseBasicParsing "$base/$file" -OutFile (Join-Path $tmp $file)
+        $got = (Get-FileHash (Join-Path $tmp $file) -Algorithm SHA256).Hash.ToLower()
+        if ($got -ne $want.ToLower()) { throw 'Node.js checksum mismatch' }
+        Expand-Archive (Join-Path $tmp $file) -DestinationPath $tmp -Force
+        $dest = Join-Path $ToolsDir 'node'
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        New-Item -ItemType Directory -Path $ToolsDir -Force | Out-Null
+        Move-Item (Join-Path $tmp ($file -replace '\.zip$', '')) $dest
+    } finally { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+    Add-ToUserPath (Join-Path $ToolsDir 'node')
+    $env:Path = (Join-Path $ToolsDir 'node') + ';' + $env:Path
+    Write-Ok "Node.js $(& $own -v)"
+    return (Join-Path $ToolsDir 'node\npm.cmd')
+}
+
+function Install-9Router {
+    if ($No9Router -or $env:NEOVARCH_NO_9ROUTER) { Write-Host '    9Router skipped'; return }
+    $have = Get-Command 9router -ErrorAction SilentlyContinue
+    if (-not $have -and (Test-Path (Join-Path $ToolsDir 'node\9router.cmd'))) { $have = $true }
+    if ($have) { Write-Ok '9Router already installed' }
+    else {
+        try { $npm = Install-Node } catch { Write-Warn2 "Node.js not installed ($($_.Exception.Message)). Later: npm install -g 9router"; return }
+        Write-Step 'Installing 9Router (npm install -g 9router)'
+        & $npm install -g 9router --no-fund --no-audit 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warn2 'npm install -g 9router failed. Later: npm install -g 9router'; return }
+        Write-Ok '9Router installed'
+    }
+    if (-not (Test-Path $CliShim)) { Write-Warn2 'neovarch command missing; skipping 9Router setup'; return }
+    Write-Step 'Starting 9Router and choosing the free default model'
+    $env:Path = (Join-Path $ToolsDir 'node') + ';' + (Join-Path $env:APPDATA 'npm') + ';' + $env:Path
+    & $CliShim router setup
+    if ($LASTEXITCODE -eq 0) { Write-Ok '9Router ready (dashboard: http://localhost:20128/dashboard)' }
+    else {
+        Write-Warn2 '9Router needs one step in its dashboard: open http://localhost:20128/dashboard'
+        Write-Host '      (the desktop app shows a "Buka dashboard 9Router" button for it)'
+    }
 }
 
 # --------------------------------------------------------------- desktop ---
@@ -362,6 +430,11 @@ function Invoke-Uninstall {
         if (Test-Path $f) { Remove-Item $f -Force; Write-Ok "removed $f"; $removed = $true }
     }
     Remove-FromUserPath $BinDir
+    # 9Router installed under the Neovarch home goes with it (a global npm one stays).
+    $ownNode = Join-Path $ToolsDir 'node'
+    Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($ownNode, [StringComparison]::OrdinalIgnoreCase) } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Remove-FromUserPath $ownNode
     if (Test-Path $Root) { Remove-Item $Root -Recurse -Force; Write-Ok "removed $Root"; $removed = $true }
     if (Test-Path $NeovarchHome) {
         Assert-NotHermes $NeovarchHome
@@ -382,6 +455,7 @@ function Invoke-Install {
     if ($arch -eq 'x86') { Write-Host "$AppName for 32-bit Windows is not available. See $ReleasesUrl/latest"; return }
 
     Install-Core
+    Install-9Router
 
     if (-not $CoreOnly) {
         if ($arch -eq 'ARM64') { Write-Warn2 'No native ARM64 desktop build yet; installing the x64 build (runs under emulation).' }
@@ -396,7 +470,8 @@ function Invoke-Install {
 
     Write-Host ''
     Write-Host "$AppName is installed. Data: $NeovarchHome"
-    Write-Host '  neovarch            ' -ForegroundColor Red -NoNewline; Write-Host 'chat in the terminal (open a new terminal first)'
+    Write-Host '  neovarch            ' -ForegroundColor Red -NoNewline; Write-Host 'chat in the terminal (free model via 9Router; open a new terminal first)'
+    Write-Host '  neovarch router     ' -ForegroundColor Red -NoNewline; Write-Host '9Router status (dashboard: http://localhost:20128/dashboard)'
     if (-not $CoreOnly) { Write-Host '  neovarch desktop    ' -ForegroundColor Red -NoNewline; Write-Host 'open the desktop app (or use the Start Menu)' }
 }
 

@@ -8,13 +8,18 @@
 #     this repo) into ~/.neovarch/neovarch-agent, with its own Python and venv;
 #   * the `neovarch` command (~/.local/bin/neovarch);
 #   * the desktop app (Electron) into ~/.local/share/neovarch-agent, started
-#     with `neovarch desktop` / `neovarch-desktop` or from the app menu.
+#     with `neovarch desktop` / `neovarch-desktop` or from the app menu;
+#   * 9Router (https://9router.com, MIT), the default model provider: `npm i -g
+#     9router` (Node.js LTS is installed into ~/.neovarch/tools/node when node >= 18
+#     is missing), started in the background, with Neovarch's default model set to
+#     the free OpenCode model oc/big-pickle — chat works with no API key.
 #
 # Neovarch never uses, reads or changes a Hermes Agent install: no `hermes`
 # command, no ~/.hermes, no HERMES_HOME. Both can be installed side by side.
 #
 # Options (pass after `sh -s --` when piping):
 #   --core-only        install only the core and the `neovarch` command
+#   --no-9router       do not install/start 9Router (pick a provider later)
 #   --uninstall        remove Neovarch (~/.neovarch, the app, its shims)
 #   --help             show help
 # Desktop-bootstrap protocol (used by the desktop app on first launch):
@@ -89,6 +94,7 @@ Usage:
 
 Options:
   --core-only   Install only the Neovarch core and the \`neovarch\` command
+  --no-9router  Skip 9Router (the free default model provider)
   --uninstall   Remove Neovarch Agent (only Neovarch files; Hermes is never touched)
   -h, --help    Show this help
 
@@ -289,10 +295,80 @@ install_core() {
   stage_cli
 }
 
+# ------------------------------------------------------------ 9Router ---
+NODE_MAJOR=22          # Node.js LTS line installed when node >= 18 is missing
+NODE_BIN=""; NPM_BIN=""
+
+node_ok() { # path-to-node -> 0 when major >= 18
+  v=$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+  [ "${v:-0}" -ge 18 ] 2>/dev/null
+}
+
+stage_node() {
+  if have node && node_ok "$(command -v node)" && have npm; then
+    NODE_BIN=$(command -v node); NPM_BIN=$(command -v npm); ok "Node.js $(node -v)"; return 0
+  fi
+  if [ -x "$TOOLS_DIR/node/bin/node" ] && node_ok "$TOOLS_DIR/node/bin/node"; then
+    NODE_BIN="$TOOLS_DIR/node/bin/node"; NPM_BIN="$TOOLS_DIR/node/bin/npm"
+    ok "Node.js $("$NODE_BIN" -v) ($TOOLS_DIR/node)"; return 0
+  fi
+  case "$(uname -m 2>/dev/null)" in
+    x86_64|amd64) narch=x64 ;; aarch64|arm64) narch=arm64 ;;
+    *) warn "no Node.js build for $(uname -m); install Node.js 18+ and run: npm install -g 9router"; return 1 ;;
+  esac
+  step "Installing Node.js $NODE_MAJOR LTS into $TOOLS_DIR/node (needed by 9Router)"
+  base="https://nodejs.org/dist/latest-v$NODE_MAJOR.x"
+  sums=$(fetch_text "$base/SHASUMS256.txt") || { warn "could not reach nodejs.org"; return 1; }
+  file=$(printf '%s\n' "$sums" | awk '{print $2}' | grep -E "^node-v[0-9.]+-linux-$narch\.tar\.gz$" | head -n 1)
+  [ -n "$file" ] || { warn "Node.js archive for linux-$narch not found"; return 1; }
+  want=$(printf '%s\n' "$sums" | awk -v f="$file" '$2==f {print $1}')
+  tmpn=$(mktemp -d)
+  download "$base/$file" "$tmpn/$file" || { rm -rf "$tmpn"; warn "Node.js download failed"; return 1; }
+  if have sha256sum; then
+    got=$(sha256sum "$tmpn/$file" | awk '{print $1}')
+    [ "$got" = "$want" ] || { rm -rf "$tmpn"; warn "Node.js checksum mismatch"; return 1; }
+  fi
+  tar -xzf "$tmpn/$file" -C "$tmpn" || { rm -rf "$tmpn"; warn "could not unpack Node.js"; return 1; }
+  rm -rf "$TOOLS_DIR/node"; mkdir -p "$TOOLS_DIR"
+  mv "$tmpn/${file%.tar.gz}" "$TOOLS_DIR/node"; rm -rf "$tmpn"
+  NODE_BIN="$TOOLS_DIR/node/bin/node"; NPM_BIN="$TOOLS_DIR/node/bin/npm"
+  ok "Node.js $("$NODE_BIN" -v)"
+}
+
+stage_9router() {
+  core_paths
+  if [ -n "${NEOVARCH_NO_9ROUTER:-}" ]; then say "    9Router skipped (NEOVARCH_NO_9ROUTER)"; return 0; fi
+  if have 9router || [ -x "$TOOLS_DIR/npm/bin/9router" ]; then
+    ok "9Router already installed"
+  else
+    stage_node || { warn "9Router not installed. Later: npm install -g 9router"; return 0; }
+    step "Installing 9Router (npm install -g 9router)"
+    PATH="$(dirname "$NODE_BIN"):$PATH"; export PATH
+    gprefix=$("$NPM_BIN" prefix -g 2>/dev/null || echo "")
+    if [ -n "$gprefix" ] && [ -w "$gprefix" ] && { [ ! -d "$gprefix/lib" ] || [ -w "$gprefix/lib" ]; }; then
+      "$NPM_BIN" install -g 9router --no-fund --no-audit >/dev/null 2>&1 || { warn "npm install -g 9router failed"; return 0; }
+    else
+      # The system npm needs root for -g: install for this user only, under the Neovarch home.
+      "$NPM_BIN" install -g --prefix "$TOOLS_DIR/npm" 9router --no-fund --no-audit >/dev/null 2>&1 \
+        || { warn "npm install 9router failed"; return 0; }
+      mkdir -p "$BIN_DIR"; ln -sf "$TOOLS_DIR/npm/bin/9router" "$BIN_DIR/9router"
+    fi
+    ok "9Router installed"
+  fi
+  [ -x "$CLI_SHIM" ] || { warn "neovarch command missing; skipping 9Router setup"; return 0; }
+  step "Starting 9Router and choosing the free default model"
+  if PATH="$TOOLS_DIR/node/bin:$TOOLS_DIR/npm/bin:$PATH" "$CLI_SHIM" router setup; then
+    ok "9Router ready (dashboard: http://localhost:20128/dashboard)"
+  else
+    warn "9Router needs one step in its dashboard: open http://localhost:20128/dashboard"
+    say "      (the desktop app shows a \"Buka dashboard 9Router\" button for it)"
+  fi
+}
+
 # ---------------------------------------------------- desktop protocol ---
 manifest() {
   cat <<'EOF'
-{"protocol_version":1,"stages":[{"name":"uv","title":"Alat Python (uv)","category":"tooling","needs_user_input":false},{"name":"core","title":"Inti Neovarch","category":"source","needs_user_input":false},{"name":"python","title":"Lingkungan Python","category":"dependencies","needs_user_input":false},{"name":"cli","title":"Perintah neovarch","category":"launcher","needs_user_input":false}]}
+{"protocol_version":1,"stages":[{"name":"uv","title":"Alat Python (uv)","category":"tooling","needs_user_input":false},{"name":"core","title":"Inti Neovarch","category":"source","needs_user_input":false},{"name":"python","title":"Lingkungan Python","category":"dependencies","needs_user_input":false},{"name":"cli","title":"Perintah neovarch","category":"launcher","needs_user_input":false},{"name":"9router","title":"9Router (model gratis)","category":"provider","needs_user_input":false}]}
 EOF
 }
 
@@ -304,6 +380,7 @@ run_stage() { # name
     core) stage_core ;;
     python) stage_uv; stage_python ;;
     cli) stage_cli ;;
+    9router) stage_9router ;;
     *) die "unknown stage: $1" ;;
   esac
   [ "$JSON" = 1 ] && printf '{"ok":true,"stage":"%s"}\n' "$1"
@@ -420,6 +497,12 @@ uninstall() {
     fi
   done
   if have pkill; then pkill -f "$APP_DIR/$EXE" >/dev/null 2>&1 || true; fi
+  # 9Router installed by us under the Neovarch home goes with it (a global npm one stays).
+  r9="$BIN_DIR/9router"
+  if [ -L "$r9" ]; then
+    case "$(readlink "$r9")" in "$NEOVARCH_HOME"/*) rm -f "$r9"; ok "removed $r9"
+      if have pkill; then pkill -f "$NEOVARCH_HOME/tools/npm" >/dev/null 2>&1 || true; fi ;; esac
+  fi
   [ -e "$DESKTOP_FILE" ] && { rm -f "$DESKTOP_FILE"; ok "removed $DESKTOP_FILE"; removed=1; }
   rm -f "$ICON_FILE"
   [ -d "$APP_DIR" ] && { rm -rf "$APP_DIR"; ok "removed $APP_DIR"; removed=1; }
@@ -440,6 +523,7 @@ main() {
     case "$1" in
       --uninstall) action=uninstall ;;
       --core-only|--no-desktop) core_only=1 ;;
+      --no-9router) NEOVARCH_NO_9ROUTER=1 ;;
       --manifest) action=manifest ;;
       --stage) action=stage; STAGE="${2:-}"; shift ;;
       --non-interactive) ;;
@@ -475,6 +559,7 @@ main() {
 
   banner
   install_core
+  stage_9router
   if [ "$core_only" = 0 ]; then
     case "$arch" in
       x86_64|amd64) install_desktop ;;
@@ -490,7 +575,8 @@ main() {
   esac
   say ""
   say "${C_BLD}Neovarch Agent is installed.${C_RST} Data: $NEOVARCH_HOME"
-  say "  ${C_RED}${C_BLD}neovarch${C_RST}            chat in the terminal"
+  say "  ${C_RED}${C_BLD}neovarch${C_RST}            chat in the terminal (free model via 9Router)"
+  say "  ${C_RED}${C_BLD}neovarch router${C_RST}     9Router status (dashboard: http://localhost:20128/dashboard)"
   [ "$core_only" = 0 ] && say "  ${C_RED}${C_BLD}neovarch desktop${C_RST}    open the desktop app"
   say "Uninstall: curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sh -s -- --uninstall"
 }

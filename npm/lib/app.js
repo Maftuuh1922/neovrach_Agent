@@ -254,7 +254,59 @@ function uninstallAll() {
   console.log('To remove the command too: npm uninstall -g neovarch-agent');
 }
 
+// ---------------------------------------------------------------- 9Router ---
+// 9Router (https://9router.com, MIT) is Neovarch's default model provider: a local
+// OpenAI-compatible router at http://localhost:20128/v1 whose "OpenCode Free"
+// provider needs no account. We install it next to this package (`npm i -g 9router`)
+// and let the core start it and pick the free default model.
+const ROUTER_DASHBOARD = 'http://localhost:20128/dashboard';
+
+function which(cmd) {
+  const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { encoding: 'utf8' });
+  return r.status === 0 ? String(r.stdout).split(/\r?\n/)[0].trim() : '';
+}
+
+function routerInstalled() {
+  return Boolean(which('9router'));
+}
+
+function npmCommand() {
+  // Same npm (and so the same global prefix) that installed this package.
+  if (process.env.npm_execpath && process.env.npm_execpath.endsWith('.js')) {
+    return { cmd: process.execPath, pre: [process.env.npm_execpath] };
+  }
+  return { cmd: process.platform === 'win32' ? 'npm.cmd' : 'npm', pre: [] };
+}
+
+function install9Router() {
+  if (process.env.NEOVARCH_NO_9ROUTER) return false;
+  if (routerInstalled()) { log.ok('9Router already installed'); return true; }
+  log.step('Installing 9Router (npm install -g 9router)');
+  const { cmd, pre } = npmCommand();
+  const r = spawnSync(cmd, [...pre, 'install', '-g', '9router', '--no-fund', '--no-audit'],
+    { stdio: 'inherit', shell: process.platform === 'win32' && !pre.length });
+  if (r.status !== 0) {
+    log.warn('could not install 9Router. Later: npm install -g 9router');
+    return false;
+  }
+  log.ok('9Router installed');
+  return true;
+}
+
+/** Start 9Router and set the free default model (through the core CLI). */
+function setup9Router() {
+  if (process.env.NEOVARCH_NO_9ROUTER || !coreInstalled()) return false;
+  log.step('Starting 9Router and choosing the free default model');
+  const env = { ...process.env, NEOVARCH_HOME: HOME_DIR };
+  const r = spawnSync(CORE_CLI, ['router', 'setup'], { stdio: 'inherit', env });
+  if (r.status === 0) { log.ok(`9Router ready (dashboard: ${ROUTER_DASHBOARD})`); return true; }
+  log.warn(`9Router needs one step in its dashboard: open ${ROUTER_DASHBOARD}`);
+  console.log('      (the desktop app shows a "Buka dashboard 9Router" button for it)');
+  return false;
+}
+
 module.exports = {
-  APP_DIR, HOME_DIR, CORE_DIR, CORE_CLI, RELEASES_URL, PKG_VERSION,
+  APP_DIR, HOME_DIR, CORE_DIR, CORE_CLI, RELEASES_URL, PKG_VERSION, ROUTER_DASHBOARD,
   detectTarget, installApp, uninstallAll, installCore, coreInstalled, isInstalled, installedTag, wantedTag, printUnsupported, needsNoSandbox, log,
+  routerInstalled, install9Router, setup9Router,
 };

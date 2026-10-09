@@ -32,6 +32,8 @@ def _print_event(kind: str, payload: dict) -> None:
         sys.stdout.write(f"\n\x1b[2m⚙ {payload.get('name')}: {payload.get('preview', '')}\x1b[0m\n")
     elif kind == "tool.complete":
         sys.stdout.write(f"\x1b[2m  ↳ {payload.get('summary', '')} ({payload.get('duration_s')}s)\x1b[0m\n")
+    elif kind == "model.fallback":
+        sys.stdout.write(f"\n\x1b[33m⚠ {payload.get('text', '')}\x1b[0m\n")
     elif kind == "error":
         sys.stdout.write(f"\n\x1b[31merror: {payload.get('message')}\x1b[0m\n")
     elif kind == "message.complete":
@@ -47,6 +49,20 @@ async def _terminal_approve(command: str, description: str, tool: str) -> str:
     return {"o": "once", "once": "once", "s": "session", "session": "session", "y": "once"}.get(answer.strip().lower(), "deny")
 
 
+async def _ensure_9router() -> None:
+    """The terminal chat has no gateway: start/provision the local 9Router itself."""
+    from neovarch import router9
+    cfg = cfgmod.load_config()
+    if cfgmod.resolve_endpoint(cfg)["provider"] != router9.PROVIDER:
+        return
+    try:
+        st = await router9.ensure_ready(router9.Router9(), cfg)
+    except Exception:  # noqa: BLE001 - the turn reports the real error
+        return
+    if not st["setup"]["ready"] and st["setup"]["message"]:
+        print(f"\x1b[33m{st['setup']['message']}\x1b[0m", file=sys.stderr)
+
+
 async def _chat(prompt: str | None, resume: str | None) -> int:
     from neovarch.agent import Agent, default_cwd
     from neovarch.store import SessionStore
@@ -60,6 +76,7 @@ async def _chat(prompt: str | None, resume: str | None) -> int:
     rec = rec or store.create(source="cli", cwd=str(default_cwd()))
     ctx = ToolContext(cwd=Path(rec.get("cwd") or default_cwd()), approve=_terminal_approve)
     agent = Agent(rec, store, ctx, _print_event)
+    await _ensure_9router()
     if prompt is not None:
         await agent.run_turn(prompt)
         return 0
@@ -87,9 +104,61 @@ async def _chat(prompt: str | None, resume: str | None) -> int:
 
 # ----------------------------------------------------------------- setup -----
 
+def cmd_router(args) -> int:
+    """`neovarch router status|start|stop|setup` — the local 9Router (default provider)."""
+    import json as _json
+
+    from neovarch import router9
+
+    async def run() -> dict:
+        r = router9.Router9()
+        cfg = cfgmod.load_config()
+        if args.action == "start" or args.action == "setup":
+            st = await r.start(cfg, wait=float(args.wait))
+        elif args.action == "stop":
+            st = await r.refresh(cfg)
+            print("9Router dijalankan terpisah; hentikan dari ikon tray-nya atau Pengaturan \u25b8 Model.")
+        else:
+            st = await r.refresh(cfg)
+        if args.action == "setup":
+            cfg = cfgmod.load_config()
+            if not cfgmod.get_path(cfg, "model.provider", "") and not cfgmod.get_path(cfg, "model.base_url", ""):
+                model = router9.choose_default(r.free_models)
+                cfg.setdefault("model", {})["provider"] = router9.PROVIDER
+                cfg["model"]["default"] = model
+                cfgmod.save_config(cfg)
+            st = r.status()
+        return st
+
+    st = asyncio.run(run())
+    if args.json:
+        print(_json.dumps(st, ensure_ascii=False, indent=2))
+    else:
+        from neovarch import models as modelsmod
+        ref = modelsmod.default_ref(cfgmod.load_config())
+        print(f"9Router: {st['state']} ({st['base_url']})" + (f" v{st['version']}" if st.get("version") else ""))
+        print(f"API key Neovarch: {'ada' if st['has_api_key'] else 'belum'}")
+        print(f"Model default: {ref['model']} via {ref['provider']}")
+        if st["setup"]["message"]:
+            print(st["setup"]["message"])
+        if st["setup"]["action_url"]:
+            print(f"Dashboard: {st['setup']['action_url']}")
+    return 0 if st["setup"]["ready"] or args.action in ("status", "stop") else 1
+
+
 def cmd_setup(args) -> int:
     cfg = cfgmod.load_config()
     provider = args.provider
+    if provider == "9router":
+        cfg.setdefault("model", {}).update({"provider": "9router", "default": args.model or "oc/big-pickle",
+                                            "base_url": ""})
+        if args.base_url:
+            cfg.setdefault("router9", {})["base_url"] = args.base_url
+        cfgmod.save_config(cfg)
+        if args.api_key:
+            cfgmod.write_env_value("NEOVARCH_9ROUTER_API_KEY", args.api_key)
+        print(f"saved {cfgmod.config_path()} (provider 9router, model {cfg['model']['default']})")
+        return 0
     if not provider:
         names = list(cfgmod.PRESETS) + ["custom"]
         print("Model provider (OpenAI-compatible):")
@@ -240,6 +309,11 @@ def build_parser() -> argparse.ArgumentParser:
     se.add_argument("id", nargs="?")
     se.add_argument("--limit", type=int, default=30)
 
+    ro = sub.add_parser("router", help="the local 9Router (default model provider)")
+    ro.add_argument("action", nargs="?", default="status", choices=["status", "start", "stop", "setup"])
+    ro.add_argument("--json", action="store_true")
+    ro.add_argument("--wait", default="40", help="seconds to wait for 9Router to answer")
+
     sub.add_parser("version", help="show version")
     sub.add_parser("update", help="how to update Neovarch")
     u = sub.add_parser("uninstall", help="remove Neovarch (only ~/.neovarch)")
@@ -269,6 +343,8 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(serve(args.host, args.port, isolated=args.isolated))
     if args.cmd == "setup":
         raise SystemExit(cmd_setup(args))
+    if args.cmd == "router":
+        raise SystemExit(cmd_router(args))
     if args.cmd == "config":
         raise SystemExit(cmd_config(args))
     if args.cmd == "sessions":

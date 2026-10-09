@@ -47,6 +47,8 @@ from neovarch import cron as cronmod
 from neovarch import netinfo
 from neovarch.realtime import EventBus
 from neovarch import uploads as upmod
+from neovarch import models as modelsmod
+from neovarch import router9
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -190,6 +192,7 @@ class LiveSession:
             self.status = "running"
             self.gw.broadcast_event("session.status", self.id, {"status": "running"})
             try:
+                await self.gw.ensure_router(self.id)
                 await self.agent.run_turn(text, attachments or None)
             except Exception as exc:  # report, keep the gateway alive
                 traceback.print_exc()
@@ -203,7 +206,8 @@ class LiveSession:
 
     def info(self) -> dict:
         return {"title": self.rec.get("title") or "", "running": self.status == "running",
-                "model": self.rec.get("model") or cfgmod.resolve_endpoint(cfgmod.load_config())["model"],
+                **{k: v for k, v in modelsmod.agent_model(cfgmod.load_config(), "session:" + self.id).items()
+                   if k in ("model", "provider")},
                 "cwd": str(self.ctx.cwd), "status": self.status,
                 # Version of the desktop session protocol this core speaks; the
                 # desktop warns "backend out of date" below its required level.
@@ -246,6 +250,9 @@ class Gateway:
         self.uploads = upmod.UploadStore()
         from neovarch.social import Social
         self.social = Social(self)
+        self.catalog = modelsmod.ModelCatalog()
+        self.router = router9.Router9(on_status=lambda st: self.broadcast_event("router.status", None, st),
+                                      on_models=lambda _ids: self._models_stale())
         self.cron = cronmod.CronStore()
         self.scheduler = cronmod.Scheduler(
             self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
@@ -326,6 +333,155 @@ class Gateway:
                 "context_length": cfgmod.get_path(cfg, "model.context_length", 128000),
                 "configured": bool(ep["base_url"])}
 
+    # ---- 9Router + model routing -------------------------------------------
+    def _models_stale(self) -> None:
+        self.catalog.fetched_at = 0.0
+        self.broadcast_event("models.changed", None, {"count": len(self.catalog.rows), "fetched_at": time.time()})
+
+    async def ensure_router(self, sid: str) -> None:
+        """Before a turn on 9Router: make sure we know it is up and hold its API key."""
+        try:
+            ep = modelsmod.endpoint_for(cfgmod.load_config(), "session:" + sid)
+            if ep["provider"] == router9.PROVIDER and (not ep["api_key"] or not self.router.running):
+                await router9.ensure_ready(self.router)
+        except Exception:  # noqa: BLE001 - the turn reports the real error
+            pass
+
+    async def router_config(self, body: dict) -> dict:
+        """Change the 9Router URL, autostart, or paste its API key ("" clears it)."""
+        cfg = cfgmod.load_config()
+        r9 = cfg.setdefault("router9", {})
+        if "base_url" in body:
+            url = str(body.get("base_url") or "").strip()
+            if url:
+                from neovarch import providers
+                try:
+                    url = providers.normalize_base_url(url)
+                except providers.EndpointError as exc:
+                    raise ValueError(str(exc)) from None
+            r9["base_url"] = url
+            self.catalog.fetched_at = 0.0
+        if "autostart" in body:
+            r9["autostart"] = bool(body["autostart"])
+        cfgmod.save_config(cfg)
+        if "api_key" in body:
+            cfgmod.write_env_value(router9.KEY_ENV, str(body.get("api_key") or "").strip())
+            self.catalog.fetched_at = 0.0
+        await self.router.refresh()
+        self.router._last_sig = None
+        return self.router._publish()
+
+    async def router_status(self, refresh: bool = True) -> dict:
+        if refresh:
+            return await self.router.refresh()
+        return self.router.status()
+
+    async def models_payload(self, refresh: bool = False) -> dict:
+        cfg = cfgmod.load_config()
+        st = await self.router.refresh(cfg)
+        changed = await self.catalog.fetch(cfg, force=refresh)
+        if changed:
+            self.broadcast_event("models.changed", None, {"count": len(self.catalog.rows),
+                                                          "fetched_at": self.catalog.fetched_at})
+        cfg = cfgmod.load_config()  # provisioning may have written the key / config
+        ref = modelsmod.default_ref(cfg)
+        listing = self.catalog.listing(cfg, st["running"])
+        return {"models": listing,
+                # OpenAI-style mirror, kept for older callers of /api/models
+                "data": [{"id": m["id"], "object": "model", "owned_by": m["provider"]} for m in listing],
+                "default": {"model": ref["model"], "provider": ref["provider"]},
+                "router": self.router.status(cfg), "fetched_at": self.catalog.fetched_at,
+                "error": self.catalog.error if not st["running"] or self.catalog.error else None}
+
+    def _default_changed(self, res: dict) -> None:
+        ref = {"model": res.get("model"), "provider": res.get("provider")}
+        self.broadcast_event("model.default.changed", None, ref)
+        self.broadcast_event("model.changed", None, ref)
+        self.office.schedule()
+        for live in list(self.live.values()):   # sessions following the default see the new one
+            self.broadcast_event("session.info", live.id, live.info())
+
+    def set_default_model(self, model: str, provider: str | None) -> dict:
+        cfg = cfgmod.load_config()
+        res = modelsmod.set_default(cfg, model, provider, self.catalog.ids())
+        cfgmod.save_config(cfg)
+        self._default_changed(res)
+        return {**res, "ok": True}
+
+    def set_agent_model(self, agent_id: str, model: str | None, provider: str | None, *, quiet: bool = False) -> dict:
+        cfg = cfgmod.load_config()
+        res = modelsmod.set_agent_model(cfg, agent_id, model, provider, self.catalog.ids())
+        cfgmod.save_config(cfg)
+        self.broadcast_event("agent.model.changed", None, res)
+        sid = res["agent_id"].split(":", 1)[1] if res["agent_id"].startswith("session:") else ""
+        if not quiet and sid in self.live:
+            self.broadcast_event("session.info", sid, self.live[sid].info())
+        self.office.schedule()
+        return {**res, "ok": True}
+
+    def switch_model_command(self, value: str, session_id: str) -> dict:
+        """The composer's `config.set model "<model> --provider <p> [--session|--global]"`.
+
+        With a session it sets THAT agent's model (per-agent override); ``--global``
+        (or no session) changes the global default instead."""
+        import shlex
+        try:
+            parts = shlex.split(value)
+        except ValueError:
+            parts = value.split()
+        model, provider, scope = "", None, ""
+        i = 0
+        while i < len(parts):
+            tok = parts[i]
+            if tok == "--provider" and i + 1 < len(parts):
+                provider = parts[i + 1]
+                i += 2
+                continue
+            if tok in ("--session", "--global"):
+                scope = tok
+            elif not tok.startswith("--") and not model:
+                model = tok
+            i += 1
+        if not model:
+            raise RpcError(-32602, "model wajib diisi")
+        try:
+            if session_id and scope != "--global":
+                res = self.set_agent_model(session_id, model, provider)
+                return {"ok": True, "value": model, "model": res["model"], "provider": res["provider"],
+                        "scope": "session", "deferred": False}
+            res = self.set_default_model(model, provider)
+            return {"ok": True, "value": model, "model": res["model"], "provider": res["provider"], "scope": "global"}
+        except modelsmod.ModelError as exc:
+            raise RpcError(-32602, str(exc)) from None
+
+    async def model_options(self, session_id: str = "", include_unconfigured: bool = False,
+                            refresh: bool = False) -> dict:
+        """`model.options` for the composer picker: 9Router's live list first."""
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        try:
+            await router9.ensure_ready(self.router, cfg) if refresh else None
+            if await self.catalog.fetch(cfg, force=refresh):
+                self.broadcast_event("models.changed", None, {"count": len(self.catalog.rows),
+                                                              "fetched_at": self.catalog.fetched_at})
+        except Exception:  # noqa: BLE001 - an offline router still lists the default
+            pass
+        cfg = cfgmod.load_config()
+        out = providers.model_options(cfg, include_unconfigured)
+        if session_id:
+            am = modelsmod.agent_model(cfg, session_id)
+            out["model"], out["provider"] = am["model"], am["provider"]
+            for prov in out["providers"]:
+                prov["is_current"] = prov["slug"] == am["provider"]
+                if prov["is_current"] and am["model"] not in prov["models"]:
+                    prov["models"] = [am["model"], *prov["models"]]
+                    prov["total_models"] = len(prov["models"])
+        r9 = next((pv for pv in out["providers"] if pv["slug"] == router9.PROVIDER), None)
+        if r9 is not None:
+            r9["free_models"] = [m for m in r9["models"] if m.split("/", 1)[0] in router9.FREE_ALIASES]
+            r9["status"] = self.router.status(cfg)
+        return out
+
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
         if method == "ping":
@@ -354,6 +510,10 @@ class Gateway:
             cwd = p.get("cwd") or str(default_cwd())
             rec = self.store.create(source=str(p.get("source") or "desktop"), cwd=cwd,
                                     model=self.model_info()["model"])
+            if str(p.get("model") or "").strip():
+                # The composer's pick for a new chat = that agent's own model.
+                self.set_agent_model(rec["id"], str(p["model"]), p.get("provider") or None, quiet=True)
+                rec["model"] = str(p["model"]).strip()
             live = self.open(rec)
             conn.attached.add(live.id)
             self.broadcast_event("sessions.changed", None, {})
@@ -424,6 +584,8 @@ class Gateway:
             cfg = cfgmod.load_config()
             key = p.get("key")
             return {"value": cfgmod.get_path(cfg, key) if key else cfg, "config": cfg}
+        if method == "config.set" and str(p.get("key") or "") == "model" and isinstance(p.get("value"), str):
+            return self.switch_model_command(str(p["value"]), str(p.get("session_id") or ""))
         if method == "config.set":
             cfg = cfgmod.load_config()
             cfgmod.set_path(cfg, str(p["key"]), p.get("value"))
@@ -432,6 +594,36 @@ class Gateway:
             return {"ok": True}
         if method == "office.snapshot":
             return self.office.snapshot()
+        if method == "router.status":
+            return await self.router_status()
+        if method == "router.start":
+            return await self.router.start()
+        if method == "router.stop":
+            if not self.router.status()["managed"]:
+                raise RpcError(-32010, "9Router ini tidak dijalankan oleh Neovarch, jadi tidak dihentikan.")
+            return await self.router.stop()
+        if method == "router.provision":
+            await self.router.provision()
+            self.router._last_sig = None
+            return await self.router_status()
+        if method == "router.config":
+            try:
+                return await self.router_config(p)
+            except ValueError as exc:
+                raise RpcError(-32602, str(exc)) from None
+        if method == "models.list":
+            return await self.models_payload(bool(p.get("refresh")))
+        if method == "models.default.get":
+            return modelsmod.default_ref(cfgmod.load_config())
+        if method in ("models.default.set", "agent.model.set", "agent.model.get"):
+            try:
+                if method == "models.default.set":
+                    return self.set_default_model(str(p.get("model") or ""), p.get("provider"))
+                if method == "agent.model.get":
+                    return modelsmod.agent_model(cfgmod.load_config(), str(p.get("agent_id") or ""))
+                return self.set_agent_model(str(p.get("agent_id") or ""), p.get("model"), p.get("provider"))
+            except modelsmod.ModelError as exc:
+                raise RpcError(-32602, str(exc)) from None
         if method == "commands.catalog":
             return {"commands": [{"name": "new", "description": "Start a new chat"},
                                  {"name": "model", "description": "Show the configured model"}], "skills": list_skills()}
@@ -461,13 +653,14 @@ class Gateway:
                     "source": "config", "free_tier_route": False, "profile": "default",
                     "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
         if method == "model.options":
-            from neovarch import providers
-            return providers.model_options(cfgmod.load_config(), bool(p.get("include_unconfigured")))
+            return await self.model_options(str(p.get("session_id") or ""), bool(p.get("include_unconfigured")),
+                                            bool(p.get("refresh")))
         if method in ("model.set", "model.switch"):
             from neovarch import providers
             cfg = cfgmod.load_config()
             res = providers.set_model(cfg, {"scope": "main", **p})
             cfgmod.save_config(cfg)
+            self._default_changed(res)
             return res
         # ---- features the Neovarch core does not have (yet): answer "off", never an error
         if method == "pet.info":
@@ -660,10 +853,13 @@ def build_app(gw: Gateway) -> web.Application:
     async def _start_cron(_app):
         gw.scheduler.start()
         gw.social.start()
+        if os.environ.get("NEOVARCH_9ROUTER_SUPERVISE", "1") not in ("0", "false", "off"):
+            gw.router.start_supervisor()
 
     async def _stop_cron(_app):
         await gw.scheduler.stop()
         await gw.social.stop()
+        await gw.router.close()
     app.on_startup.append(_start_cron)
     app.on_cleanup.append(_stop_cron)
 
@@ -881,9 +1077,9 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response(gw.model_info())
 
     async def model_options(request):
-        from neovarch import providers
         inc = request.query.get("include_unconfigured") in ("1", "true")
-        return web.json_response(providers.model_options(cfgmod.load_config(), inc))
+        return web.json_response(await gw.model_options(request.query.get("session_id") or "", inc,
+                                                        request.query.get("refresh") in ("1", "true")))
 
     async def model_set(request):
         from neovarch import providers
@@ -894,7 +1090,7 @@ def build_app(gw: Gateway) -> web.Application:
         except providers.EndpointError as exc:
             return web.json_response({"ok": False, "detail": str(exc), "message": str(exc)}, status=422)
         cfgmod.save_config(cfg)
-        gw.broadcast_event("model.changed", None, {"provider": res.get("provider"), "model": res.get("model")})
+        gw._default_changed(res)
         return web.json_response(res)
 
     async def model_recommended(request):
@@ -1353,6 +1549,93 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_delete("/api/uploads/{uid}", upload_delete)
     r.add_get("/api/fs/download", fs_download)
     gw.social.install_routes(r)
+
+    # ---- 9Router + models (contract: docs/9router.md) ------------------------
+    def _bad(exc: Exception, code: int = 400):
+        return web.json_response({"ok": False, "error": str(exc), "detail": str(exc)}, status=code)
+
+    async def router_status_h(_):
+        return web.json_response(await gw.router_status())
+
+    async def router_start_h(_):
+        st = await gw.router.start()
+        if st["state"] == "not_installed":
+            return web.json_response({**st, "ok": False, "error": st["setup"]["message"]}, status=409)
+        return web.json_response(st)
+
+    async def router_stop_h(_):
+        if not gw.router.status()["managed"]:
+            st = gw.router.status()
+            return web.json_response({**st, "ok": False,
+                                      "error": "9Router ini tidak dijalankan oleh Neovarch, jadi tidak dihentikan."},
+                                     status=409)
+        return web.json_response(await gw.router.stop())
+
+    async def router_config_h(request):
+        try:
+            return web.json_response(await gw.router_config(await _json(request)))
+        except ValueError as exc:
+            return _bad(exc)
+
+    async def router_provision_h(_):
+        await gw.router.provision()
+        gw.router._last_sig = None
+        return web.json_response(await gw.router_status())
+
+    async def models_list_h(request):
+        return web.json_response(await gw.models_payload(request.query.get("refresh") in ("1", "true")))
+
+    async def models_default_get_h(_):
+        return web.json_response(modelsmod.default_ref(cfgmod.load_config()))
+
+    async def models_default_put_h(request):
+        body = await _json(request)
+        try:
+            return web.json_response(gw.set_default_model(str(body.get("model") or ""), body.get("provider")))
+        except (modelsmod.ModelError, ValueError) as exc:
+            return _bad(exc)
+
+    async def agents_models_h(_):
+        cfg = cfgmod.load_config()
+        ref = modelsmod.default_ref(cfg)
+        return web.json_response({"default": {"model": ref["model"], "provider": ref["provider"]},
+                                  "agents": {aid: modelsmod.agent_model(cfg, aid) for aid in modelsmod.overrides(cfg)}})
+
+    async def agent_model_get_h(request):
+        try:
+            return web.json_response(modelsmod.agent_model(cfgmod.load_config(), request.match_info["aid"]))
+        except modelsmod.ModelError as exc:
+            return _bad(exc)
+
+    async def agent_model_put_h(request):
+        body = await _json(request)
+        if "model" not in body:
+            return _bad(ValueError("model wajib ada (null untuk kembali ke model global)"))
+        try:
+            return web.json_response(gw.set_agent_model(request.match_info["aid"], body.get("model"),
+                                                        body.get("provider")))
+        except modelsmod.ModelError as exc:
+            return _bad(exc)
+
+    async def agent_model_delete_h(request):
+        try:
+            return web.json_response(gw.set_agent_model(request.match_info["aid"], None, None))
+        except modelsmod.ModelError as exc:
+            return _bad(exc)
+
+    r.add_get("/api/router/status", router_status_h)
+    r.add_post("/api/router/start", router_start_h)
+    r.add_post("/api/router/stop", router_stop_h)
+    r.add_put("/api/router/config", router_config_h)
+    r.add_post("/api/router/config", router_config_h)
+    r.add_post("/api/router/provision", router_provision_h)
+    r.add_get("/api/models", models_list_h)
+    r.add_get("/api/models/default", models_default_get_h)
+    r.add_put("/api/models/default", models_default_put_h)
+    r.add_get("/api/agents/models", agents_models_h)
+    r.add_get("/api/agents/{aid}/model", agent_model_get_h)
+    r.add_put("/api/agents/{aid}/model", agent_model_put_h)
+    r.add_delete("/api/agents/{aid}/model", agent_model_delete_h)
 
     r.add_get("/api/office", office_get)
     r.add_get("/api/office/events", office_events)
