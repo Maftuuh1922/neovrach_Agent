@@ -51,7 +51,7 @@ class ApprovalsList extends ConsumerWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
         child: Text(list.isEmpty ? 'tidak ada yang menunggu' : '${list.length} aksi menunggu keputusanmu',
-            style: NV.monoLabel(size: 10, color: list.isEmpty ? NV.muted : NV.red).copyWith(letterSpacing: 0.4)),
+            style: NV.monoLabel(size: 10, color: list.isEmpty ? NV.muted : NV.redInk).copyWith(letterSpacing: 0.4)),
       ),
       if (list.isEmpty)
         const NvEmpty(

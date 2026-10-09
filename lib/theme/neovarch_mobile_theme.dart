@@ -85,22 +85,55 @@ class NvPalette {
         wash: t(0xFF0D0D0D, 0.22),
       );
     }
+    // 1.4.4 light-mode contrast: a pale accent (amber, yellow, lime) is
+    // deepened until it reads as an icon / fill edge on the light surface
+    // (3:1); text in the accent uses [accentInk] (4.5:1).
+    // reference: light glass composited over a black wallpaper (~#CCC), so
+    // accent icons hold up on glass too; on the plain background it is ~4:1.
+    final la = _toContrast(a, const Color(0xFFCCCCCC), 3.0);
+    final cw2 = _contrast(la, const Color(0xFFFFFFFF)), cb2 = _contrast(la, const Color(0xFF000000));
+    final on2 = onAccent ?? (cw2 >= 4.5 || cw2 >= cb2 ? const Color(0xFFFFFFFF) : const Color(0xFF000000));
+    Color tl(int base, double f) => Color.lerp(Color(base), la, f)!;
     return NvPalette(
       brightness: b,
-      accent: a,
-      onAccent: on,
-      bg: t(0xFFF6F4F1, 0.06),
-      surface: t(0xFFFFFFFF, 0.035),
-      raised: t(0xFFEEEBE7, 0.08),
-      border: t(0xFFDDD8D1, 0.16),
-      borderStrong: t(0xFFC9C2B9, 0.22),
-      text: Color.lerp(const Color(0xFF151111), a, 0.05)!,
-      muted: Color.lerp(const Color(0xFF5C5450), a, 0.10)!,
-      faint: Color.lerp(const Color(0xFF8A827C), a, 0.12)!,
-      darkAccent: Color.lerp(a, const Color(0xFF000000), 0.35)!,
-      wash: t(0xFFFFFFFF, 0.16),
+      accent: la,
+      onAccent: on2,
+      bg: tl(0xFFF6F4F1, 0.06),
+      surface: tl(0xFFFFFFFF, 0.035),
+      raised: tl(0xFFEEEBE7, 0.08),
+      border: tl(0xFFDDD8D1, 0.16),
+      borderStrong: tl(0xFFC9C2B9, 0.22),
+      text: Color.lerp(const Color(0xFF151111), la, 0.05)!,
+      // darker secondary/tertiary than before so they hold AA on light glass
+      muted: Color.lerp(const Color(0xFF433C39), la, 0.06)!,
+      faint: Color.lerp(const Color(0xFF66605B), la, 0.06)!,
+      darkAccent: Color.lerp(la, const Color(0xFF000000), 0.35)!,
+      wash: tl(0xFFFFFFFF, 0.16),
     );
   }
+
+  /// The accent as a text colour: deepened (light) or lifted (dark) until it
+  /// reaches AA 4.5:1 on [bg].
+  Color get accentInk {
+    final c = _toContrast(_toContrast(accent, bg, 4.5), wash, 4.5);
+    // light mode: also 3:1 over the wallpaper veil on a black photo (~#B0B0B0)
+    return dark ? c : _toContrast(c, const Color(0xFFB0B0B0), 3.2);
+  }
+
+  /// Moves [c] toward black (on a light [bg]) or white (on a dark one) until
+  /// it reaches [ratio] against [bg].
+  static Color _toContrast(Color c, Color bg, double ratio) {
+    if (_contrast(c, bg) >= ratio) return c;
+    final to = _lum(bg) > 0.4 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    for (var i = 1; i <= 20; i++) {
+      final x = Color.lerp(c, to, i / 20)!;
+      if (_contrast(x, bg) >= ratio) return x;
+    }
+    return to;
+  }
+
+  /// WCAG contrast ratio of two opaque colours.
+  static double contrast(Color a, Color b) => _contrast(a, b);
 
   static double _lum(Color c) {
     double ch(double v) => v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
@@ -148,6 +181,8 @@ abstract final class NV {
   static Color get faint => palette.faint;
   static Color get red => palette.accent; // the accent (red by default)
   static Color get onRed => palette.onAccent;
+  /// Accent for text (kickers, counts, links): AA 4.5:1 on the background.
+  static Color get redInk => palette.accentInk;
   static Color get darkRed => palette.darkAccent;
   static Color get redWash => palette.wash; // accent-tinted surface (selection, user message)
   // Status colours stay inside the palette: no stock green / amber.
@@ -166,20 +201,36 @@ abstract final class NV {
   static Color glassFill(NvGlassStyle st, {bool nav = false}) {
     final d = palette.dark;
     final a = palette.accent;
+    if (!d) {
+      // 1.4.4 light mode: dark text sits on these fills over any wallpaper,
+      // so every style keeps enough light fill to hold 4.5:1 for body and
+      // secondary text even over a black backdrop (see remote_v144 contrast
+      // test); the blur + rim still read as glass.
+      return switch (st) {
+        NvGlassStyle.reguler => Color.lerp(palette.surface, a, nav ? 0.08 : 0.05)!.withValues(alpha: nav ? 0.80 : 0.80),
+        NvGlassStyle.bening => Color.lerp(const Color(0xFFFFFFFF), a, 0.04)!.withValues(alpha: 0.74),
+        NvGlassStyle.gelap => Color.lerp(palette.surface, const Color(0xFF000000), 0.07)!.withValues(alpha: 0.84),
+        NvGlassStyle.warna => Color.lerp(a, palette.surface, 0.82)!.withValues(alpha: 0.86),
+        NvGlassStyle.tanpa => Color.lerp(palette.surface, a, 0.05)!.withValues(alpha: 0.96),
+      };
+    }
     return switch (st) {
-      NvGlassStyle.reguler => Color.lerp(palette.surface, a, nav ? (d ? 0.16 : 0.10) : (d ? 0.10 : 0.06))!
-          .withValues(alpha: nav ? (d ? 0.50 : 0.58) : (d ? 0.55 : 0.62)),
+      NvGlassStyle.reguler => Color.lerp(palette.surface, a, nav ? 0.16 : 0.10)!.withValues(alpha: nav ? 0.50 : 0.55),
       // Clear: nearly no fill (spec: white α .04–.06) + a light dimming so
       // labels keep their contrast over bright wallpapers.
-      NvGlassStyle.bening => Color.lerp(const Color(0xFF000000), a, 0.10)!.withValues(alpha: d ? 0.16 : 0.10),
+      NvGlassStyle.bening => Color.lerp(const Color(0xFF000000), a, 0.10)!.withValues(alpha: 0.16),
       // Dark smoked glass, neutral taken from the accent hue.
       NvGlassStyle.gelap => Color.lerp(const Color(0xFF0B0B0D), a, 0.08)!.withValues(alpha: 0.68),
       // Tinted: the accent tone-mapped toward the surface.
-      NvGlassStyle.warna => Color.lerp(a, palette.surface, d ? 0.45 : 0.35)!.withValues(alpha: 0.58),
+      NvGlassStyle.warna => Color.lerp(a, palette.surface, 0.45)!.withValues(alpha: 0.58),
       // Reduce transparency: an opaque surface in the mode colour.
       NvGlassStyle.tanpa => Color.lerp(palette.surface, a, 0.05)!.withValues(alpha: 0.96),
     };
   }
+
+  /// Light mode with a wallpaper: the minimum light veil over the picture so
+  /// headers and text drawn straight on it keep their contrast.
+  static const lightWallpaperVeil = 0.74;
 
   /// Backdrop blur multiplier per style (0 = no BackdropFilter).
   static double glassSigmaScale(NvGlassStyle st) => switch (st) {
@@ -201,7 +252,9 @@ abstract final class NV {
       };
   /// Text on glass: a faint shadow only where the glass is clear.
   static List<Shadow> get glassTextShadows => glassStyle == NvGlassStyle.bening
-      ? [Shadow(color: const Color(0xFF000000).withValues(alpha: palette.dark ? 0.55 : 0.35), blurRadius: 3, offset: const Offset(0, 1))]
+      ? (palette.dark
+          ? [Shadow(color: const Color(0xFF000000).withValues(alpha: 0.55), blurRadius: 3, offset: const Offset(0, 1))]
+          : [Shadow(color: const Color(0xFFFFFFFF).withValues(alpha: 0.6), blurRadius: 3)])
       : const [];
   /// Tab bar glass: a touch more accent so the bar reads as tinted glass.
   static Color get navGlass => glassFill(glassStyle, nav: true);

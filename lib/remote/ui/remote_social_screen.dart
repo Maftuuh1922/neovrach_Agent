@@ -41,7 +41,7 @@ class _RemoteSocialScreenState extends ConsumerState<RemoteSocialScreen> {
                 onPressed: () => Navigator.maybePop(context),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(CupertinoIcons.chevron_back, size: 20, color: NV.red),
-                  Text('PC', style: TextStyle(color: NV.red, fontSize: 16)),
+                  Text('PC', style: TextStyle(color: NV.redInk, fontSize: 16)),
                 ]),
               ),
             ]),
@@ -360,7 +360,7 @@ class FriendTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, color: NV.text, fontWeight: FontWeight.w500)),
               const SizedBox(height: 2),
-              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: f.coding ? NV.red : NV.muted)),
+              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: f.coding ? NV.redInk : NV.muted)),
             ]),
           ),
           if (f.topStack.isNotEmpty)
@@ -424,7 +424,7 @@ class _RemoteFriendScreenState extends ConsumerState<RemoteFriendScreen> {
               onPressed: () => Navigator.maybePop(context),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(CupertinoIcons.chevron_back, size: 20, color: NV.red),
-                Text('Teman', style: TextStyle(color: NV.red, fontSize: 16)),
+                Text('Teman', style: TextStyle(color: NV.redInk, fontSize: 16)),
               ]),
             ),
             const Spacer(),

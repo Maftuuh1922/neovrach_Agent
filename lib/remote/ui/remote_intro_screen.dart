@@ -407,7 +407,7 @@ class _SlideViewState extends State<_SlideView> with SingleTickerProviderStateMi
       final text = Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _stagger(0, Text(slide.kicker.toUpperCase(), style: NV.monoLabel(color: NV.red))),
+          _stagger(0, Text(slide.kicker.toUpperCase(), style: NV.monoLabel(color: NV.redInk))),
           const SizedBox(height: 10),
           _stagger(1, NvGlassText(slide.title, entrance: false, sheen: false, textAlign: TextAlign.left, style: NV.display(size: 34))),
           const SizedBox(height: 12),
@@ -466,7 +466,7 @@ class _ThemeStep extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('TAMPILAN · TEMA', style: NV.monoLabel(color: NV.red)),
+            Text('TAMPILAN · TEMA', style: NV.monoLabel(color: NV.redInk)),
             const SizedBox(height: 10),
             NvGlassText('Pilih temamu.', key: const ValueKey('intro-theme-title'), textAlign: TextAlign.left, style: NV.display(size: 34)),
             const SizedBox(height: 10),

@@ -236,12 +236,12 @@ class _GlassBackdropState extends ConsumerState<GlassBackdrop> {
         })();
     final useImage = grid != null && (b.active || widget.debugGrid != null);
     // Memoised so GlassScope only notifies when the backdrop really changed.
-    final key = Object.hash(useImage ? identityHashCode(grid) : 0, screen, NV.bg, NV.red, b.tint, b.dim, b.saturation, b.isAsset);
+    final key = Object.hash(useImage ? identityHashCode(grid) : 0, screen, NV.bg, NV.red, b.tint, b.dim, NV.palette.dark, b.saturation, b.isAsset);
     if (key != _memoKey || _memo == null) {
       _memoKey = key;
       _memo = useImage
           ? GlassBackdropMap.image(grid,
-              screen: screen, base: NV.bg, accent: NV.red, tint: b.tint, dim: b.dim, saturation: b.saturation, isAsset: b.isAsset)
+              screen: screen, base: NV.bg, accent: NV.red, tint: b.tint, dim: NV.palette.dark ? b.dim : (b.dim > NV.lightWallpaperVeil ? b.dim : NV.lightWallpaperVeil), saturation: b.saturation, isAsset: b.isAsset)
           : GlassBackdropMap.flat(NV.bg);
     }
     final map = _memo!;

@@ -437,7 +437,7 @@ class _Count extends StatelessWidget {
           onTap: onTap,
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$n', style: NV.display(size: 30, color: accent && n > 0 ? NV.red : NV.text)),
+            Text('$n', style: NV.display(size: 30, color: accent && n > 0 ? NV.redInk : NV.text)),
             const SizedBox(height: 4),
             Text(label.toUpperCase(), style: NV.monoLabel(size: 9.5)),
           ]),
@@ -475,7 +475,7 @@ class AgentDesk extends StatelessWidget {
               border: Border.all(color: a.working ? NV.darkRed : NV.border),
             ),
             child: Text(a.name.isEmpty ? '?' : a.name.characters.first.toUpperCase(),
-                style: TextStyle(fontFamily: NV.serif, fontSize: 22, color: a.working ? NV.red : NV.text)),
+                style: TextStyle(fontFamily: NV.serif, fontSize: 22, color: a.working ? NV.redInk : NV.text)),
           ),
           const SizedBox(width: 12),
           Expanded(

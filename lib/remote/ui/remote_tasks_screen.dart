@@ -143,7 +143,7 @@ class _LaneTile extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 84),
             padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(laneLabel(lane.name).toUpperCase(), style: NV.monoLabel(size: 9.5, color: selected ? NV.red : NV.muted)),
+              Text(laneLabel(lane.name).toUpperCase(), style: NV.monoLabel(size: 9.5, color: selected ? NV.redInk : NV.muted)),
               const SizedBox(height: 2),
               Text('${lane.cards.length}', style: NV.display(size: 28, color: lane.cards.isEmpty && !selected ? NV.faint : NV.text)),
             ]),

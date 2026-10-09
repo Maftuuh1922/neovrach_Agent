@@ -147,7 +147,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('REMOTE', style: NV.monoLabel(color: NV.red)),
+                  Text('REMOTE', style: NV.monoLabel(color: NV.redInk)),
                   const SizedBox(height: 8),
                   Text('Hubungkan ke PC', style: NV.display(size: 34)),
                   const SizedBox(height: 10),
@@ -175,7 +175,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                       height: 26,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(color: NV.redWash, shape: BoxShape.circle, border: Border.all(color: NV.darkRed)),
-                      child: Text('${i + 1}', style: TextStyle(fontFamily: NV.sans, fontWeight: FontWeight.w600, fontSize: 12.5, color: NV.red)),
+                      child: Text('${i + 1}', style: TextStyle(fontFamily: NV.sans, fontWeight: FontWeight.w600, fontSize: 12.5, color: NV.redInk)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(t, style: TextStyle(fontSize: 14, height: 1.45, color: NV.text)))),
