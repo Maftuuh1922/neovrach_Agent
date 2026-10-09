@@ -15,6 +15,7 @@ import '../../ui/screens/chat/message_widgets.dart';
 import '../../ui/widgets/common.dart';
 import '../agent_identity.dart';
 import '../composer.dart';
+import '../home_widget.dart' show remoteLaunchAction;
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'nv_glass_text.dart';
@@ -76,10 +77,35 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   void initState() {
     super.initState();
     _input.addListener(_onInput);
+    remoteLaunchAction.addListener(_onLaunchAction);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunchAction());
+  }
+
+  /// Home-screen widget "Suara": start dictation once the PC is connected.
+  bool _awaitLaunch = false;
+  void _onLaunchAction() {
+    if (!mounted || remoteLaunchAction.value != 'voice') return;
+    final r = ref.read(remoteProvider);
+    if (!r.connected) {
+      // wait for the connection (the controller notifies on connect)
+      if (_awaitLaunch) return;
+      _awaitLaunch = true;
+      void later() {
+        if (mounted && (!r.connected)) return;
+        r.removeListener(later);
+        _awaitLaunch = false;
+        _onLaunchAction();
+      }
+      r.addListener(later);
+      return;
+    }
+    remoteLaunchAction.value = null;
+    if (!_dictating) _dictate();
   }
 
   @override
   void dispose() {
+    remoteLaunchAction.removeListener(_onLaunchAction);
     _input.removeListener(_onInput);
     _input.dispose();
     _scroll.dispose();

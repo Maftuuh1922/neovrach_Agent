@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget, day (values-night has the night set). -->
+<resources>
+    <color name="nvw_bg">#F2F6F4F1</color>
+    <color name="nvw_line">#1F140607</color>
+    <color name="nvw_chip">#14140607</color>
+    <color name="nvw_text">#FF140607</color>
+    <color name="nvw_muted">#FF5C5350</color>
+    <color name="nvw_accent">#FFC8101A</color>
+    <color name="nvw_on_accent">#FFFFFFFF</color>
+    <color name="nvw_ok">#FF1E8E4E</color>
+</resources>

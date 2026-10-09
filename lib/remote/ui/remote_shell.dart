@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../main.dart' show previewTab;
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/motion.dart';
+import '../home_widget.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import '../../data/device_tools.dart' show deviceCall;
@@ -40,6 +41,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   static const tabChat = 0, tabKantor = 1, tabPc = 2, tabProfile = 3;
   int _lastApprovals = 0;
   bool _sheetOpen = false;
+  final _widget = HomeWidgetSync();
 
   @override
   void initState() {
@@ -82,6 +84,13 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
         openTasks();
       case 'chat':
         setState(() => index = tabChat);
+      // home-screen widget buttons
+      case 'voice':
+        setState(() => index = tabChat);
+        remoteLaunchAction.value = 'voice';
+      case 'newtask':
+        openTasks();
+        remoteLaunchAction.value = 'newtask';
       case 'profile':
         setState(() => index = tabProfile);
     }
@@ -116,6 +125,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   @override
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
+    _widget.update(remote); // home-screen widget summary (sent only when it changed)
     final pending = remote.approvals.length;
     if (pending > _lastApprovals && index != tabChat) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

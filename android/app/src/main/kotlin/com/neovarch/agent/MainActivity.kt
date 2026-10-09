@@ -232,6 +232,10 @@ class MainActivity : FlutterActivity() {
             "launcherIcon" -> result.success(launcherIcon())
             "setLauncherIcon" -> result.success(setLauncherIcon(call.argument<String>("id") ?: ""))
             "takeRoute" -> { result.success(pendingRoute); pendingRoute = null }
+            "updateWidget" -> {
+                NvHomeWidget.save(this, (call.arguments as? Map<*, *>) ?: emptyMap<String, Any?>())
+                result.success(true)
+            }
             else -> result.notImplemented()
         }
     }

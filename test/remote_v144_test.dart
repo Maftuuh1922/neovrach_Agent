@@ -16,7 +16,10 @@ import 'package:neovarch_agent/remote/office_models.dart';
 import 'package:neovarch_agent/remote/models_api.dart';
 import 'package:neovarch_agent/remote/office_scene_state.dart';
 import 'package:neovarch_agent/remote/remote_controller.dart';
-import 'package:neovarch_agent/remote/remote_gateway.dart' show RemoteStatus;
+import 'package:flutter/services.dart';
+import 'package:neovarch_agent/remote/home_widget.dart';
+import 'package:neovarch_agent/remote/remote_gateway.dart' show RemoteStatus, KanbanSnapshot, KanbanLane, KanbanCard;
+import 'package:neovarch_agent/remote/ui/remote_tasks_screen.dart';
 import 'package:neovarch_agent/remote/saved_desktops.dart';
 import 'package:neovarch_agent/remote/ui/remote_chat_screen.dart';
 import 'package:neovarch_agent/remote/ui/remote_office_3d.dart';
@@ -41,6 +44,7 @@ Map<String, dynamic> officeJson({String rakaStatus = 'working', String rakaTask 
 
 class SpyController extends RemoteController {
   SpyController(super.desktops);
+  void poke() => notifyListeners();
   final created = <Map<String, String?>>[];
   final sent = <String>[];
   @override
@@ -362,6 +366,109 @@ void main() {
       expect(find.byKey(const ValueKey('contribution-scroll')), findsOneWidget);
       expect(find.text('${h.total} kontribusi'), findsOneWidget);
       NV.palette = NvPalette.red;
+    });
+  });
+
+  group('Home-screen widget', () {
+    tearDown(() => remoteLaunchAction.value = null);
+
+    test('summary: PC, connection, working / waiting / open tasks, current task', () {
+      final r = controller();
+      expect(homeWidgetPayload(r), {
+        'pc': 'PC Kantor',
+        'connected': true,
+        'status': 'terhubung',
+        'working': 1,
+        'waiting': 0,
+        'tasks': 3, // office kanban: todo 2 + running 1
+        'task': 'Raka: Rapikan folder Unduhan',
+      });
+      r.board = const KanbanSnapshot([
+        KanbanLane('ready', [KanbanCard(id: 't1', title: 'A', status: 'ready')]),
+        KanbanLane('done', [KanbanCard(id: 't2', title: 'B', status: 'done')]),
+      ], ['coder']);
+      r.status = RemoteStatus.reconnecting;
+      final p = homeWidgetPayload(r);
+      expect(p['tasks'], 1); // done lane not counted
+      expect(p['status'], 'menyambung…');
+      expect(p['connected'], false);
+    });
+
+    test('sync sends only when the summary changed', () {
+      final sent = <Map<String, Object?>>[];
+      final sync = HomeWidgetSync(send: (p) async => sent.add(p));
+      final r = controller();
+      sync.update(r);
+      sync.update(r);
+      expect(sent.length, 1);
+      r.office = OfficeSnapshot.fromJson(officeJson(rakaStatus: 'idle'));
+      sync.update(r);
+      expect(sent.length, 2);
+      expect(sent.last['working'], 0);
+      expect(sent.last['task'], isNull);
+    });
+
+    testWidgets('platform send: updateWidget on the neovarch/device channel', (tester) async {
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('neovarch/device'), (c) async {
+        calls.add(c);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('neovarch/device'), null));
+      HomeWidgetSync().update(controller());
+      await tester.pump();
+      expect(calls.single.method, 'updateWidget');
+      expect((calls.single.arguments as Map)['pc'], 'PC Kantor');
+    });
+
+    testWidgets('"+ Tugas" button: the Tugas screen opens the Tugas baru sheet', (tester) async {
+      final r = controller()
+        ..board = const KanbanSnapshot([
+          KanbanLane('ready', [KanbanCard(id: 't1', title: 'A', status: 'ready')]),
+        ], ['coder']);
+      await pump(tester, r, home: const Scaffold(body: RemoteTasksScreen()));
+      expect(find.text('Tugas baru di PC'), findsNothing);
+      remoteLaunchAction.value = 'newtask';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Tugas baru di PC'), findsOneWidget);
+      expect(remoteLaunchAction.value, isNull);
+    });
+
+    testWidgets('"+ Tugas" before the board arrives waits for it', (tester) async {
+      final r = controller();
+      remoteLaunchAction.value = 'newtask';
+      await pump(tester, r, home: const Scaffold(body: RemoteTasksScreen()));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Tugas baru di PC'), findsNothing);
+      r.board = const KanbanSnapshot([KanbanLane('ready', [])], ['coder']);
+      r.poke();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Tugas baru di PC'), findsOneWidget);
+    });
+
+    testWidgets('"Suara" button: Chat starts dictation', (tester) async {
+      final engine = FakeEngine();
+      VoiceService.debugEngine = engine;
+      VoiceService.debugMicPermission = () async => true;
+      VoiceService.instance.debugReset();
+      addTearDown(() {
+        VoiceService.debugEngine = null;
+        VoiceService.debugMicPermission = null;
+        VoiceService.instance.debugReset();
+      });
+      final r = controller();
+      await pump(tester, r, home: RemoteChatScreen(onOpenApprovals: () {}));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(engine.listening, isFalse);
+      remoteLaunchAction.value = 'voice';
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(engine.listening, isTrue);
+      expect(remoteLaunchAction.value, isNull);
+      await VoiceService.instance.stopDictation();
     });
   });
 

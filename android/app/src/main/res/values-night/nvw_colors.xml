@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nvw_bg">#F20D0A0A</color>
+    <color name="nvw_line">#26F2EDE4</color>
+    <color name="nvw_chip">#1FF2EDE4</color>
+    <color name="nvw_text">#FFF2EDE4</color>
+    <color name="nvw_muted">#FFA79E99</color>
+    <color name="nvw_accent">#FFE0222C</color>
+    <color name="nvw_on_accent">#FFFFFFFF</color>
+    <color name="nvw_ok">#FF4ADE80</color>
+</resources>
