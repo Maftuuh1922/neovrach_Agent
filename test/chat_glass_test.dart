@@ -290,6 +290,9 @@ void main() {
     testWidgets('user bubble, agent turns, sender labels, header, error card + banner, code block', (tester) async {
       final look = AppearanceController(prefs, systemBrightness: Brightness.light)..setLocal(accent: _kuning, dark: false);
       await pumpShell(tester, look, controller(history(), error: 'Giliran gagal: model tidak ditemukan (404)'));
+      // 1.4.5: the chat opens on the newest message; read the whole history from the top
+      tester.state<ScrollableState>(find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first).position.jumpTo(0);
+      await tester.pump();
       expect(find.descendant(of: find.byType(GlassUserMessage), matching: find.byType(LiquidGlass)), findsNWidgets(2));
       expect(find.byType(GlassAgentTurn), findsNWidgets(2));
       expect(find.byType(GlassSenderLabel), findsNWidgets(2));

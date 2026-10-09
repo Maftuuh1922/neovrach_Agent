@@ -4,10 +4,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/platform_caps.dart';
+import '../../models/models.dart' show ChatMsg;
 import '../../state/app_controller.dart' show settingsProvider;
 import '../../state/voice_service.dart';
 import '../../theme/neovarch_mobile_theme.dart';
@@ -47,6 +49,107 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   final _fresh = <String>{};
   String? _knownSession;
 
+  // Follow the newest message (1.4.5): on open and while replies stream the
+  // list stays at the bottom, unless the user scrolled up to read; then a
+  // floating ↓ (with the count of new messages) brings them back.
+  static const _nearPx = 80.0;
+  bool _follow = true;
+  bool _atBottom = true;
+  bool _settling = false;
+  bool _settleQueued = false;
+  int _unread = 0;
+  String? _followKey;
+  int _seenCount = 0;
+  String _seenSig = '';
+
+  void _followNewest(RemoteController r) {
+    final msgs = r.transcript.messages;
+    final key = '${r.storedId}|${r.runtimeId}|${r.opening}';
+    if (key != _followKey) {
+      // (re)opened session: land on the newest message
+      _followKey = key;
+      _follow = true;
+      _unread = 0;
+      _seenCount = msgs.length;
+      _seenSig = _sig(msgs);
+      if (msgs.isNotEmpty) _scrollToEnd();
+      return;
+    }
+    final sig = _sig(msgs);
+    if (sig == _seenSig) return;
+    final added = msgs.length - _seenCount;
+    if (_follow) {
+      _scrollToEnd();
+    } else if (added > 0) {
+      _unread += msgs.skip(_seenCount).where((m) => m.role != 'user').length;
+    }
+    _seenCount = msgs.length;
+    _seenSig = sig;
+  }
+
+  static String _sig(List<ChatMsg> msgs) {
+    if (msgs.isEmpty) return '0';
+    final l = msgs.last;
+    return '${msgs.length}|${l.id}|${l.content.length}|${l.reasoning.length}|${l.tools.length}|${l.streaming}';
+  }
+
+  bool get _near {
+    final p = _scroll.position;
+    return p.maxScrollExtent - p.pixels <= _nearPx;
+  }
+
+  void _onScroll() {
+    if (_settling || !_scroll.hasClients) return;
+    final near = _near;
+    // only the user's own scrolling changes whether we follow
+    if (_scroll.position.userScrollDirection != ScrollDirection.idle || near) _follow = near;
+    if (near) _unread = 0;
+    if (near != _atBottom) setState(() => _atBottom = near);
+  }
+
+  /// Jump (or animate) to the real end. A lazy list only knows its true
+  /// extent once the last items are built, so settle over a few frames.
+  void _scrollToEnd({bool animate = false}) {
+    if (_settleQueued) return;
+    _settleQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _settleQueued = false;
+      _settle(animate);
+    });
+  }
+
+  Future<void> _settle(bool animate) async {
+    if (!mounted || !_scroll.hasClients) return;
+    _settling = true;
+    try {
+      if (animate) {
+        await _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+      }
+      for (var i = 0; i < 8 && mounted && _scroll.hasClients; i++) {
+        final p = _scroll.position;
+        if ((p.maxScrollExtent - p.pixels).abs() < 0.5) break;
+        _scroll.jumpTo(p.maxScrollExtent);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    } finally {
+      _settling = false;
+    }
+    if (!mounted || !_scroll.hasClients) return;
+    final near = _near;
+    if (near) {
+      _follow = true;
+      _unread = 0;
+    }
+    if (near != _atBottom || near) setState(() => _atBottom = near);
+  }
+
+  void _jumpToLatest() {
+    _follow = true;
+    _unread = 0;
+    setState(() => _atBottom = true);
+    _scrollToEnd(animate: true);
+  }
+
   void _track(RemoteController r) {
     final session = '${r.storedId}|${r.runtimeId}';
     final msgs = r.transcript.messages;
@@ -77,6 +180,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
   void initState() {
     super.initState();
     _input.addListener(_onInput);
+    _scroll.addListener(_onScroll);
     remoteLaunchAction.addListener(_onLaunchAction);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunchAction());
   }
@@ -195,10 +299,11 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     if (mounted) setState(() => _menuOpen = false);
   }
 
+  /// Sending, opening a session, the keyboard coming up: back to the newest.
   void _toBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
-    });
+    _follow = true;
+    _unread = 0;
+    _scrollToEnd();
   }
 
   Future<void> _send([String? preset]) async {
@@ -206,6 +311,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final r = ref.read(remoteProvider);
     if (text.isEmpty && preset == null && r.pendingAttachments.isEmpty) return;
     if (text.isEmpty && preset != null) return;
+    _follow = true;
     _input.clear();
     final err = await ref.read(remoteProvider).send(text);
     if (err != null && mounted) toast(context, err);
@@ -269,13 +375,13 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     final msgs = r.transcript.messages;
     final mine = r.approvals.where((a) => a.sessionId == r.runtimeId).toList();
     final others = r.approvals.length - mine.length;
-    if (r.running) _toBottom();
     final pc = r.desktop?.name ?? 'PC';
     // the open session's pegawai (same name + avatar as Kantor and the desktop)
     final agent = r.office?.agents.where((a) => a.sessionId != null && (a.sessionId == r.storedId || a.sessionId == r.runtimeId)).firstOrNull;
     final tps = r.transcript.tokensPerSecond;
 
     _track(r);
+    _followNewest(r);
     final empty = msgs.isEmpty && !r.opening;
     // Keyboard: the shell hides the nav pill and this screen does NOT let the
     // Scaffold shrink for it (the composer adds the keyboard inset itself);
@@ -364,6 +470,12 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                       },
                     )),
             ),
+            if (msgs.isNotEmpty && !r.opening)
+              Positioned(
+                right: 16,
+                bottom: _dockH + 10,
+                child: _ToLatestButton(visible: !_atBottom, unread: _unread, onTap: _jumpToLatest),
+              ),
             Positioned(
               left: 0,
               right: 0,
@@ -372,7 +484,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                 onHeight: (h) {
                   if ((h - _dockH).abs() > 0.5) {
                     setState(() => _dockH = h);
-                    if (_lastKb > 0) _toBottom();
+                    if (_follow) _scrollToEnd();
                   }
                 },
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -606,4 +718,60 @@ class _MinimalTopBar extends StatelessWidget {
           NvIconButton(tooltip: 'Sesi baru', icon: CupertinoIcons.add, onPressed: onNew),
         ]),
       );
+}
+
+
+/// Floating "↓ newest" over the messages, with the count of replies that
+/// arrived while the user was reading further up.
+class _ToLatestButton extends StatelessWidget {
+  const _ToLatestButton({required this.visible, required this.unread, required this.onTap});
+  final bool visible;
+  final int unread;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 160),
+        child: AnimatedScale(
+          scale: visible ? 1 : 0.85,
+          duration: const Duration(milliseconds: 160),
+          child: Semantics(
+            button: true,
+            label: unread > 0 ? 'Ke pesan terbaru, $unread baru' : 'Ke pesan terbaru',
+            child: GestureDetector(
+              key: const ValueKey('chat-to-latest'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Stack(clipBehavior: Clip.none, children: [
+                LiquidGlass(
+                  themed: true,
+                  borderRadius: BorderRadius.circular(22),
+                  child: const SizedBox(width: 44, height: 44, child: Icon(CupertinoIcons.arrow_down, size: 20)),
+                ),
+                if (unread > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      key: const ValueKey('chat-unread-badge'),
+                      constraints: const BoxConstraints(minWidth: 20),
+                      height: 20,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: NV.red, borderRadius: BorderRadius.circular(10)),
+                      child: Text(unread > 99 ? '99+' : '$unread',
+                          style: TextStyle(color: NV.onRed, fontSize: 11, fontWeight: FontWeight.w700, height: 1)),
+                    ),
+                  ),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
