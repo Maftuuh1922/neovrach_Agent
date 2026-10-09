@@ -13,6 +13,7 @@ key.properties
 **/*.keystore
 **/*.jks
 
-# Neovarch fixed dev/debug signing key: committed on purpose.
-!/key.properties
-!/app/neovarch-signing.keystore
+# Neovarch signing key: never committed (public repo). Local builds read
+# android/key.properties; CI reads the NEOVARCH_* secrets.
+/key.properties
+/app/neovarch-signing.keystore

@@ -103,7 +103,7 @@ void main() {
     }
   }
 
-  test('version is 1.4.2', () => expect(SettingsController.appVersion, '1.4.2'));
+  test('version is 1.4.3', () => expect(SettingsController.appVersion, '1.4.3'));
 
   group('Onboarding theme step', () {
     testWidgets('4th page "Pilih tema": picker without "Ikuti tema PC", pick = local override, applied live', (tester) async {

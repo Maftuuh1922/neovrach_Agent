@@ -80,7 +80,6 @@ core/*.egg-info/
 core/.pytest_cache/
 core/.venv/
 
-# Neovarch fixed dev/debug signing key: committed on purpose so APKs
-# always install over each other (see android/app/build.gradle.kts).
-!/android/key.properties
-!/android/app/neovarch-signing.keystore
+# Neovarch signing key: never committed (see android/app/build.gradle.kts).
+/android/key.properties
+/android/app/neovarch-signing.keystore

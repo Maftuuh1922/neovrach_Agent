@@ -59,7 +59,7 @@ class SettingsController extends ChangeNotifier {
   String lastSessionId = '';
   String updateRepo = '';
 
-  static const appVersion = '1.4.2';
+  static const appVersion = '1.4.3';
 
   Future<void> load() async {
     final p = _prefs;
