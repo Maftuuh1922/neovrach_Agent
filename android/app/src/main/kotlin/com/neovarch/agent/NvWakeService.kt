@@ -68,8 +68,8 @@ class NvWakeService : Service(), RecognitionListener {
         try {
             val dir = modelDir(this)
             if (!File(dir, "am").exists() && !File(dir, "conf").exists()) {
-                setState(this, "downloading")
-                update("Mengunduh model suara (±40 MB)…")
+                setState(this, "downloading:0:0")
+                update("Mengunduh model suara…", 0, 0)
                 download(dir)
             }
             if (stopped) return
@@ -89,10 +89,22 @@ class NvWakeService : Service(), RecognitionListener {
 
     private fun download(dir: File) {
         val tmp = File(cacheDir, "vosk-model.zip")
-        val c = URL(MODEL_URL).openConnection() as HttpURLConnection
-        c.connectTimeout = 20000
-        c.readTimeout = 30000
-        c.inputStream.use { inp -> FileOutputStream(tmp).use { out -> inp.copyTo(out) } }
+        var lastUi = 0L
+        ModelDownloader(MODEL_URLS).fetch(tmp, { stopped }) { ev ->
+            val now = System.currentTimeMillis()
+            when (ev) {
+                is ModelDownloader.Event.Progress -> if (now - lastUi >= 700 || ev.done == ev.total) {
+                    lastUi = now
+                    setState(this, "downloading:${ev.done}:${ev.total}")
+                    update(ModelDownloader.progressText(ev.done, ev.total), ev.done, ev.total)
+                }
+                is ModelDownloader.Event.Retry -> {
+                    setState(this, "retrying:${ev.attempt}:${ev.reason}")
+                    update("Unduhan macet, mencoba lagi… (${ev.attempt}/${ModelDownloader.ATTEMPTS})")
+                }
+            }
+        }
+        if (stopped) return
         val staging = File(filesDir, "vosk-staging").apply { deleteRecursively(); mkdirs() }
         ZipInputStream(tmp.inputStream()).use { z ->
             var e = z.nextEntry
@@ -160,15 +172,19 @@ class NvWakeService : Service(), RecognitionListener {
         super.onDestroy()
     }
 
-    private fun update(text: String) {
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, ongoing(text))
+    private fun update(text: String, done: Long = -1, total: Long = -1) {
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, ongoing(text, done, total))
     }
 
-    private fun ongoing(text: String): Notification {
+    private fun ongoing(text: String, done: Long = -1, total: Long = -1): Notification {
         val b = builder(this, CHANNEL_QUIET, "Hey Neo", NotificationManager.IMPORTANCE_LOW)
+        if (done >= 0) {
+            if (total > 0) b.setProgress(1000, (done * 1000 / total).toInt(), false) else b.setProgress(0, 0, true)
+        }
         return b.setSmallIcon(R.mipmap.ic_launcher_foreground)
             .setContentTitle("Hey Neo")
             .setContentText(text)
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setContentIntent(openApp(this, "profile", 50))
             .build()
@@ -183,6 +199,9 @@ class NvWakeService : Service(), RecognitionListener {
         private const val CHANNEL_ALERT = "nv_wake_alert"
         private const val PREFS = "nv_wake"
         const val MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+        /** GitHub mirror first (fast CDN, range requests), then the original. */
+        const val MIRROR_URL = "https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/assets-vosk/vosk-model-small-en-us-0.15.zip"
+        val MODEL_URLS = listOf(MIRROR_URL, MODEL_URL)
         /** Only the phrase (and "unknown"), so ordinary speech never matches. */
         const val GRAMMAR = "[\"hey neo\", \"[unk]\"]"
 

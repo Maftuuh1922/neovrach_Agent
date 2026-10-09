@@ -17,13 +17,43 @@ class WakeWordStatus {
         modelReady: m?['modelReady'] == true,
       );
   final bool enabled;
-  /// `off`, `downloading`, `listening`, `stopped` or `error:` + reason
+  /// `off`, `downloading[:done:total]`, `retrying:n:reason`, `listening`,
+  /// `stopped` or `error:` + reason
   final String state;
   final bool modelReady;
+
+  bool get downloading => state == 'downloading' || state.startsWith('downloading:') || state.startsWith('retrying:');
+
+  /// Bytes received / expected while downloading (total 0 = unknown).
+  (int, int)? get progress {
+    if (!state.startsWith('downloading:')) return null;
+    final p = state.split(':');
+    if (p.length < 3) return null;
+    return (int.tryParse(p[1]) ?? 0, int.tryParse(p[2]) ?? 0);
+  }
+
+  /// 0..1, null when unknown (indeterminate bar).
+  double? get fraction {
+    final p = progress;
+    if (p == null || p.$2 <= 0) return null;
+    return (p.$1 / p.$2).clamp(0.0, 1.0);
+  }
+
+  /// "Mengunduh model suara 12 / 40 MB (30%)" (same text as the notification).
+  static String progressText(int done, int total) {
+    final mb = done ~/ 1048576;
+    return total > 0 ? 'Mengunduh model suara $mb / ${total ~/ 1048576} MB (${done * 100 ~/ total}%)' : 'Mengunduh model suara $mb MB';
+  }
 
   String get label {
     if (!enabled) return 'Mati';
     if (state == 'downloading') return 'Mengunduh model suara…';
+    final p = progress;
+    if (p != null) return p.$1 == 0 && p.$2 == 0 ? 'Mengunduh model suara…' : progressText(p.$1, p.$2);
+    if (state.startsWith('retrying:')) {
+      final n = state.split(':');
+      return 'Unduhan macet, mencoba lagi… (${n.length > 1 ? n[1] : '1'}/3)${n.length > 2 ? ' · ${n.sublist(2).join(':')}' : ''}';
+    }
     if (state == 'listening') return 'Mendengarkan "Hey Neo"';
     if (state == 'stopped') return 'Berhenti (ketuk notifikasi atau nyalakan lagi)';
     if (state.startsWith('error:')) return 'Gagal: ${state.substring(6)}';
@@ -58,6 +88,17 @@ class WakeWordController extends ChangeNotifier {
       await ensurePermissions(const ['android.permission.POST_NOTIFICATIONS']);
     } catch (_) {}
     return mic;
+  }
+
+  /// Opens MIUI autostart / battery (or overlay) settings for background use.
+  Future<String?> openBackgroundSettings({bool overlay = false}) async {
+    try {
+      return '${await _call('wakeBackground', {'kind': overlay ? 'overlay' : 'autostart'})}';
+    } catch (e) {
+      error = '$e';
+      notifyListeners();
+      return null;
+    }
   }
 
   Future<void> refresh() async {

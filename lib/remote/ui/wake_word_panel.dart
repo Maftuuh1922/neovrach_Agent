@@ -1,9 +1,13 @@
 // Profil → Hey Neo: the opt-in switch for the wake word (lib/remote/wake_word.dart).
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/neovarch_mobile_theme.dart';
 import '../wake_word.dart';
+import 'nv_widgets.dart';
 
 class WakeWordPanel extends ConsumerStatefulWidget {
   const WakeWordPanel({super.key});
@@ -12,25 +16,44 @@ class WakeWordPanel extends ConsumerStatefulWidget {
 }
 
 class _WakeWordPanelState extends ConsumerState<WakeWordPanel> {
+  Timer? _poll;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.read(wakeWordProvider).refresh();
     });
+    // live download progress / errors from the service (every second while on)
+    _poll = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final w = ref.read(wakeWordProvider);
+      if (w.status.enabled && !w.busy && w.status.state != 'listening') w.refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final w = ref.watch(wakeWordProvider);
     final s = w.status;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    final failed = s.enabled && s.state.startsWith('error:');
+    return NvPanel(
+      key: const ValueKey('wake-panel'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Panggil dengan "Hey Neo"', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: NV.text)),
             const SizedBox(height: 2),
-            Text(s.label, key: const ValueKey('wake-state'), style: TextStyle(fontSize: 12.5, color: NV.muted)),
+            Text(s.label, key: const ValueKey('wake-state'), style: TextStyle(fontSize: 12.5, color: failed ? NV.redInk : NV.muted)),
           ]),
         ),
         Switch.adaptive(
@@ -40,6 +63,19 @@ class _WakeWordPanelState extends ConsumerState<WakeWordPanel> {
           onChanged: w.busy ? null : (v) => w.setEnabled(v),
         ),
       ]),
+      if (s.enabled && s.downloading) ...[
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: LinearProgressIndicator(
+            key: const ValueKey('wake-progress'),
+            value: s.fraction,
+            minHeight: 5,
+            color: NV.red,
+            backgroundColor: NV.text.withValues(alpha: 0.10),
+          ),
+        ),
+      ],
       const SizedBox(height: 8),
       Text(
         'Opsional. Mikrofon didengarkan di HP (tanpa internet) hanya untuk kata "Hey Neo", lalu dikte Chat terbuka. '
@@ -51,6 +87,48 @@ class _WakeWordPanelState extends ConsumerState<WakeWordPanel> {
         const SizedBox(height: 8),
         Text(w.error!, key: const ValueKey('wake-error'), style: TextStyle(fontSize: 12.5, color: NV.redInk)),
       ],
-    ]);
+      const SizedBox(height: 6),
+      _Row(
+        key: const ValueKey('wake-background'),
+        icon: CupertinoIcons.bolt,
+        title: 'Izinkan jalan di latar',
+        body: 'Xiaomi/MIUI: nyalakan Mulai otomatis dan Baterai → Tanpa batasan.',
+        onTap: () => w.openBackgroundSettings(),
+      ),
+      _Row(
+        key: const ValueKey('wake-overlay'),
+        icon: CupertinoIcons.rectangle_on_rectangle,
+        title: 'Tampil di atas aplikasi lain',
+        body: 'Supaya "Hey Neo" bisa membuka Chat saat HP di layar lain.',
+        onTap: () => w.openBackgroundSettings(overlay: true),
+      ),
+    ]),
+    );
   }
+}
+
+class _Row extends StatelessWidget {
+  const _Row({super.key, required this.icon, required this.title, required this.body, required this.onTap});
+  final IconData icon;
+  final String title, body;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            Icon(icon, size: 17, color: NV.red),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: NV.text)),
+                Text(body, style: TextStyle(fontSize: 12, height: 1.3, color: NV.muted)),
+              ]),
+            ),
+            Icon(CupertinoIcons.chevron_right, size: 14, color: NV.muted),
+          ]),
+        ),
+      );
 }
