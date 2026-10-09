@@ -299,3 +299,24 @@ async def test_start_and_stop_a_local_9router(home, tmp_path, monkeypatch):
         if gw.router.proc and gw.router.proc.poll() is None:
             gw.router.proc.kill()
         await c.close()
+
+
+def test_cli_router_status_and_setup_9router(tmp_path):
+    import subprocess
+    core = Path(__file__).resolve().parent.parent
+    env = {k: v for k, v in os.environ.items() if not k.startswith("NEOVARCH_")}
+    env.update(HOME=str(tmp_path), NEOVARCH_HOME=str(tmp_path / ".nv"), PYTHONPATH=str(core),
+               NEOVARCH_9ROUTER_URL=f"http://127.0.0.1:{_free_port()}/v1",
+               NEOVARCH_9ROUTER_BIN=str(tmp_path / "none"))
+    run = lambda *a: subprocess.run([sys.executable, "-m", "neovarch", *a], env=env, capture_output=True,
+                                    text=True, timeout=60)
+    r = run("router", "status")
+    assert r.returncode == 0 and "9Router: not_installed" in r.stdout and "npm install -g 9router" in r.stdout
+    assert "Model default: oc/big-pickle via 9router" in r.stdout
+    r = run("router", "setup", "--wait", "1")
+    assert r.returncode == 1
+    r = run("setup", "--provider", "9router", "--non-interactive")
+    assert r.returncode == 0, r.stderr
+    import yaml
+    cfg = yaml.safe_load((tmp_path / ".nv" / "config.yaml").read_text())
+    assert cfg["model"]["provider"] == "9router" and cfg["model"]["default"] == "oc/big-pickle"

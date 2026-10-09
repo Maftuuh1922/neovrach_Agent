@@ -330,10 +330,7 @@ class Gateway:
         try:
             ep = modelsmod.endpoint_for(cfgmod.load_config(), "session:" + sid)
             if ep["provider"] == router9.PROVIDER and (not ep["api_key"] or not self.router.running):
-                st = await self.router.refresh()
-                if (not st["running"] and st["installed"] and not self.router.user_stopped
-                        and router9.autostart_enabled() and router9.is_local(st["base_url"])):
-                    await self.router.start()
+                await router9.ensure_ready(self.router)
         except Exception:  # noqa: BLE001 - the turn reports the real error
             pass
 

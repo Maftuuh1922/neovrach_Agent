@@ -25,6 +25,7 @@ async function main() {
       console.log('      Run later: neovarch --install-core');
     }
   }
+  if (!process.env.NEOVARCH_SKIP_CORE && app.install9Router()) app.setup9Router();
   console.log('Neovarch Agent is ready. Run: neovarch');
 }
 

@@ -170,9 +170,13 @@ def _npm_bin_dirs() -> list[Path]:
         appdata = os.environ.get("APPDATA")
         if appdata:
             out.append(Path(appdata) / "npm")
+        from neovarch.paths import neovarch_home
+        out += [neovarch_home() / "tools" / "npm", neovarch_home() / "tools" / "node"]
     else:
-        out += [home / ".npm-global" / "bin", home / ".local" / "bin", Path("/usr/local/bin"),
-                home / ".neovarch" / "node" / "bin"]
+        from neovarch.paths import neovarch_home
+        tools = neovarch_home() / "tools"
+        out += [tools / "npm" / "bin", tools / "node" / "bin", home / ".npm-global" / "bin",
+                home / ".local" / "bin", Path("/usr/local/bin")]
         nvm = home / ".nvm" / "versions" / "node"
         if nvm.is_dir():
             out += sorted((p / "bin" for p in nvm.iterdir()), reverse=True)
@@ -535,6 +539,15 @@ async def _ensure_key(s: aiohttp.ClientSession, root: str, headers: dict) -> str
             data = await r.json(content_type=None)
             return str(data.get("key") or "") or None
     return None
+
+
+async def ensure_ready(r: Router9, cfg: dict | None = None) -> dict:
+    """Before a turn on 9Router: refresh, start it when installed and allowed, provision."""
+    st = await r.refresh(cfg)
+    if (not st["running"] and st["installed"] and not r.user_stopped and autostart_enabled(cfg)
+            and is_local(st["base_url"])):
+        st = await r.start(cfg)
+    return st
 
 
 def log_path() -> Path:
