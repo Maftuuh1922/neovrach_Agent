@@ -120,7 +120,7 @@ class _ChatHomeState extends ConsumerState<ChatHome> {
             onPressed: () async {
               if (await confirmDialog(context,
                   title: 'Hapus riwayat?',
-                  body: 'Pointer thread dilupakan. Riwayat tetap ada di session store Hermes (bisa dipulihkan dengan hermes sessions list).',
+                  body: 'Pointer thread dilupakan. Riwayat tetap ada di penyimpanan sesi agen dan bisa dipulihkan.',
                   confirm: 'Hapus')) {
                 final s = chat.current!;
                 await chat.delete(s);

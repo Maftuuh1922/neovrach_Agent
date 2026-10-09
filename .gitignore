@@ -79,3 +79,7 @@ core/**/__pycache__/
 core/*.egg-info/
 core/.pytest_cache/
 core/.venv/
+
+# Neovarch signing key: never committed (see android/app/build.gradle.kts).
+/android/key.properties
+/android/app/neovarch-signing.keystore

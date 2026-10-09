@@ -1,4 +1,4 @@
-// Connection mode: Mandiri (on-device, default), Remote gateway (hermes
+// Connection mode: Mandiri (on-device, default), Remote gateway (Neovarch
 // serve, JSON-RPC over WebSocket), the Next.js office server, or Demo.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,7 +47,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
     try {
       if (mode == ConnectionMode.server) {
         final b = ServerBackend(_server.text.trim());
-        final ApiResult r = await b.get('/api/hermes/tasks');
+        final ApiResult r = await b.get('/api/neovarch/tasks');
         b.dispose();
         ok = r.ok;
         result = r.ok ? 'Server menjawab: ${r.list('tasks').length} tugas, ${r.list('agents').length} agent' : r.error;
@@ -92,8 +92,8 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
   Widget build(BuildContext context) {
     final desc = {
       ConnectionMode.local: 'Agent berjalan di ponsel: chat, memori, skill, berkas, Kanban, rapat, dan cron — memanggil penyedia LLM langsung. Tanpa PC.',
-      ConnectionMode.gateway: 'Sambungkan ke backend `hermes serve` (tui_gateway) di VPS/PC lewat WebSocket. Sesi, alat, dan memori milik Hermes di sana. Kantor/Kanban tetap memakai agent di perangkat.',
-      ConnectionMode.server: 'Sambungkan ke server Hermes Virtual Office (Next.js) yang menjalankan CLI hermes. Papan, rapat, cron, dan chat per-agent milik server.',
+      ConnectionMode.gateway: 'Sambungkan ke gateway Neovarch di VPS/PC lewat WebSocket. Sesi, alat, dan memori ada di sana. Kantor/Kanban tetap memakai agent di perangkat.',
+      ConnectionMode.server: 'Sambungkan ke server kantor virtual (Next.js) yang menjalankan CLI agen. Papan, rapat, cron, dan chat per-agent milik server.',
       ConnectionMode.demo: 'Papan contoh tanpa jaringan — untuk mencoba alur. Balasan chat adalah simulasi berlabel demo.',
     };
     return Scaffold(
@@ -167,7 +167,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
           if (mode == ConnectionMode.server || mode == ConnectionMode.gateway) const SizedBox(width: 10),
           Expanded(child: FilledButton(onPressed: busy ? null : _save, child: const Text('Simpan & sambungkan ulang'))),
         ]),
-        if (busy) const Padding(padding: EdgeInsets.only(top: 12), child: HermesLoader(size: 18)),
+        if (busy) const Padding(padding: EdgeInsets.only(top: 12), child: NvLoader(size: 18)),
         if (result != null) Padding(padding: const EdgeInsets.only(top: 12), child: ok ? NoteBanner(result!, ok: true) : ErrorBanner(result!)),
       ]),
     );

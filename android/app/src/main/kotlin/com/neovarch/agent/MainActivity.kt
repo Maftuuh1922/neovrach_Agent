@@ -6,6 +6,8 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -16,6 +18,9 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Bundle
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -42,7 +47,79 @@ class MainActivity : FlutterActivity() {
     private val channelName = "neovarch/device"
     private val permRequests = HashMap<Int, MethodChannel.Result>()
     private val docRequests = HashMap<Int, MethodChannel.Result>()
+    private val uploadRequests = HashMap<Int, MethodChannel.Result>()
     private var nextCode = 4100
+    /** Where a tapped notification wants the app to go ("approvals"); taken once by Dart. */
+    private var pendingRoute: String? = null
+
+    /**
+     * Cold start in the user's theme: the Dart side stores the resolved
+     * background (`nv.boot.bg`, `nv.boot.dark`) in the plugin's
+     * FlutterSharedPreferences; paint it as the window background before
+     * Flutter's first frame so the intro opens without a colour jump. On
+     * Android 13+ also pick the matching (neutral) system splash for next time.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        try {
+            val p = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val bg = p.getString("flutter.nv.boot.bg", null)
+            if (bg != null) window.setBackgroundDrawable(ColorDrawable(Color.parseColor(bg)))
+            if (Build.VERSION.SDK_INT >= 33) {
+                val light = p.getString("flutter.nv.boot.dark", "1") == "0"
+                splashScreen.setSplashScreenTheme(if (light) R.style.LaunchThemeLight else R.style.LaunchTheme)
+            }
+        } catch (e: Exception) {
+            // keep the neutral default
+        }
+        super.onCreate(savedInstanceState)
+        pendingRoute = intent?.getStringExtra(EXTRA_ROUTE) ?: pendingRoute
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_ROUTE)?.let { pendingRoute = it }
+    }
+
+    // ------------------------------------------------------ launcher icon --
+    /** Launcher icon colour: one enabled <activity-alias> (AndroidManifest). */
+    private fun aliasName(id: String) = "$packageName.Launcher" + id.replaceFirstChar { it.uppercase() }
+
+    private fun launcherIcon(): String {
+        val pm = packageManager
+        for (id in ICON_IDS) {
+            val st = pm.getComponentEnabledSetting(ComponentName(this, aliasName(id)))
+            if (st == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return id
+            // DEFAULT = the manifest value: only Merah is enabled there
+            if (st == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && id == ICON_IDS[0]) {
+                val others = ICON_IDS.drop(1).any {
+                    pm.getComponentEnabledSetting(ComponentName(this, aliasName(it))) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                }
+                if (!others) return id
+            }
+        }
+        return ICON_IDS[0]
+    }
+
+    /** Enables [id]'s alias, then disables every other one, so the launcher never sees zero entries. */
+    private fun setLauncherIcon(id: String): String {
+        if (id !in ICON_IDS) throw IllegalArgumentException("ikon tidak dikenal: $id")
+        val pm = packageManager
+        val on = ComponentName(this, aliasName(id))
+        val flags = PackageManager.DONT_KILL_APP
+        if (Build.VERSION.SDK_INT >= 33) {
+            val list = ArrayList<PackageManager.ComponentEnabledSetting>()
+            list.add(PackageManager.ComponentEnabledSetting(on, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, flags))
+            for (other in ICON_IDS) if (other != id) list.add(PackageManager.ComponentEnabledSetting(
+                ComponentName(this, aliasName(other)), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, flags))
+            pm.setComponentEnabledSettings(list)
+        } else {
+            pm.setComponentEnabledSetting(on, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, flags)
+            for (other in ICON_IDS) if (other != id) pm.setComponentEnabledSetting(
+                ComponentName(this, aliasName(other)), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, flags)
+        }
+        return id
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -109,12 +186,52 @@ class MainActivity : FlutterActivity() {
                 @Suppress("DEPRECATION")
                 startActivityForResult(i, code)
             }
+            // Chat attachments: copy a picked document into the app cache (no size
+            // clipping below the 25 MB upload limit) and hand Dart its path.
+            "pickFileForUpload" -> {
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = call.argument<String>("mime") ?: "*/*"
+                }
+                val code = nextCode++
+                uploadRequests[code] = result
+                @Suppress("DEPRECATION")
+                startActivityForResult(i, code)
+            }
+            // An image on the clipboard (copied from a browser / gallery / screenshot).
+            "clipboardImage" -> Thread {
+                val out = try { clipboardImage() } catch (e: Exception) { null }
+                Handler(Looper.getMainLooper()).post { result.success(out) }
+            }.start()
+            "hasClipboardImage" -> result.success(hasClipboardImage())
+            "shareImage" -> {
+                val f = java.io.File(call.argument<String>("path") ?: "")
+                val share = java.io.File(cacheDir, "share").apply { mkdirs() }
+                val target = if (f.parentFile?.canonicalPath == share.canonicalPath) f else java.io.File(share, f.name).also { f.copyTo(it, true) }
+                val uri = Uri.parse("content://$packageName.nvshare/${Uri.encode(target.name)}")
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = call.argument<String>("mime") ?: "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    call.argument<String>("text")?.let { putExtra(Intent.EXTRA_TEXT, it) }
+                    clipData = android.content.ClipData.newRawUri("profil", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(send, "Bagikan profil").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                result.success(true)
+            }
+            "saveImageToGallery" -> Thread {
+                val out = try { saveToGallery(java.io.File(call.argument<String>("path") ?: ""), call.argument<String>("name") ?: "neovarch.png") } catch (e: Exception) { null }
+                Handler(Looper.getMainLooper()).post { result.success(out) }
+            }.start()
             "openIntent" -> result.success(openIntent(call))
-            "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: ""))
+            "notify" -> result.success(notify(call.argument<String>("title") ?: "Neovarch", call.argument<String>("body") ?: "", call.argument<String>("route")))
             "location" -> location(result)
             "contacts" -> result.success(contacts(call.argument<String>("query") ?: "", call.argument<Int>("limit") ?: 20))
             "calendar" -> result.success(calendar(call.argument<Int>("days") ?: 7, call.argument<Int>("limit") ?: 40))
             "apps" -> result.success(apps(call.argument<String>("query") ?: ""))
+            "launcherIcon" -> result.success(launcherIcon())
+            "setLauncherIcon" -> result.success(setLauncherIcon(call.argument<String>("id") ?: ""))
+            "takeRoute" -> { result.success(pendingRoute); pendingRoute = null }
             else -> result.notImplemented()
         }
     }
@@ -141,9 +258,109 @@ class MainActivity : FlutterActivity() {
         r.success(out)
     }
 
+    private val uploadLimit = 25L * 1024 * 1024
+
+    /** Copy a content:// URI into cache/uploads; {path, name, mime, size} or {error, size}. */
+    private fun copyForUpload(uri: Uri, fallbackName: String): Map<String, Any?> {
+        var name = uri.lastPathSegment?.substringAfterLast('/') ?: fallbackName
+        var size = -1L
+        contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val ni = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val si = c.getColumnIndex(OpenableColumns.SIZE)
+                if (ni >= 0) name = c.getString(ni) ?: name
+                if (si >= 0 && !c.isNull(si)) size = c.getLong(si)
+            }
+        }
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+        if (size > uploadLimit) return mapOf("error" to "too_big", "size" to size, "name" to name)
+        val dir = java.io.File(cacheDir, "uploads").apply { mkdirs() }
+        val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").ifEmpty { fallbackName }
+        val f = java.io.File(dir, "${System.currentTimeMillis()}-$safe")
+        var copied = 0L
+        contentResolver.openInputStream(uri)?.use { input ->
+            f.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    copied += n
+                    if (copied > uploadLimit) {
+                        out.close(); f.delete()
+                        return mapOf("error" to "too_big", "size" to copied, "name" to name)
+                    }
+                    out.write(buf, 0, n)
+                }
+            }
+        } ?: return mapOf("error" to "unreadable", "name" to name)
+        return mapOf("path" to f.absolutePath, "name" to name, "mime" to mime, "size" to copied)
+    }
+
+    /** Copy a PNG into Pictures/Neovarch via MediaStore (no permission on API 29+). */
+    private fun saveToGallery(src: java.io.File, name: String): String? {
+        if (!src.isFile) return null
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Neovarch")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+            contentResolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+            values.clear()
+            values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            return uri.toString()
+        }
+        @Suppress("DEPRECATION")
+        val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Neovarch").apply { mkdirs() }
+        val f = java.io.File(dir, name)
+        src.copyTo(f, true)
+        android.media.MediaScannerConnection.scanFile(this, arrayOf(f.absolutePath), arrayOf("image/png"), null)
+        return f.absolutePath
+    }
+
+    private fun clipItemUri(): Uri? {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = cm.primaryClip ?: return null
+        for (i in 0 until clip.itemCount) {
+            val uri = clip.getItemAt(i).uri ?: continue
+            val type = contentResolver.getType(uri) ?: ""
+            if (type.startsWith("image/")) return uri
+        }
+        return null
+    }
+
+    private fun hasClipboardImage(): Boolean {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val d = cm.primaryClipDescription ?: return false
+        for (i in 0 until d.mimeTypeCount) if (d.getMimeType(i).startsWith("image/")) return true
+        return false
+    }
+
+    private fun clipboardImage(): Map<String, Any?>? {
+        val uri = clipItemUri() ?: return null
+        return copyForUpload(uri, "tempel.png")
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val up = uploadRequests.remove(requestCode)
+        if (up != null) {
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) { up.success(null); return }
+            Thread {
+                try {
+                    val out = copyForUpload(uri, "berkas")
+                    Handler(Looper.getMainLooper()).post { up.success(out) }
+                } catch (e: Exception) {
+                    Handler(Looper.getMainLooper()).post { up.error("failed", e.message, null) }
+                }
+            }.start()
+            return
+        }
         val r = docRequests.remove(requestCode) ?: return
         val uri = data?.data
         if (resultCode != Activity.RESULT_OK || uri == null) {
@@ -252,7 +469,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun notify(title: String, body: String): String {
+    private fun notify(title: String, body: String, route: String?): String {
         if (!granted(Manifest.permission.POST_NOTIFICATIONS)) return "izin notifikasi belum diberikan"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val id = "neovarch_agent"
@@ -268,8 +485,11 @@ class MainActivity : FlutterActivity() {
             .setContentText(body)
             .setStyle(Notification.BigTextStyle().bigText(body))
             .setAutoCancel(true)
-            .setContentIntent(android.app.PendingIntent.getActivity(this, 0,
-                Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE))
+            .setContentIntent(android.app.PendingIntent.getActivity(this, if (route != null) 1 else 0,
+                Intent(this, MainActivity::class.java).apply {
+                    if (route != null) putExtra(EXTRA_ROUTE, route)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
             .build()
         nm.notify((System.currentTimeMillis() % 100000).toInt(), n)
         return "terkirim"
@@ -344,5 +564,11 @@ class MainActivity : FlutterActivity() {
             .filter { q.isEmpty() || (it["label"] as String).lowercase().contains(q) || (it["package"] as String).contains(q) }
             .distinctBy { it["package"] }
             .sortedBy { (it["label"] as String).lowercase() }
+    }
+
+    companion object {
+        private const val EXTRA_ROUTE = "nv_route"
+        /** Order = the Dart picker (lib/remote/app_icon.dart); first is the manifest default. */
+        private val ICON_IDS = listOf("merah", "biru", "ungu", "toska", "hijau", "oranye", "monokrom")
     }
 }

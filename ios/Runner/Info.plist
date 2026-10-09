@@ -21,7 +21,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Pengenalan suara mengubah dikteanmu menjadi teks pesan.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Untuk tersambung ke aplikasi Neovarch (gateway Hermes) di PC dalam jaringan lokalmu.</string>
+	<string>Untuk tersambung ke aplikasi Neovarch (gateway Neovarch) di PC dalam jaringan lokalmu.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

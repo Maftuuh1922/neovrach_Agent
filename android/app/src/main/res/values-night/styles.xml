@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Neutral cold start (no logo, no accent); the app's own intro follows in the saved theme. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
+    <!-- MainActivity overrides this with the saved theme background before Flutter draws. -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@color/brand_bg</item>
+        <item name="android:windowBackground">@color/boot_dark</item>
     </style>
 </resources>

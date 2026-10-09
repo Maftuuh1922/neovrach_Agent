@@ -1,20 +1,19 @@
-// Hermes Desktop theme presets, ported from
-// apps/shared/src/theme-presets.ts (THEME_PRESET_PALETTES) and
-// apps/desktop/src/themes/presets.ts (labels, typography).
+// Theme presets of the legacy standalone Flutter app (not the phone remote,
+// which uses neovarch_mobile_theme.dart).
 //
 // Every preset carries the same Tailwind-style slots Desktop uses; dark-only
 // skins (Midnight, Ember, Mono, Cyberpunk, Slate) have no light palette.
 // "Neovarch Red" (first) is the app's own brand theme and the default;
 // Desktop's blue Nous presets are not shipped (Neovarch's accent is red).
-// "Kantor Hermes" is the extra teal look of the original virtual office.
+// "Kantor" is the extra teal look of the original virtual office.
 import 'package:flutter/material.dart';
 
-class HermesPalette {
+class NvLegacyPalette {
   final Color background, foreground, card, muted, mutedForeground, popover;
   final Color primary, primaryForeground, secondary, accent, border, input;
   final Color ring, midground, destructive, sidebarBackground, sidebarBorder;
   final Color userBubble, userBubbleBorder;
-  const HermesPalette({
+  const NvLegacyPalette({
     required this.background,
     required this.foreground,
     required this.card,
@@ -39,12 +38,12 @@ class HermesPalette {
 
 enum FontPreset { inter, system, courierPrime, plexMono, barlow }
 
-class HermesTheme {
+class NvTheme {
   final String name;
   final String label;
   final String description;
-  final HermesPalette light;
-  final HermesPalette? dark; // null => light palette reused / dark-only flag below
+  final NvLegacyPalette light;
+  final NvLegacyPalette? dark; // null => light palette reused / dark-only flag below
   final bool darkOnly;
   final String monoFont; // google font family (or a bundled one, see app_theme)
   final FontPreset sans;
@@ -52,12 +51,12 @@ class HermesTheme {
   final String? displayFont;
   /// Base corner radius; the site-style theme is almost square.
   final double corner;
-  /// Hermes Agent site look: grain overlay, halftone accents, mono labels.
+  /// Brand print look: grain overlay, halftone accents, mono labels.
   final bool brand;
   /// Light "paper" palette for cards / sheets / dialogs on a coloured base
   /// (null = surfaces use this theme's own palette).
-  final HermesPalette? paper;
-  const HermesTheme({
+  final NvLegacyPalette? paper;
+  const NvTheme({
     required this.name,
     required this.label,
     required this.description,
@@ -72,7 +71,7 @@ class HermesTheme {
     this.paper,
   });
 
-  HermesPalette palette(Brightness b) {
+  NvLegacyPalette palette(Brightness b) {
     if (darkOnly) return light;
     if (b == Brightness.dark) return dark ?? light;
     return light;
@@ -84,7 +83,7 @@ Color _c(String hex) {
   return Color(int.parse(h.length == 6 ? 'FF$h' : h, radix: 16));
 }
 
-HermesPalette _p(Map<String, String> m) => HermesPalette(
+NvLegacyPalette _p(Map<String, String> m) => NvLegacyPalette(
       background: _c(m['background']!),
       foreground: _c(m['foreground']!),
       card: _c(m['card']!),
@@ -115,13 +114,13 @@ final neovarchPaper = _p({
   'userBubble': '#EADFD3', 'userBubbleBorder': '#40140607',
 });
 
-final hermesThemes = <HermesTheme>[
-  // Default — Neovarch identity, flat print (Hermes-site style): solid red
+final nvThemes = <NvTheme>[
+  // Default — Neovarch identity, flat print style: solid red
   // #C8101A base with bone-white type and 1px bone frame lines; cards,
   // sheets and dialogs are solid bone "paper" (see [neovarchPaper]) with
   // near-black text and red accents. No gradients, glows or scrims.
   // Dark mode = near-black variant with crimson accents.
-  HermesTheme(
+  NvTheme(
     name: 'neovarch',
     label: 'Neovarch Red',
     description: 'Merah datar, kertas tulang, garis tipis',
@@ -146,7 +145,7 @@ final hermesThemes = <HermesTheme>[
       'userBubble': '#2A0D0F', 'userBubbleBorder': '#80E0262F',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'github',
     label: 'GitHub',
     description: 'Netral ala GitHub, aksen hijau',
@@ -163,7 +162,7 @@ final hermesThemes = <HermesTheme>[
       'destructive': '#f85149', 'sidebarBackground': '#010409', 'userBubble': '#0f2018', 'userBubbleBorder': '#30363d',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'classic',
     label: 'Classic',
     description: 'Emas di atas biru tua, tampilan asli CLI',
@@ -181,7 +180,7 @@ final hermesThemes = <HermesTheme>[
       'userBubbleBorder': '#4a4565',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'catppuccin',
     label: 'Catppuccin',
     description: 'Latte / Mocha, aksen mauve',
@@ -198,7 +197,7 @@ final hermesThemes = <HermesTheme>[
       'destructive': '#f38ba8', 'sidebarBackground': '#181825', 'userBubble': '#38324b', 'userBubbleBorder': '#585b70',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'everforest',
     label: 'Everforest',
     description: 'Hijau hutan yang lembut',
@@ -215,7 +214,7 @@ final hermesThemes = <HermesTheme>[
       'destructive': '#da6362', 'sidebarBackground': '#293136', 'userBubble': '#434e47', 'userBubbleBorder': '#3d474d',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'solarized',
     label: 'Solarized',
     description: 'Palet klasik Ethan Schoonover',
@@ -232,7 +231,7 @@ final hermesThemes = <HermesTheme>[
       'destructive': '#e35957', 'sidebarBackground': '#001f26', 'userBubble': '#144050', 'userBubbleBorder': '#234751',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'midnight',
     label: 'Midnight',
     description: 'Biru-ungu pekat, khusus gelap',
@@ -245,7 +244,7 @@ final hermesThemes = <HermesTheme>[
       'userBubbleBorder': '#242466',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'ember',
     label: 'Ember',
     description: 'Bara oranye hangat, khusus gelap',
@@ -259,7 +258,7 @@ final hermesThemes = <HermesTheme>[
       'userBubbleBorder': '#4a2010',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'mono',
     label: 'Mono',
     description: 'Hitam-putih tanpa warna',
@@ -272,7 +271,7 @@ final hermesThemes = <HermesTheme>[
       'userBubbleBorder': '#363636',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'cyberpunk',
     label: 'Cyberpunk',
     description: 'Hijau terminal di atas hitam',
@@ -287,7 +286,7 @@ final hermesThemes = <HermesTheme>[
       'userBubbleBorder': '#004800',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'slate',
     label: 'Slate',
     description: 'Abu-abu batu tulis, aksen biru',
@@ -300,7 +299,7 @@ final hermesThemes = <HermesTheme>[
       'userBubbleBorder': '#2e4060',
     }),
   ),
-  HermesTheme(
+  NvTheme(
     name: 'office',
     label: 'Kantor Teal',
     description: 'Teal dari kantor virtual awal',
@@ -319,5 +318,5 @@ final hermesThemes = <HermesTheme>[
   ),
 ];
 
-HermesTheme themeByName(String name) =>
-    hermesThemes.firstWhere((t) => t.name == name, orElse: () => hermesThemes.first);
+NvTheme themeByName(String name) =>
+    nvThemes.firstWhere((t) => t.name == name, orElse: () => nvThemes.first);

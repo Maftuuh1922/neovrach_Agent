@@ -1,5 +1,6 @@
 // PC: connection status, what the desktop agent is doing, saved desktops,
 // and the phone's own preferences.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,10 +9,12 @@ import '../../state/settings_controller.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import 'remote_intro_screen.dart';
 import '../../ui/widgets/common.dart';
+import '../pairing.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'connect_screen.dart';
 import 'nv_widgets.dart';
+import 'appearance/appearance_section.dart' show NvAppearanceSection;
 
 class RemotePcScreen extends ConsumerWidget {
   const RemotePcScreen({super.key, this.onOpenChat});
@@ -49,7 +52,7 @@ class RemotePcScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(NV.rCtl),
                     border: Border.all(color: NV.darkRed),
                   ),
-                  child: const Icon(Icons.desktop_windows_rounded, size: 24, color: NV.red),
+                  child: Icon(CupertinoIcons.desktopcomputer, size: 24, color: NV.red),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -57,7 +60,7 @@ class RemotePcScreen extends ConsumerWidget {
                     Text(d?.name ?? 'Belum ada PC', maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.display(size: 28)),
                     const SizedBox(height: 4),
                     if (d != null)
-                      Text(d.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.muted)),
+                      Text(d.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.muted)),
                   ]),
                 ),
                 Container(
@@ -75,7 +78,7 @@ class RemotePcScreen extends ConsumerWidget {
                 ),
               ]),
               const SizedBox(height: 14),
-              const Divider(height: 1, color: NV.border),
+              Divider(height: 1, color: NV.border),
               const SizedBox(height: 14),
               // three numbers in a row
               Row(children: [
@@ -94,6 +97,22 @@ class RemotePcScreen extends ConsumerWidget {
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: dot, fontWeight: FontWeight.w500)),
                 ),
               ]),
+              if (ok && r.gateway != null) ...[
+                const SizedBox(height: 8),
+                Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                  Expanded(child: Text('JALUR', style: NV.monoLabel(size: 9.5))),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      key: const ValueKey('pc-route'),
+                      '${routeLabel(r.gateway!.activeUrl)}${r.gateway!.lastRtt != null ? ' · ${r.gateway!.lastRtt!.inMilliseconds} ms' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, color: NV.text, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ]),
+              ],
               if (r.error != null && !ok) ...[const SizedBox(height: 8), NvNotice(r.error!)],
               const SizedBox(height: 14),
               Row(children: [
@@ -115,12 +134,12 @@ class RemotePcScreen extends ConsumerWidget {
             NvList(children: [
               for (final a in r.active)
                 NvRow(
-                  icon: a.status == 'running' ? Icons.bolt_rounded : Icons.chat_bubble_outline_rounded,
+                  icon: a.status == 'running' ? CupertinoIcons.bolt_fill : CupertinoIcons.chat_bubble,
                   accent: a.status == 'running',
                   title: a.title.isNotEmpty ? a.title : a.id,
                   subtitle: '${a.status}${a.model.isNotEmpty ? ' · ${a.model}' : ''}',
                   mono: true,
-                  trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                  trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
                   onTap: () async {
                     await r.openActive(a);
                     onOpenChat?.call();
@@ -131,11 +150,11 @@ class RemotePcScreen extends ConsumerWidget {
           NvSection('pc tersimpan',
               trailing: TextButton.icon(
                 onPressed: () => open(const ConnectScreen()),
-                icon: const Icon(Icons.add_rounded, size: 18),
+                icon: const Icon(CupertinoIcons.add, size: 18),
                 label: const Text('Tambah'),
               )),
           if (r.desktops.items.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text('Belum ada PC tersimpan.', style: TextStyle(color: NV.muted, fontSize: 13.5)),
             )
@@ -143,7 +162,7 @@ class RemotePcScreen extends ConsumerWidget {
             NvList(children: [
               for (final x in r.desktops.items)
                 NvRow(
-                  icon: x.id == d?.id ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  icon: x.id == d?.id ? CupertinoIcons.largecircle_fill_circle : CupertinoIcons.circle,
                   accent: x.id == d?.id,
                   title: x.name,
                   subtitle: '${x.url}${x.lastConnected != null ? ' · ${relTime(x.lastConnected!.toIso8601String())}' : ''}',
@@ -151,7 +170,7 @@ class RemotePcScreen extends ConsumerWidget {
                   onTap: x.id == d?.id ? null : () => r.connectTo(x),
                   trailing: NvIconButton(
                     tooltip: 'Lupakan',
-                    icon: Icons.delete_outline_rounded,
+                    icon: CupertinoIcons.trash,
                     size: 36,
                     onPressed: () async {
                       final yes = await confirmDialog(context,
@@ -167,24 +186,33 @@ class RemotePcScreen extends ConsumerWidget {
           const NvSection('hp ini'),
           NvList(children: [
             _SwitchRow(
-              icon: Icons.notifications_none_rounded,
+              icon: CupertinoIcons.bell,
               title: 'Notifikasi persetujuan',
               subtitle: 'Kabari saat agen di PC menunggu persetujuan',
               value: r.notifyApprovals,
               onChanged: r.setNotifyApprovals,
             ),
             _SwitchRow(
-              icon: Icons.psychology_outlined,
+              icon: CupertinoIcons.lightbulb,
               title: 'Tampilkan proses berpikir',
               subtitle: 'Blok penalaran agen di chat',
               value: s.showReasoning,
               onChanged: (v) => ref.read(settingsProvider).update((x) => x.showReasoning = v),
             ),
             NvRow(
-              icon: Icons.slideshow_outlined,
+              icon: CupertinoIcons.play_rectangle,
               title: 'Putar ulang intro',
-              trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+              trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
               onTap: () => open(const RemoteIntroScreen(replay: true)),
+            ),
+            NvRow(
+              key: const ValueKey('pc-licenses'),
+              icon: CupertinoIcons.doc_text,
+              title: 'Lisensi sumber terbuka',
+              subtitle: 'Font Inter (SIL OFL 1.1), Cupertino Icons (MIT), dan lainnya',
+              trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
+              onTap: () => showLicensePage(
+                  context: context, applicationName: 'Neovarch Remote', applicationVersion: SettingsController.appVersion),
             ),
           ]),
           const SizedBox(height: 24),
@@ -210,7 +238,7 @@ class _Stat extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: mono
-                  ? const TextStyle(fontFamily: NV.mono, fontSize: 15, color: NV.text, height: 1.6)
+                  ? TextStyle(fontFamily: NV.mono, fontSize: 15, color: NV.text, height: 1.6)
                   : NV.display(size: 30, color: hot ? NV.red : NV.text)),
         ]),
       );
@@ -231,4 +259,26 @@ class _SwitchRow extends StatelessWidget {
         onTap: () => onChanged(!value),
         trailing: Switch(value: value, onChanged: onChanged),
       );
+}
+
+/// "LAN" / "Tailscale" / "Internet" for the address the socket uses.
+String routeLabel(String url) => switch (gatewayRoute(url)) {
+      'lan' => 'LAN · ${Uri.tryParse(url)?.host ?? url}',
+      'tailscale' => 'Tailscale · ${Uri.tryParse(url)?.host ?? url}',
+      _ => Uri.tryParse(url)?.host ?? url,
+    };
+
+/// Theme picker ("Tampilan"): follow the PC (default) or a local look —
+/// liquid glass cards for theme mode, accent (curated swatches, wallpaper
+/// colours, HSV custom), corner roundness and the app background. Every
+/// change applies live. See lib/remote/ui/appearance/.
+class AppearancePanel extends StatelessWidget {
+  const AppearancePanel({super.key, this.showFollowPc = true, this.showBackground = true, this.margin = const EdgeInsets.symmetric(horizontal: 16)});
+  /// Onboarding hides "Ikuti tema PC" (no PC yet); picking there is a local override.
+  final bool showFollowPc;
+  /// "Latar belakang" + "Kekuatan kaca" controls.
+  final bool showBackground;
+  final EdgeInsets margin;
+  @override
+  Widget build(BuildContext context) => NvAppearanceSection(showFollowPc: showFollowPc, showBackground: showBackground, margin: margin);
 }

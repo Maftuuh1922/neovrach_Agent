@@ -1,6 +1,8 @@
 // Phone remote state: which desktop, the live gateway link, the open chat,
-// approvals, the Kanban board and the desktop's status. One ChangeNotifier
-// the remote screens watch.
+// approvals, the Office, the Kanban board and the desktop's status. One
+// ChangeNotifier the remote screens watch. Everything after the first load is
+// pushed by the PC over the WebSocket (no polling); a reconnect re-reads the
+// snapshots and replays or resumes what was missed.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -9,10 +11,16 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../data/device_tools.dart';
 import '../data/gateway_client.dart';
 import '../models/models.dart';
+import 'attachments.dart';
+import 'office_models.dart';
 import 'pairing.dart';
 import 'remote_gateway.dart';
+import 'update_check.dart';
+import 'vault_models.dart';
+import 'composer.dart';
 import 'remote_transcript.dart';
 import 'saved_desktops.dart';
+import 'social_models.dart';
 
 class RemoteController extends ChangeNotifier {
   RemoteController(this.desktops);
@@ -22,7 +30,50 @@ class RemoteController extends ChangeNotifier {
   SavedDesktop? desktop;
   RemoteStatus status = RemoteStatus.disconnected;
   String? error;
-  StreamSubscription? _statusSub, _eventSub, _approvalSub;
+  StreamSubscription? _statusSub, _eventSub, _approvalSub, _routeSub;
+
+  /// The PC's appearance (`/api/appearance`, `appearance.changed`).
+  void Function(Map<String, dynamic> appearance)? onAppearance;
+
+  /// Checks GitHub Releases for a newer phone app (injectable for tests).
+  UpdateChecker updateChecker = UpdateChecker();
+
+  // office (pushed via `office.update`)
+  OfficeSnapshot? office;
+  String? officeError;
+  DateTime? officeAt;
+
+  /// Bumped on `vault.changed` so an open vault screen re-reads its note.
+  int vaultRevision = 0;
+
+  // social: GitHub friends & profile, read through the PC (no phone login)
+  SocialProfile? socialProfile;
+  FriendsSnapshot? socialFriends;
+  bool socialSignedIn = false;
+  bool socialLoading = false;
+  String? socialError;
+
+  // composer attachments (uploaded to the PC as soon as they are picked)
+  final List<PendingAttachment> pendingAttachments = [];
+
+  /// Last notice about attachments (e.g. the model cannot see images).
+  String? attachNotice;
+  int _attachSeq = 0;
+
+  // composer controls mirrored from the desktop (skills, model, reasoning,
+  // "/" and "@"); null = the PC has no catalog (older version) → plain composer
+  ComposerCatalog? composer;
+  /// Skills picked for the next prompt (cleared after sending, like the
+  /// desktop's `/skill` references that live in the message text).
+  final List<String> selectedSkills = [];
+  /// Reasoning effort for the following prompts; null = the PC's default.
+  String? reasoningEffort;
+  bool modelSwitching = false;
+
+  /// Widget-test harness only: vault data without a gateway.
+  @visibleForTesting
+  VaultApi? debugVault;
+  VaultApi? get vault => debugVault ?? gateway;
 
   // chat
   List<ChatSessionInfo> sessions = [];
@@ -45,11 +96,20 @@ class RemoteController extends ChangeNotifier {
   List<ActiveSession> active = [];
   Map<String, dynamic> serverInfo = const {};
 
-  /// Latest GitHub release as the PC core reports it (`/api/update`).
+  /// Newest release for this phone app: GitHub Releases API directly, the
+  /// PC core's `/api/update` (cached GitHub check) as the fallback.
   Map<String, dynamic> update = const {};
   String? dismissedUpdate;
   bool get updateAvailable =>
       update['available'] == true && update['latest'] != null && update['latest'] != dismissedUpdate;
+
+  Future<void> checkUpdate() async {
+    final u = await updateChecker.check(fallback: gateway?.updateInfo);
+    if (u != null) {
+      update = u;
+      notifyListeners();
+    }
+  }
   void dismissUpdate() {
     dismissedUpdate = update['latest'] as String?;
     notifyListeners();
@@ -113,10 +173,11 @@ class RemoteController extends ChangeNotifier {
     desktop = d;
     desktops.touch(d);
     final token = await desktops.token(d.id);
-    final g = gateway = RemoteGateway(baseUrl: d.url, token: token, headers: d.headers, profile: d.profile);
+    final g = gateway = RemoteGateway(baseUrl: d.url, alternates: d.alternates, token: token, headers: d.headers, profile: d.profile);
     _statusSub = g.statusStream.listen(_onStatus);
     _eventSub = g.events.listen(_onEvent);
     _approvalSub = g.approvalsChanged.listen(_onApproval);
+    _routeSub = g.routesChanged.listen((urls) => desktops.updateRoutes(d, alternates: urls));
     error = null;
     notifyListeners();
     try {
@@ -136,6 +197,7 @@ class RemoteController extends ChangeNotifier {
     await _statusSub?.cancel();
     await _eventSub?.cancel();
     await _approvalSub?.cancel();
+    await _routeSub?.cancel();
     final g = gateway;
     gateway = null;
     await g?.close();
@@ -147,7 +209,11 @@ class RemoteController extends ChangeNotifier {
     boardError = null;
     active = [];
     serverInfo = const {};
-    update = const {};
+    office = null;
+    officeError = null;
+    composer = null;
+    selectedSkills.clear();
+    reasoningEffort = null;
     status = RemoteStatus.disconnected;
   }
 
@@ -184,9 +250,14 @@ class RemoteController extends ChangeNotifier {
     status = s;
     if (s == RemoteStatus.connected) {
       error = null;
+      final d = desktop, g = gateway;
+      if (d != null && g != null) desktops.updateRoutes(d, lastUrl: g.activeUrl);
       unawaited(refreshAll());
-      // Re-attach to the open chat: picks up a turn or approval we missed.
-      if (was != RemoteStatus.connected && storedId != null) unawaited(openSession(storedId!, quiet: true));
+      // Re-attach to the open chat when the missed events could not be
+      // replayed (older core, PC restarted, gap too old).
+      if (was != RemoteStatus.connected && storedId != null && (g == null || g.resyncNeeded || runtimeId == null)) {
+        unawaited(openSession(storedId!, quiet: true));
+      }
     } else if (s == RemoteStatus.reconnecting || s == RemoteStatus.failed) {
       transcript.interrupted();
       if (s == RemoteStatus.failed) error ??= _friendly(gateway?.lastError ?? 'gagal terhubung');
@@ -195,6 +266,27 @@ class RemoteController extends ChangeNotifier {
   }
 
   void _onEvent(GatewayEventFrame f) {
+    switch (f.type) {
+      case 'office.update':
+        _applyOffice(f.payload);
+      case 'appearance.changed':
+        onAppearance?.call(f.payload);
+      case 'kanban.changed':
+        unawaited(refreshBoard());
+      case 'vault.changed':
+        vaultRevision++;
+        notifyListeners();
+      case 'social.changed':
+        if (socialProfile != null || socialFriends != null || socialError != null) unawaited(refreshSocial());
+      case 'attachment.notice':
+        if (f.sessionId == null || f.sessionId == runtimeId) {
+          attachNotice = '${f.payload['message'] ?? ''}';
+          notifyListeners();
+        }
+      case 'resync.required':
+        unawaited(refreshAll());
+        if (storedId != null) unawaited(openSession(storedId!, quiet: true));
+    }
     if (f.type == 'sessions.changed' || f.type == 'session.title') unawaited(loadSessions());
     if (f.sessionId != null && f.sessionId == runtimeId) {
       if (transcript.apply(f)) {
@@ -216,14 +308,117 @@ class RemoteController extends ChangeNotifier {
       await deviceCall<String>('notify', {
         'title': 'Neovarch · perlu persetujuan',
         'body': '${a.toolName ?? 'Agen'} di ${desktop?.name ?? 'PC'}: ${a.description.isNotEmpty ? a.description : a.command}',
+        'route': 'approvals', // tap → Chat + approvals sheet
       });
     } catch (_) {
       // No notification bridge: the in-app badge still shows it.
     }
   }
 
+  /// Snapshots after (re)connecting; from here on the PC pushes changes.
   Future<void> refreshAll() async {
-    await Future.wait([loadSessions(), refreshStatus(), refreshBoard()]);
+    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer()]);
+  }
+
+  // ------------------------------------------------------------- composer --
+  Future<void> refreshComposer() async {
+    final g = gateway;
+    if (g == null) return;
+    final c = await g.composerCatalog();
+    if (gateway != g) return;
+    composer = c;
+    if (c != null) {
+      selectedSkills.removeWhere((s) => !c.skills.any((k) => k.name == s));
+      if (reasoningEffort != null && !c.reasoningLevels.contains(reasoningEffort)) reasoningEffort = null;
+    } else {
+      selectedSkills.clear();
+      reasoningEffort = null;
+    }
+    notifyListeners();
+  }
+
+  void toggleSkill(String name) {
+    if (!selectedSkills.remove(name)) selectedSkills.add(name);
+    notifyListeners();
+  }
+
+  void setSkills(Iterable<String> names) {
+    selectedSkills
+      ..clear()
+      ..addAll(names);
+    notifyListeners();
+  }
+
+  void setReasoningEffort(String? level) {
+    reasoningEffort = (level == null || level == 'default') ? null : level;
+    notifyListeners();
+  }
+
+  /// Switch the PC's model (global, like the desktop model pill). Returns an
+  /// error to show, or null.
+  Future<String?> selectModel(String provider, String model) async {
+    final g = gateway, c = composer;
+    if (g == null || c == null) return 'Belum terhubung ke PC.';
+    modelSwitching = true;
+    notifyListeners();
+    try {
+      await g.setModel(provider: provider, model: model);
+      composer = c.withModel(provider, model);
+      return null;
+    } catch (e) {
+      return _friendly('$e');
+    } finally {
+      modelSwitching = false;
+      notifyListeners();
+    }
+  }
+
+  /// "@" / "/" suggestions from the PC (empty when it has no catalog).
+  Future<List<ComposerSuggestion>> completeMentions(String query) async {
+    final g = gateway, c = composer;
+    if (g == null || c == null) return const [];
+    final q = query.toLowerCase();
+    final starters = [for (final m in c.mentions) if (q.isEmpty || m.text.toLowerCase().contains(q)) m];
+    // `@url:` / `@git:` values are typed, not looked up.
+    if (q.startsWith('url:') || q.startsWith('git:')) return starters;
+    try {
+      final files = await g.composerComplete('path', query, sessionId: runtimeId);
+      return [...files, ...starters];
+    } catch (_) {
+      return starters;
+    }
+  }
+
+  Future<void> _loadAppearance() async {
+    final a = await gateway?.appearance();
+    if (a != null) onAppearance?.call(a);
+  }
+
+  // --------------------------------------------------------------- office --
+  Future<void> refreshOffice() async {
+    final g = gateway;
+    if (g == null || !connected) return;
+    try {
+      office = await g.office();
+      officeAt = DateTime.now();
+      officeError = null;
+    } catch (e) {
+      officeError = '$e';
+    }
+    notifyListeners();
+  }
+
+  void _applyOffice(Map<String, dynamic> payload) {
+    final before = office;
+    office = OfficeSnapshot.fromJson(payload);
+    officeAt = DateTime.now();
+    officeError = null;
+    // The Kanban counts changed or a task moved: re-read the board (event
+    // driven; cores without `kanban.changed`).
+    final k = office!.kanban, kb = before?.kanban ?? const {};
+    final moved = office!.feed.isNotEmpty && office!.feed.first.kind == 'task' && office!.feed.first.id != (before?.feed.firstOrNull?.id);
+    if (before != null && (moved || k.entries.any((e) => kb[e.key] != e.value))) unawaited(refreshBoard());
+    notifyListeners();
   }
 
   // ----------------------------------------------------------------- chat --
@@ -290,15 +485,28 @@ class RemoteController extends ChangeNotifier {
   Future<String?> send(String text) async {
     final t = text.trim();
     final g = gateway;
-    if (t.isEmpty || g == null) return null;
+    final ready = pendingAttachments.where((a) => a.state == AttachState.done && a.remote != null).toList();
+    if ((t.isEmpty && ready.isEmpty) || g == null) return null;
     if (!connected) return 'Belum terhubung ke PC.';
+    if (pendingAttachments.any((a) => a.state == AttachState.uploading)) return 'Tunggu lampiran selesai diunggah.';
     if (runtimeId == null) await newChat();
     final rid = runtimeId;
     if (rid == null) return error ?? 'Gagal membuat sesi di PC.';
-    transcript.addUser(t);
+    final extra = composerSubmitFields(composer, skills: List.of(selectedSkills), reasoningEffort: reasoningEffort);
+    selectedSkills.clear();
+    // The PC prefixes picked skills as `/name` (the desktop's text form); show
+    // the turn the same way right away.
+    final skills = [for (final s in (extra['skills'] as List? ?? const [])) '/$s'].where((s) => !t.split(RegExp(r'\s+')).contains(s));
+    transcript.addUser(skills.isEmpty ? t : '${skills.join(' ')} $t', attachments: [for (final a in ready) a.remote!.toJson()]);
+    pendingAttachments.clear();
+    attachNotice = null;
     notifyListeners();
     try {
-      await g.submit(rid, t);
+      final res = await g.submit(rid, t, attachments: [for (final a in ready) a.remote!.id], extra: extra);
+      if (res is Map && res['notice'] != null) {
+        attachNotice = '${res['notice']}';
+        notifyListeners();
+      }
       return null;
     } catch (e) {
       transcript.interrupted();
@@ -306,6 +514,89 @@ class RemoteController extends ChangeNotifier {
       notifyListeners();
       return transcript.error;
     }
+  }
+
+  // ------------------------------------------------------------ attachments --
+  /// Add a picked / pasted / shot file to the composer and upload it to the PC
+  /// right away (progress on the chip). Returns an error to show, or null.
+  Future<String?> addAttachment(String name, Uint8List bytes, {String? mime}) async {
+    final g = gateway;
+    if (g == null || !connected) return 'Belum terhubung ke PC.';
+    if (bytes.isEmpty) return 'File kosong.';
+    if (bytes.length > kMaxAttachmentBytes) return '$name terlalu besar (maks 25 MB).';
+    if (runtimeId == null) await newChat();
+    final rid = runtimeId;
+    if (rid == null) return error ?? 'Gagal membuat sesi di PC.';
+    final type = sniffImageMime(bytes) ?? mime ?? mimeForName(name);
+    final p = PendingAttachment(localId: 'att${_attachSeq++}', name: name, mime: type, bytes: bytes);
+    pendingAttachments.add(p);
+    notifyListeners();
+    var lastTick = 0.0;
+    try {
+      p.remote = await g.uploadAttachment(
+        sessionId: rid,
+        name: name,
+        mime: type,
+        bytes: bytes,
+        onProgress: (v) {
+          p.progress = v;
+          if (v - lastTick >= 0.05 || v >= 1) {
+            lastTick = v;
+            notifyListeners();
+          }
+        },
+      );
+      p.state = AttachState.done;
+      p.progress = 1;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      p.state = AttachState.failed;
+      p.error = _friendly('$e');
+      notifyListeners();
+      return p.error;
+    }
+  }
+
+  void removeAttachment(String localId) {
+    final p = pendingAttachments.where((a) => a.localId == localId).firstOrNull;
+    if (p == null) return;
+    pendingAttachments.remove(p);
+    final id = p.remote?.id;
+    if (id != null) unawaited(gateway?.deleteAttachment(id).catchError((_) {}));
+    notifyListeners();
+  }
+
+  // ----------------------------------------------------------------- social --
+  /// Profile + friends from the PC (`/api/social/*`); the PC signs in to GitHub.
+  Future<void> refreshSocial() async {
+    final g = gateway;
+    if (g == null || !connected) return;
+    socialLoading = true;
+    notifyListeners();
+    try {
+      final st = await g.socialStatus();
+      socialSignedIn = st['signed_in'] == true;
+      if (socialSignedIn) {
+        final res = await Future.wait([g.socialProfile(), g.socialFriends()]);
+        socialProfile = res[0] as SocialProfile;
+        socialFriends = res[1] as FriendsSnapshot;
+      } else {
+        socialProfile = null;
+        socialFriends = const FriendsSnapshot();
+      }
+      socialError = null;
+    } catch (e) {
+      socialError = _friendly('$e');
+    }
+    socialLoading = false;
+    notifyListeners();
+  }
+
+  Future<FriendDetail> friendDetail(String login) async {
+    final g = gateway;
+    if (g == null) throw StateError('Belum terhubung ke PC.');
+    return g.socialFriend(login);
   }
 
   Future<void> stop() async {
@@ -382,8 +673,8 @@ class RemoteController extends ChangeNotifier {
       }
     } catch (_) {}
     serverInfo = await g.serverStatus();
-    update = await g.updateInfo();
     notifyListeners();
+    unawaited(checkUpdate());
   }
 
   @override

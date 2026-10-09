@@ -20,7 +20,7 @@ class _Slide {
 
 const _slides = [
   _Slide('assets/intro/eva_hero.webp', '[ 01 ]  pembuka · neovarch', 'NEOVARCH\nAGENT',
-      'Agen AI milikmu sendiri — terbuka, berjalan di PC-mu, dan bisa kamu kendalikan dari HP. Dibangun di atas Hermes Agent.'),
+      'Agen AI milikmu sendiri — terbuka, berjalan di PC-mu, dan bisa kamu kendalikan dari HP.'),
   _Slide('assets/intro/eva_office.webp', '[ 02 ]  kantor agen', 'KANTOR\nAGEN',
       'Tim agen bekerja di PC: Kanban, sesi, dan cron — kamu tinggal memantau dan menyetujui dari HP.'),
   _Slide('assets/intro/eva_remote.webp', '[ 03 ]  pc = otak · hp = remote', 'OTAK DI PC,\nREMOTE\nDI SAKU',

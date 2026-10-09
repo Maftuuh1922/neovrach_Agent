@@ -32,7 +32,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       loading = true;
       err = null;
     });
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/agents');
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/agents');
     if (!mounted) return;
     setState(() {
       loading = false;
@@ -50,7 +50,7 @@ class _AgentsScreenState extends ConsumerState<AgentsScreen> {
       err = null;
       note = null;
     });
-    final res = await ref.read(officeProvider).backend.post('/api/hermes/agents', {'action': action, 'name': name});
+    final res = await ref.read(officeProvider).backend.post('/api/neovarch/agents', {'action': action, 'name': name});
     if (!mounted) return;
     setState(() {
       busy = null;
@@ -228,7 +228,7 @@ class _ProfileEditorState extends ConsumerState<ProfileEditor> {
     }
     final body = <String, dynamic>{'action': 'create', 'name': name, 'description': _desc.text.trim()};
     if (widget.local) body.addAll({'role': role, 'systemPrompt': _prompt.text});
-    final res = await ref.read(officeProvider).backend.post('/api/hermes/agents', body);
+    final res = await ref.read(officeProvider).backend.post('/api/neovarch/agents', body);
     if (!mounted) return;
     if (!res.ok) {
       setState(() {

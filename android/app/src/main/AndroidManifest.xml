@@ -50,11 +50,109 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+        </activity>
+        <!-- Launcher icon colours (Profil → Ikon aplikasi). The LAUNCHER
+             intent-filter lives ONLY on these aliases, exactly one of them
+             enabled at a time (MainActivity.kt "setLauncherIcon"); the
+             activity itself keeps its name so updates install over it and
+             pairing data survives. Merah is the default. -->
+        <activity-alias
+            android:name=".LauncherMerah"
+            android:targetActivity=".MainActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherBiru"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher_biru"
+            android:roundIcon="@mipmap/ic_launcher_biru_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherUngu"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher_ungu"
+            android:roundIcon="@mipmap/ic_launcher_ungu_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherToska"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher_toska"
+            android:roundIcon="@mipmap/ic_launcher_toska_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherHijau"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher_hijau"
+            android:roundIcon="@mipmap/ic_launcher_hijau_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherOranye"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher_oranye"
+            android:roundIcon="@mipmap/ic_launcher_oranye_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherMonokrom"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Neovarch Agent"
+            android:icon="@mipmap/ic_launcher_monokrom"
+            android:roundIcon="@mipmap/ic_launcher_monokrom_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <!-- Shared profile card PNGs (cache/share) for the share sheet. -->
+        <provider
+            android:name=".NvShareProvider"
+            android:authorities="${applicationId}.nvshare"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

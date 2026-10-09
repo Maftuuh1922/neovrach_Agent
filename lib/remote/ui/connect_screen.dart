@@ -1,5 +1,6 @@
 // "Hubungkan ke PC": scan the desktop's pairing QR or type the gateway
 // address + token. Also the first screen after the intro on a fresh phone.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,7 +9,9 @@ import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/common.dart';
 import '../pairing.dart';
 import '../remote_controller.dart';
+import '../appearance.dart' show appearanceProvider;
 import 'nv_widgets.dart';
+import 'remote_background.dart' show NvAccentArt, showAppearanceSheet;
 import 'scan_screen.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
@@ -85,7 +88,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   @override
   Widget build(BuildContext context) {
     final remote = ref.watch(remoteProvider);
+    ref.watch(appearanceProvider); // follow live theme changes
     final saved = remote.desktops.items;
+    final palette = NvIconButton(
+      key: const ValueKey('connect-appearance'),
+      icon: CupertinoIcons.paintbrush,
+      tooltip: 'Tampilan',
+      onPressed: () => showAppearanceSheet(context),
+    );
     final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
       body: Center(
@@ -95,12 +105,22 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             if (!widget.onboarding)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: NvHeader(kicker: 'perangkat · tambah', title: 'Tambah PC', inset: 0, onBack: () => Navigator.of(context).maybePop()),
+                child: NvHeader(
+                    kicker: 'perangkat · tambah', title: 'Tambah PC', inset: 0, onBack: () => Navigator.of(context).maybePop(), actions: [palette]),
               ),
             // Art plate and intro copy on first run only; "Tambah PC" goes
             // straight to the steps and the pairing actions.
             if (widget.onboarding) ...[
-              // Dithered art plate with the wordmark.
+              // Top rail: "Tampilan" (theme + background) before any PC.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(children: [
+                  Text('NEOVARCH REMOTE', style: NV.monoLabel(color: NV.muted)),
+                  const Spacer(),
+                  palette,
+                ]),
+              ),
+              // Dithered art plate (recoloured to the accent) with the wordmark.
               ClipRRect(
                 borderRadius: BorderRadius.circular(NV.rCard),
                 child: Container(
@@ -108,7 +128,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   child: AspectRatio(
                     aspectRatio: 4 / 3,
                     child: Stack(fit: StackFit.expand, children: [
-                      Image.asset('assets/art/feat-remote.webp', fit: BoxFit.cover, alignment: const Alignment(0.35, 0), filterQuality: FilterQuality.medium),
+                      const NvAccentArt('assets/art/feat-remote.webp', alignment: Alignment(0.35, 0)),
                       Positioned(
                         left: 14,
                         top: 14,
@@ -118,7 +138,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                           child: Text('HP = REMOTE · PC = OTAK', style: NV.monoLabel(size: 9.5, color: NV.text)),
                         ),
                       ),
-                      const Positioned(left: 16, bottom: 14, child: Wordmark(height: 30, color: NV.text, haloColor: NV.red)),
+                      Positioned(left: 16, bottom: 14, child: Wordmark(height: 30, color: NV.text, haloColor: NV.red)),
                     ]),
                   ),
                 ),
@@ -127,13 +147,13 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('// REMOTE', style: NV.monoLabel(color: NV.red)),
+                  Text('REMOTE', style: NV.monoLabel(color: NV.red)),
                   const SizedBox(height: 8),
-                  Text('Hubungkan ke PC', style: NV.display(size: 40)),
+                  Text('Hubungkan ke PC', style: NV.display(size: 34)),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Agen Neovarch berjalan di aplikasi desktop. HP ini hanya remote: kirim perintah, pantau tugas, dan setujui aksi agen dari jaringan yang sama.',
-                    style: TextStyle(fontSize: 14.5, height: 1.5, color: NV.muted),
+                    style: TextStyle(fontSize: 17, height: 1.4, letterSpacing: NV.tracking(17), color: NV.muted),
                   ),
                 ]),
               ),
@@ -148,17 +168,17 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   'Masuk ke Pengaturan → Remote / Perangkat, aktifkan akses remote.',
                   'Pindai QR yang muncul, atau ketik alamat dan token-nya di bawah.',
                 ].indexed) ...[
-                  if (i > 0) const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: NV.border)),
+                  if (i > 0) Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: NV.border)),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Container(
                       width: 26,
                       height: 26,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(color: NV.redWash, shape: BoxShape.circle, border: Border.all(color: NV.darkRed)),
-                      child: Text('${i + 1}', style: const TextStyle(fontFamily: NV.mono, fontSize: 11.5, color: NV.red)),
+                      child: Text('${i + 1}', style: TextStyle(fontFamily: NV.sans, fontWeight: FontWeight.w600, fontSize: 12.5, color: NV.red)),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(t, style: const TextStyle(fontSize: 14, height: 1.45, color: NV.text)))),
+                    Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(t, style: TextStyle(fontSize: 14, height: 1.45, color: NV.text)))),
                   ]),
                 ],
               ]),
@@ -169,7 +189,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               FilledButton.icon(
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
                 onPressed: _busy ? null : _scan,
-                icon: const Icon(Icons.qr_code_scanner_rounded),
+                icon: const Icon(CupertinoIcons.qrcode_viewfinder),
                 label: const Text('Pindai QR dari PC'),
               ),
             const SizedBox(height: 10),
@@ -177,7 +197,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
                 onPressed: _busy ? null : () => setState(() => _manual = true),
-                icon: const Icon(Icons.keyboard_outlined),
+                icon: const Icon(CupertinoIcons.keyboard),
                 label: const Text('Masukkan alamat & token'),
               )
             else ...[
@@ -202,7 +222,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     hintText: 'token dari Remote / Perangkat di PC',
                     suffixIcon: IconButton(
                       tooltip: _showToken ? 'Sembunyikan' : 'Tampilkan',
-                      icon: Icon(_showToken ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                      icon: Icon(_showToken ? CupertinoIcons.eye_slash : CupertinoIcons.eye),
                       onPressed: () => setState(() => _showToken = !_showToken),
                     ),
                   ),
@@ -222,11 +242,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               NvList(margin: EdgeInsets.zero, children: [
                 for (final d in saved)
                   NvRow(
-                    icon: Icons.desktop_windows_outlined,
+                    icon: CupertinoIcons.desktopcomputer,
                     title: d.name,
                     subtitle: d.url,
                     mono: true,
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: NV.faint),
+                    trailing: Icon(CupertinoIcons.chevron_right, size: 18, color: NV.faint),
                     onTap: () async {
                       await ref.read(remoteProvider).connectTo(d);
                       if (context.mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
@@ -235,7 +255,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ]),
             ],
             const SizedBox(height: 22),
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 'HP dan PC harus di jaringan yang sama (Wi-Fi rumah/kantor) atau terhubung lewat Tailscale/VPN. Token disimpan terenkripsi di HP.',

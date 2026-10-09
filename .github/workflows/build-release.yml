@@ -21,6 +21,15 @@ jobs:
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Fixed signing key (same certificate on every APK so updates install
+    # over the previous one). android/app/build.gradle.kts decodes the
+    # base64 keystore to a temp file; without these secrets the build falls
+    # back to the debug key.
+    env:
+      NEOVARCH_KEYSTORE_BASE64: ${{ secrets.NEOVARCH_KEYSTORE_BASE64 }}
+      NEOVARCH_KEYSTORE_PASSWORD: ${{ secrets.NEOVARCH_KEYSTORE_PASSWORD }}
+      NEOVARCH_KEY_ALIAS: ${{ secrets.NEOVARCH_KEY_ALIAS }}
+      NEOVARCH_KEY_PASSWORD: ${{ secrets.NEOVARCH_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 

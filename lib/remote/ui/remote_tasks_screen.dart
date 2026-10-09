@@ -1,5 +1,6 @@
-// The PC's Kanban board (Hermes kanban plugin): read the lanes, move a card,
+// The PC's Kanban board (Neovarch core Kanban): read the lanes, move a card,
 // comment, add a task. Agents on the PC pick up ready tasks themselves.
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,17 +12,17 @@ import 'nv_widgets.dart';
 
 const laneLabels = {
   'triage': 'Triase',
-  'todo': 'Todo',
+  'todo': 'Akan dikerjakan',
   'scheduled': 'Terjadwal',
   'ready': 'Siap',
   'running': 'Jalan',
   'blocked': 'Terhambat',
-  'review': 'Review',
+  'review': 'Ditinjau',
   'done': 'Selesai',
   'archived': 'Arsip',
 };
 
-/// Manual moves the default Hermes workflow allows (kanban_workflow.py).
+/// Manual moves the Kanban workflow allows.
 const laneMoves = {
   'triage': ['todo', 'ready'],
   'todo': ['triage', 'ready'],
@@ -62,8 +63,8 @@ class _RemoteTasksScreenState extends ConsumerState<RemoteTasksScreen> {
           status: Text(b == null ? 'papan agen di PC' : '$total tugas · ${lanes.length} kolom',
               style: NV.monoLabel(size: 10).copyWith(letterSpacing: 0.4)),
           actions: [
-            NvIconButton(tooltip: 'Segarkan', icon: Icons.refresh_rounded, onPressed: r.connected ? r.refreshBoard : null),
-            NvIconButton(tooltip: 'Tugas baru', icon: Icons.add_rounded, accent: true, onPressed: r.connected && b != null ? () => _newTask(context, b) : null),
+            NvIconButton(tooltip: 'Segarkan', icon: CupertinoIcons.arrow_clockwise, onPressed: r.connected ? r.refreshBoard : null),
+            NvIconButton(tooltip: 'Tugas baru', icon: CupertinoIcons.add, accent: true, onPressed: r.connected && b != null ? () => _newTask(context, b) : null),
           ],
         ),
         Expanded(
@@ -166,10 +167,10 @@ class _TaskCard extends StatelessWidget {
             if (task.priority > 0) NvPill('P${task.priority}', color: NV.red),
           ]),
           const SizedBox(height: 8),
-          Text(task.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3, color: NV.text)),
+          Text(task.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.3, color: NV.text)),
           if ((task.summary ?? '').isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(task.summary!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.45, color: NV.muted)),
+            Text(task.summary!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, height: 1.45, color: NV.muted)),
           ],
           const SizedBox(height: 12),
           Row(children: [
@@ -180,7 +181,7 @@ class _TaskCard extends StatelessWidget {
                   maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10.5, color: NV.muted).copyWith(letterSpacing: 0.3)),
             ),
             if (task.comments > 0) ...[
-              const Icon(Icons.mode_comment_outlined, size: 13, color: NV.muted),
+              Icon(CupertinoIcons.bubble_left, size: 13, color: NV.muted),
               const SizedBox(width: 4),
               Text('${task.comments}', style: NV.monoLabel(size: 10.5)),
             ],
@@ -203,8 +204,8 @@ class _Avatar extends StatelessWidget {
           border: Border.all(color: name == null ? NV.border : NV.darkRed),
         ),
         child: name == null
-            ? const Icon(Icons.person_outline_rounded, size: 13, color: NV.faint)
-            : Text(initials(name!).substring(0, 1), style: const TextStyle(fontFamily: NV.mono, fontSize: 10.5, color: NV.text)),
+            ? Icon(CupertinoIcons.person, size: 13, color: NV.faint)
+            : Text(initials(name!).substring(0, 1), style: TextStyle(fontFamily: NV.sans, fontWeight: FontWeight.w600, fontSize: 11, color: NV.text)),
       );
 }
 
@@ -241,10 +242,10 @@ class _TaskSheetState extends ConsumerState<_TaskSheet> {
           const SizedBox(height: 12),
           NvKv('Penanggung', t.assignee ?? '—'),
           if (t.priority > 0) NvKv('Prioritas', 'P${t.priority}', mono: true),
-          if ((t.body ?? '').isNotEmpty) ...[const SizedBox(height: 8), Text(t.body!, style: const TextStyle(fontSize: 14, height: 1.5, color: NV.text))],
+          if ((t.body ?? '').isNotEmpty) ...[const SizedBox(height: 8), Text(t.body!, style: TextStyle(fontSize: 14, height: 1.5, color: NV.text))],
           if ((t.summary ?? '').isNotEmpty) ...[
             const NvSection('ringkasan terakhir', padding: EdgeInsets.fromLTRB(0, 16, 0, 8)),
-            Text(t.summary!, style: const TextStyle(fontSize: 13, height: 1.5, color: NV.muted)),
+            Text(t.summary!, style: TextStyle(fontSize: 13, height: 1.5, color: NV.muted)),
           ],
           if (moves.isNotEmpty) ...[
             const NvSection('pindahkan ke', padding: EdgeInsets.fromLTRB(0, 18, 0, 10)),
@@ -312,7 +313,7 @@ class _NewTaskSheetState extends ConsumerState<_NewTaskSheet> {
             onChanged: (v) => setState(() => assignee = v),
           ),
           const SizedBox(height: 6),
-          Text('Tugas dengan penanggung dikerjakan agen di PC saat siap.', style: const TextStyle(fontSize: 12.5, color: NV.muted)),
+          Text('Tugas dengan penanggung dikerjakan agen di PC saat siap.', style: TextStyle(fontSize: 12.5, color: NV.muted)),
           const SizedBox(height: 14),
           FilledButton(
             onPressed: busy

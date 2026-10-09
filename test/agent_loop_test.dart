@@ -17,7 +17,7 @@ void main() {
     final all = allTools.map((t) => t.name).toSet();
     final runtime = AgentRuntime(
       store: store,
-      llm: () => LlmClient(baseUrl: 'http://127.0.0.1:8898/v1', apiKey: 'x', model: 'hermes-4-mock'),
+      llm: () => LlmClient(baseUrl: 'http://127.0.0.1:8898/v1', apiKey: 'x', model: 'neovarch-mock'),
       enabledTools: () => all,
     );
     final backend = LocalBackend(store: store, runtime: runtime, autoRun: () => false);

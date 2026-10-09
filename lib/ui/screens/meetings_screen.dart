@@ -157,7 +157,7 @@ class _NewMeetingScreenState extends ConsumerState<NewMeetingScreen> {
       err = null;
     });
     final office = ref.read(officeProvider);
-    final res = await office.backend.post('/api/hermes/meeting', {'topic': _topic.text.trim(), 'participants': picked, 'moderator': moderator, 'mode': mode});
+    final res = await office.backend.post('/api/neovarch/meeting', {'topic': _topic.text.trim(), 'participants': picked, 'moderator': moderator, 'mode': mode});
     if (!mounted) return;
     if (!res.ok) {
       setState(() {
@@ -251,7 +251,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
   }
 
   Future<void> _loadArchive() async {
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/meeting', {'id': widget.archiveId!});
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/meeting', {'id': widget.archiveId!});
     if (!mounted) return;
     setState(() {
       if (!res.ok || res.data == null) {
@@ -266,7 +266,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
   Future<void> _loadItems(String id) async {
     if (itemsBusy) return;
     itemsBusy = true;
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/meeting/actions', {'from': id});
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/meeting/actions', {'from': id});
     if (!mounted) return;
     setState(() {
       itemsBusy = false;
@@ -320,7 +320,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
           KeyValue('peserta', m.participants.join(', ')),
           KeyValue('giliran', m.currentSpeaker ?? '—'),
           SectionLabel('Transkrip (${m.turns.where((t) => t.kind != 'minutes').length})', padding: const EdgeInsets.fromLTRB(0, 14, 0, 8)),
-          if (m.turns.isEmpty) Padding(padding: const EdgeInsets.all(8), child: Row(children: [const HermesLoader(size: 16), const SizedBox(width: 10), Text('menunggu giliran pertama…', style: context.tt.bodySmall)])),
+          if (m.turns.isEmpty) Padding(padding: const EdgeInsets.all(8), child: Row(children: [const NvLoader(size: 16), const SizedBox(width: 10), Text('menunggu giliran pertama…', style: context.tt.bodySmall)])),
           for (final t in m.turns.where((t) => t.kind != 'minutes'))
             Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -349,7 +349,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
           if (m.live && m.currentSpeaker != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(children: [const HermesLoader(size: 14), const SizedBox(width: 10), Text('${m.currentSpeaker} sedang bicara…', style: context.tt.bodySmall)]),
+              child: Row(children: [const NvLoader(size: 14), const SizedBox(width: 10), Text('${m.currentSpeaker} sedang bicara…', style: context.tt.bodySmall)]),
             ),
           if (m.minutes.isNotEmpty) ...[
             SectionLabel('Notulen',

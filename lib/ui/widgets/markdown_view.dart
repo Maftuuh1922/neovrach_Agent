@@ -11,6 +11,7 @@ import 'package:highlight/highlight.dart' show highlight, Node;
 import 'package:highlight/languages/all.dart' show allLanguages;
 
 import '../../theme/app_theme.dart';
+import '../../remote/ui/glass/liquid_glass.dart' show GlassCode, GlassForeground;
 
 typedef LinkTap = void Function(String url);
 
@@ -171,6 +172,13 @@ class CodeBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Inside liquid glass (phone remote): a darker glass with light text.
+    final g = GlassForeground.maybeOf(context);
+    if (g != null && !g.isCode) return GlassCode(child: Builder(builder: _build));
+    return _build(context);
+  }
+
+  Widget _build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final base = monoStyle(context, size: 12.5 * scale, color: context.cs.onSurface);
     List<TextSpan> spans;

@@ -81,7 +81,7 @@ class LlmClient {
         'Content-Type': 'application/json',
         if (apiKey != null && apiKey!.isNotEmpty) 'Authorization': 'Bearer $apiKey',
         // OpenRouter attribution headers; harmless elsewhere.
-        'HTTP-Referer': 'https://github.com/NousResearch/hermes-agent',
+        'HTTP-Referer': 'https://github.com/Maftuuh1922/neovrach_Agent',
         'X-Title': 'Neovarch Agent',
       };
 
@@ -278,6 +278,6 @@ class LlmClient {
   }
 }
 
-/// Hermes/DeepSeek-style models may inline `<think>…</think>`; split it out.
+/// Some reasoning models (DeepSeek-style) inline `<think>…</think>`; split it out.
 String stripThink(String s) =>
     s.replaceAll(RegExp(r'<think>[\s\S]*?</think>', multiLine: true), '').trim();

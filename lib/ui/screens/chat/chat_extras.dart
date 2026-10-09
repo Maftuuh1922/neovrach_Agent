@@ -1,4 +1,4 @@
-// Chat controls ported from Hermes Desktop / CLI: per-session settings panel
+// Chat controls as on the desktop app / CLI: per-session settings panel
 // (model, thinking, sampling, persona, toolsets, approval, memory, stream),
 // the thinking quick-switch in the composer, slash commands with
 // autocomplete, and the /usage, /help and search sheets.
@@ -195,7 +195,7 @@ class _ChatSettingsPanelState extends ConsumerState<ChatSettingsPanel> {
       const SizedBox(height: 10),
       TextField(
         controller: _model,
-        decoration: InputDecoration(labelText: 'Model (kosong = bawaan profil/penyedia)', hintText: model.isEmpty ? 'mis. nousresearch/hermes-4-70b' : model),
+        decoration: InputDecoration(labelText: 'Model (kosong = bawaan profil/penyedia)', hintText: model.isEmpty ? 'mis. qwen/qwen3-coder' : model),
         onSubmitted: (v) => _set((x) => v.trim().isEmpty ? ChatOptions.fromJson({...x.toJson(), 'model': null}) : x.copyWith(model: v.trim())),
         onTapOutside: (_) {
           final v = _model.text.trim();
@@ -224,7 +224,7 @@ class _ChatSettingsPanelState extends ConsumerState<ChatSettingsPanel> {
       const SectionLabel('Thinking / penalaran', padding: EdgeInsets.fromLTRB(0, 20, 0, 6)),
       if (!supported)
         NoteBanner('Model "${model.isEmpty ? '-' : model}" tampaknya tidak mendukung mode thinking — opsi disembunyikan. '
-            'Pilih model reasoning (mis. Hermes 4, DeepSeek R1, o4-mini, Claude Sonnet 4, Qwen3).')
+            'Pilih model reasoning (mis. DeepSeek R1, o4-mini, Claude Sonnet 4, Qwen3).')
       else ...[
         SegmentedButton<String>(
           showSelectedIcon: false,
@@ -354,7 +354,7 @@ class _ChatSettingsPanelState extends ConsumerState<ChatSettingsPanel> {
       ReasoningWire.openRouter => 'Dikirim ke OpenRouter sebagai reasoning: {effort | max_tokens}.',
       ReasoningWire.openAi => 'Dikirim ke OpenAI sebagai reasoning_effort (Maksimum = high, Mati = minimal).',
       ReasoningWire.ollama => 'Dikirim ke Ollama sebagai think + reasoning_effort.',
-      ReasoningWire.nous => 'Nous Portal / Hermes 4: thinking diaktifkan lewat system prompt <think> + reasoning_effort.',
+      ReasoningWire.nous => 'Nous Portal: reasoning_effort (OpenAI-compatible).',
       ReasoningWire.generic => 'Dikirim sebagai reasoning_effort (standar OpenAI-kompatibel); budget hanya untuk OpenRouter.',
     };
   }

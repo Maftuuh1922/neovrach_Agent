@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pre-Android-12 launch screen: flat Neovarch red with the halo monogram -->
+<!-- Pre-Android-12 launch screen: a plain neutral field, no logo. The themed
+     intro is drawn by Flutter in the user's saved accent. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/brand_bg" />
-    <item>
-        <bitmap android:gravity="center" android:src="@drawable/splash_logo" />
-    </item>
+    <item android:drawable="@color/boot_dark" />
 </layer-list>

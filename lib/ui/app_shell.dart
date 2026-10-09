@@ -1,4 +1,4 @@
-// The shell: Chat is the home surface (as in Hermes Desktop); the office
+// The shell: Chat is the home surface (as on the desktop app); the office
 // (Kantor), Kanban (Papan), meetings (Rapat) and the management hub
 // (Lainnya) sit beside it. Phones get a bottom NavigationBar, wide screens
 // a NavigationRail. Pages stay mounted when hidden (visibility ≠ lifecycle).

@@ -1,4 +1,4 @@
-// Material 3 ThemeData built from a Hermes Desktop palette.
+// Material 3 ThemeData built from a Neovarch palette preset.
 //
 // Desktop's contract, translated: flat not boxed (no elevation, hairline
 // borders from the token), one primitive per concern (buttons share one
@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../ui/widgets/motion.dart';
-import 'hermes_themes.dart';
+import 'nv_themes.dart';
 
 @immutable
-class HermesColors extends ThemeExtension<HermesColors> {
+class NvColors extends ThemeExtension<NvColors> {
   final Color card, muted, mutedForeground, popover, border, strokeSoft;
   final Color midground, destructive, success, warning, info;
   final Color sidebar, sidebarBorder, userBubble, userBubbleBorder, codeBg;
@@ -23,7 +23,7 @@ class HermesColors extends ThemeExtension<HermesColors> {
   /// Bone "paper" theme for cards / sheets / dialogs on the red base
   /// (null when surfaces simply use this theme). See [PaperScope].
   final ThemeData? paper;
-  const HermesColors({
+  const NvColors({
     required this.card,
     required this.muted,
     required this.mutedForeground,
@@ -48,15 +48,15 @@ class HermesColors extends ThemeExtension<HermesColors> {
   });
 
   @override
-  HermesColors copyWith() => this;
+  NvColors copyWith() => this;
 
   @override
-  HermesColors lerp(ThemeExtension<HermesColors>? other, double t) =>
-      (other is HermesColors && t > 0.5) ? other : this;
+  NvColors lerp(ThemeExtension<NvColors>? other, double t) =>
+      (other is NvColors && t > 0.5) ? other : this;
 }
 
-extension HermesThemeX on BuildContext {
-  HermesColors get hc => Theme.of(this).extension<HermesColors>()!;
+extension NvThemeX on BuildContext {
+  NvColors get hc => Theme.of(this).extension<NvColors>()!;
   ColorScheme get cs => Theme.of(this).colorScheme;
   TextTheme get tt => Theme.of(this).textTheme;
 }
@@ -85,7 +85,7 @@ TextStyle monoStyle(BuildContext context, {double? size, Color? color, FontWeigh
   }
 }
 
-ThemeData buildTheme(HermesTheme theme, Brightness brightness, {String fontChoice = 'tema'}) {
+ThemeData buildTheme(NvTheme theme, Brightness brightness, {String fontChoice = 'tema'}) {
   final p = theme.palette(brightness);
   // Brightness follows the actual base colour: the red brand base carries
   // light (bone) type, so Material treats it as a dark surface.
@@ -94,7 +94,7 @@ ThemeData buildTheme(HermesTheme theme, Brightness brightness, {String fontChoic
   final ThemeData? paperTheme = paperPalette == null
       ? null
       : buildTheme(
-          HermesTheme(
+          NvTheme(
             name: '${theme.name}-paper',
             label: theme.label,
             description: theme.description,
@@ -195,12 +195,12 @@ ThemeData buildTheme(HermesTheme theme, Brightness brightness, {String fontChoic
     textTheme: text,
     splashFactory: theme.brand ? InkRipple.splashFactory : InkSparkle.splashFactory,
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
-      TargetPlatform.android: HermesPageTransitionsBuilder(),
-      TargetPlatform.iOS: HermesPageTransitionsBuilder(),
-      TargetPlatform.linux: HermesPageTransitionsBuilder(),
-      TargetPlatform.macOS: HermesPageTransitionsBuilder(),
-      TargetPlatform.windows: HermesPageTransitionsBuilder(),
-      TargetPlatform.fuchsia: HermesPageTransitionsBuilder(),
+      TargetPlatform.android: NvPageTransitionsBuilder(),
+      TargetPlatform.iOS: NvPageTransitionsBuilder(),
+      TargetPlatform.linux: NvPageTransitionsBuilder(),
+      TargetPlatform.macOS: NvPageTransitionsBuilder(),
+      TargetPlatform.windows: NvPageTransitionsBuilder(),
+      TargetPlatform.fuchsia: NvPageTransitionsBuilder(),
     }),
     visualDensity: VisualDensity.standard,
     dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
@@ -364,7 +364,7 @@ ThemeData buildTheme(HermesTheme theme, Brightness brightness, {String fontChoic
       waitDuration: const Duration(milliseconds: 200),
     ),
     extensions: [
-      HermesColors(
+      NvColors(
         card: p.card,
         muted: p.muted,
         mutedForeground: p.mutedForeground,

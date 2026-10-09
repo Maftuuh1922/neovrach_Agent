@@ -12,3 +12,8 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Neovarch signing key: never committed (public repo). Local builds read
+# android/key.properties; CI reads the NEOVARCH_* secrets.
+/key.properties
+/app/neovarch-signing.keystore

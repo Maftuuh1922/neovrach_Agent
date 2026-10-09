@@ -1,12 +1,11 @@
-// Appearance — Hermes Desktop's theme presets (Nous, Nous Alt, GitHub,
-// Classic Hermes, Catppuccin, Everforest, Solarized, Midnight, Ember, Mono,
-// Cyberpunk, Slate) plus "Kantor Hermes"; color mode; font; chat text size.
+// Appearance (legacy standalone app): theme presets, colour mode, font,
+// chat text size.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/app_controller.dart';
 import '../../../theme/app_theme.dart';
-import '../../../theme/hermes_themes.dart';
+import '../../../theme/nv_themes.dart';
 
 class AppearanceScreen extends ConsumerWidget {
   const AppearanceScreen({super.key});
@@ -41,7 +40,7 @@ class AppearanceScreen extends ConsumerWidget {
           crossAxisSpacing: 10,
           childAspectRatio: 1.25,
           children: [
-            for (final t in hermesThemes) _ThemeCard(theme: t, selected: s.themeName == t.name, dark: dark, onTap: () => s.update((x) => x.themeName = t.name)),
+            for (final t in nvThemes) _ThemeCard(theme: t, selected: s.themeName == t.name, dark: dark, onTap: () => s.update((x) => x.themeName = t.name)),
           ],
         ),
         const SizedBox(height: 20),
@@ -69,7 +68,7 @@ class AppearanceScreen extends ConsumerWidget {
 
 class _ThemeCard extends StatelessWidget {
   const _ThemeCard({required this.theme, required this.selected, required this.dark, required this.onTap});
-  final HermesTheme theme;
+  final NvTheme theme;
   final bool selected;
   final bool dark;
   final VoidCallback onTap;

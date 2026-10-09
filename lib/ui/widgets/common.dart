@@ -1,9 +1,10 @@
-// Shared primitives — one per concern, as Hermes Desktop's DESIGN.md asks:
+// Shared primitives — one per concern, as the design guide asks:
 // Loader (animated curve, never the literal "Loading…"), EmptyState,
 // ErrorBanner, ConfirmDialog, LogView, Avatar, SectionLabel, Collapsible,
 // Skeleton, StatusPill, BrandMark.
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -14,15 +15,15 @@ export 'brand.dart';
 export 'motion.dart';
 
 /// Lemniscate-bloom loader — the Desktop Loader's long-operation curve.
-class HermesLoader extends StatefulWidget {
-  const HermesLoader({super.key, this.size = 28, this.label});
+class NvLoader extends StatefulWidget {
+  const NvLoader({super.key, this.size = 28, this.label});
   final double size;
   final String? label;
   @override
-  State<HermesLoader> createState() => _HermesLoaderState();
+  State<NvLoader> createState() => _NvLoaderState();
 }
 
-class _HermesLoaderState extends State<HermesLoader> with SingleTickerProviderStateMixin {
+class _NvLoaderState extends State<NvLoader> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat();
   @override
   void dispose() {
@@ -93,7 +94,7 @@ class CenterLoader extends StatelessWidget {
   const CenterLoader({super.key, this.label});
   final String? label;
   @override
-  Widget build(BuildContext context) => Center(child: HermesLoader(size: 30, label: label));
+  Widget build(BuildContext context) => Center(child: NvLoader(size: 30, label: label));
 }
 
 class EmptyState extends StatelessWidget {
@@ -143,7 +144,7 @@ class ErrorBanner extends StatelessWidget {
         border: Border(left: BorderSide(color: c, width: 2)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.error_outline, size: 18, color: c)),
+        Padding(padding: const EdgeInsets.only(top: 1), child: Icon(CupertinoIcons.exclamationmark_circle, size: 18, color: c)),
         const SizedBox(width: 10),
         Expanded(child: SelectableText(message, style: TextStyle(color: context.cs.onSurface, fontSize: 13))),
         if (onRetry != null)
@@ -166,7 +167,7 @@ class NoteBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(color: c.withValues(alpha: 0.08), border: Border(left: BorderSide(color: c, width: 2))),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon ?? (ok ? Icons.check_circle_outline : Icons.info_outline), size: 18, color: c),
+        Icon(icon ?? (ok ? CupertinoIcons.checkmark_circle : CupertinoIcons.info_circle), size: 18, color: c),
         const SizedBox(width: 10),
         Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
       ]),
@@ -250,7 +251,7 @@ class LogView extends StatelessWidget {
             iconSize: 16,
             visualDensity: VisualDensity.compact,
             tooltip: 'Salin',
-            icon: const Icon(Icons.copy_rounded),
+            icon: const Icon(CupertinoIcons.doc_on_doc),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: text));
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disalin'), duration: Duration(seconds: 1)));
@@ -424,7 +425,7 @@ class _CollapsibleState extends State<Collapsible> {
             AnimatedRotation(
               turns: open ? 0.25 : 0,
               duration: const Duration(milliseconds: 120),
-              child: Icon(Icons.chevron_right, size: 18, color: context.hc.mutedForeground),
+              child: Icon(CupertinoIcons.chevron_right, size: 18, color: context.hc.mutedForeground),
             ),
             const SizedBox(width: 4),
             Text(widget.label, style: context.tt.titleSmall),

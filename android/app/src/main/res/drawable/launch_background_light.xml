@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-Android-12 launch screen: a plain neutral field, no logo. The themed
+     intro is drawn by Flutter in the user's saved accent. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/boot_light" />
+</layer-list>

@@ -5,4 +5,9 @@
     <color name="brand_red">#FFC8101A</color>
     <color name="brand_paper">#FFF2EDE4</color>
     <color name="brand_ink">#FF140607</color>
+    <!-- Neutral cold-start background (no logo, no hue): the native splash
+         cannot read the user's theme, so it stays plain; MainActivity then
+         paints the saved theme background and the Flutter intro takes over. -->
+    <color name="boot_dark">#FF0A0A0A</color>
+    <color name="boot_light">#FFF6F4F1</color>
 </resources>

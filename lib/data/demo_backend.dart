@@ -1,6 +1,6 @@
 // Port of src/lib/offline-mock.ts — the offline demo board.
 //
-// Answers every `/api/hermes/*` route from an in-memory board persisted to
+// Answers every `/api/neovarch/*` route from an in-memory board persisted to
 // the KV store. Meetings are simulated with scripted turns every 4 s, then
 // archived with minutes. Chat answers with a clearly-labelled demo reply.
 import 'dart:async';
@@ -74,9 +74,9 @@ class DemoBackend extends OfficeBackend {
       'archived': <dynamic>[],
       'bodies': <String, dynamic>{},
       'logs': {
-        't2': ['\$ hermes kanban show t2', '[worker] menulis src/lib/offline-mock.ts ...', '[worker] 3 berkas berubah, typecheck hijau'],
-        't3': ['\$ hermes kanban show t3', '[worker] menyesuaikan panel untuk viewport 360px ...'],
-        't4': ['\$ hermes kanban show t4', '[review] membuka APK di perangkat ...', '[review] WebGL: OK, 60fps'],
+        't2': ['\$ neovarch kanban show t2', '[worker] menulis src/lib/offline-mock.ts ...', '[worker] 3 berkas berubah, typecheck hijau'],
+        't3': ['\$ neovarch kanban show t3', '[worker] menyesuaikan panel untuk viewport 360px ...'],
+        't4': ['\$ neovarch kanban show t4', '[review] membuka APK di perangkat ...', '[review] WebGL: OK, 60fps'],
       },
     };
   }
@@ -181,7 +181,7 @@ class DemoBackend extends OfficeBackend {
     method = method.toUpperCase();
     final now = DateTime.now().toIso8601String();
 
-    if (path == '/api/hermes/tasks') {
+    if (path == '/api/neovarch/tasks') {
       if (method == 'GET') {
         return ApiResult.success({'tasks': s['tasks'], 'agents': s['agents']});
       }
@@ -224,7 +224,7 @@ class DemoBackend extends OfficeBackend {
       return ApiResult.success({'success': true, 'task': {'id': t['id']}}, 201);
     }
 
-    final taskHit = RegExp(r'^/api/hermes/tasks/([^/]+)$').firstMatch(path);
+    final taskHit = RegExp(r'^/api/neovarch/tasks/([^/]+)$').firstMatch(path);
     if (taskHit != null) {
       final id = Uri.decodeComponent(taskHit.group(1)!);
       final tasks = (s['tasks'] as List);
@@ -233,7 +233,7 @@ class DemoBackend extends OfficeBackend {
       final logs = s['logs'] as Map;
       if (method == 'GET') {
         final lines = (logs[id] as List?)?.cast<String>() ??
-            ['\$ hermes kanban show $id', '(demo) belum ada output worker.'];
+            ['\$ neovarch kanban show $id', '(demo) belum ada output worker.'];
         return ApiResult.success({'taskId': id, 'log': lines.join('\n'), 'runs': []});
       }
       final action = '${b['action'] ?? ''}';
@@ -254,7 +254,7 @@ class DemoBackend extends OfficeBackend {
       return ApiResult.fail(400, 'aksi tidak dikenal');
     }
 
-    if (path == '/api/hermes/agents') {
+    if (path == '/api/neovarch/agents') {
       if (method == 'GET') {
         return ApiResult.success({
           'available': _list('agents')
@@ -292,7 +292,7 @@ class DemoBackend extends OfficeBackend {
       return ApiResult.fail(400, 'aksi tidak dikenal');
     }
 
-    if (path == '/api/hermes/chat') {
+    if (path == '/api/neovarch/chat') {
       final agent = q['agent'];
       final threads = s['threads'] as Map;
       if (method == 'DELETE') {
@@ -335,7 +335,7 @@ class DemoBackend extends OfficeBackend {
       });
     }
 
-    if (path == '/api/hermes/cron') {
+    if (path == '/api/neovarch/cron') {
       if (method == 'GET') return ApiResult.success({'jobs': s['jobs'], 'runs': []});
       final action = '${b['action'] ?? ''}';
       if (action == 'create') {
@@ -368,11 +368,11 @@ class DemoBackend extends OfficeBackend {
       _save();
       return ApiResult.success({'success': true, 'action': action, 'id': id, 'job': action == 'remove' ? null : j});
     }
-    if (path == '/api/hermes/cron/actions') {
+    if (path == '/api/neovarch/cron/actions') {
       return ApiResult.success({'items': [], 'roster': _list('agents').map((a) => a['name']).toList()});
     }
 
-    if (path == '/api/hermes/meeting') {
+    if (path == '/api/neovarch/meeting') {
       if (method == 'POST') {
         final topic = '${b['topic'] ?? ''}'.trim();
         final participants = ((b['participants'] as List?) ?? []).map((e) => '$e').toList();
@@ -397,7 +397,7 @@ class DemoBackend extends OfficeBackend {
       final active = _live.where((m) => m['state'] == 'running').firstOrNull;
       return ApiResult.success({'configured': true, 'live': _live, 'active': active?['id'], 'archived': s['archived']});
     }
-    if (path == '/api/hermes/meeting/actions') {
+    if (path == '/api/neovarch/meeting/actions') {
       final from = q['from'] ?? '';
       final m = _live.where((x) => x['id'] == from).firstOrNull;
       final roster = m != null

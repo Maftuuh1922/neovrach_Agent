@@ -1,11 +1,13 @@
-// What a phone needs to reach the desktop's Hermes-compatible gateway:
-// the gateway base URL (the `hermes serve` / dashboard HTTP origin that
-// serves `/api/ws`) and its auth token. The Neovarch desktop shows this as a
+// What a phone needs to reach the desktop's Neovarch core gateway: the
+// gateway base URL (the HTTP origin that serves `/api/ws`), its auth token,
+// and optional fallback addresses (LAN first, then Tailscale MagicDNS / 100.x). The Neovarch desktop shows this as a
 // pairing QR; it can also be typed by hand. Pure Dart.
 //
 // Accepted forms (see docs/remote-protocol.md):
 //   neovarch://pair?v=1&url=http%3A%2F%2F192.168.1.5%3A9319&token=…&name=…&profile=…
-//   {"url":"http://192.168.1.5:9319","token":"…","name":"PC Kantor"}
+//        [&alt=http%3A%2F%2Fpc.tailnet.ts.net%3A9319&alt=…]   (or urls=a,b,c)
+//   {"url":"http://192.168.1.5:9319","token":"…","name":"PC Kantor",
+//    "urls":["http://192.168.1.5:9319","http://pc.tailnet.ts.net:9319","http://100.101.1.2:9319"]}
 //   http://192.168.1.5:9319/?token=…        (a dashboard URL with ?token=)
 //   ws://192.168.1.5:9319/api/ws?token=…    (the WebSocket URL itself)
 //   192.168.1.5:9319                        (manual: token typed separately)
@@ -20,12 +22,18 @@ class GatewayPairing {
   final String? profile;
   final Map<String, String> headers;
 
-  const GatewayPairing({required this.url, this.token = '', this.name = '', this.profile, this.headers = const {}});
+  /// Other addresses of the same PC, tried after [url] (see [orderedGatewayUrls]).
+  final List<String> alternates;
+
+  const GatewayPairing({required this.url, this.token = '', this.name = '', this.profile, this.headers = const {}, this.alternates = const []});
+
+  /// [url] first, then the alternates, LAN before Tailscale, no duplicates.
+  List<String> get allUrls => orderedGatewayUrls([url, ...alternates]);
 
   String get displayName => name.trim().isNotEmpty ? name.trim() : (Uri.tryParse(url)?.host ?? url);
 
-  GatewayPairing copyWith({String? token, String? name}) =>
-      GatewayPairing(url: url, token: token ?? this.token, name: name ?? this.name, profile: profile, headers: headers);
+  GatewayPairing copyWith({String? token, String? name}) => GatewayPairing(
+      url: url, token: token ?? this.token, name: name ?? this.name, profile: profile, headers: headers, alternates: alternates);
 
   String toUri() => Uri(scheme: 'neovarch', host: 'pair', queryParameters: {
         'v': '1',
@@ -33,6 +41,7 @@ class GatewayPairing {
         if (token.isNotEmpty) 'token': token,
         if (name.isNotEmpty) 'name': name,
         if (profile != null && profile!.isNotEmpty) 'profile': profile!,
+        if (alternates.isNotEmpty) 'alt': alternates,
       }).toString();
 
   /// Never throws; null when [raw] carries no usable gateway address.
@@ -51,6 +60,14 @@ class GatewayPairing {
           name: '${j['name'] ?? ''}',
           profile: (j['profile'] as String?)?.trim().isEmpty == true ? null : j['profile'] as String?,
           headers: h is Map ? h.map((k, v) => MapEntry('$k', '$v')) : const {},
+          alternates: _alts(url, [
+            for (final k in const ['urls', 'alt', 'alternates', 'addresses'])
+              if (j[k] is List) ...(j[k] as List).map((e) => '$e') else if (j[k] is String) ...'${j[k]}'.split(','),
+            if (j['tailscale'] is Map) ...[
+              if ((j['tailscale'] as Map)['magic_dns'] != null) '${(j['tailscale'] as Map)['magic_dns']}',
+              for (final ip in ((j['tailscale'] as Map)['ips'] as List? ?? const [])) '$ip',
+            ],
+          ], Uri.tryParse(url)?.port),
         );
       } catch (_) {
         return null;
@@ -61,11 +78,16 @@ class GatewayPairing {
       final q = u.queryParameters;
       final url = normalizeGatewayUrl(q['url'] ?? q['u'] ?? '');
       if (url == null) return null;
+      final all = u.queryParametersAll;
       return GatewayPairing(
           url: url,
           token: q['token'] ?? q['t'] ?? '',
           name: q['name'] ?? q['n'] ?? '',
-          profile: (q['profile'] ?? '').isEmpty ? null : q['profile']);
+          profile: (q['profile'] ?? '').isEmpty ? null : q['profile'],
+          alternates: _alts(url, [
+            ...?all['alt'],
+            for (final v in [...?all['urls'], ...?all['ts']]) ...v.split(','),
+          ], Uri.tryParse(url)?.port));
     }
     final url = normalizeGatewayUrl(s);
     if (url == null) return null;
@@ -92,4 +114,53 @@ String? normalizeGatewayUrl(String input) {
   if (path.endsWith('/api/ws')) path = path.substring(0, path.length - '/api/ws'.length);
   final port = u.hasPort ? u.port : (scheme == 'https' ? null : defaultGatewayPort);
   return Uri(scheme: scheme, host: u.host, port: port, path: path).toString();
+}
+
+/// Normalise alternate addresses (bare hosts get the primary's port), drop
+/// the primary and duplicates.
+List<String> _alts(String primary, Iterable<String> raw, int? port) {
+  final out = <String>[];
+  for (final r in raw) {
+    var v = r.trim();
+    if (v.isEmpty) continue;
+    if (!v.contains('://') && !RegExp(r':\d+$').hasMatch(v) && port != null) v = '$v:$port';
+    final n = normalizeGatewayUrl(v);
+    if (n != null && n != primary && !out.contains(n)) out.add(n);
+  }
+  return out;
+}
+
+/// Kind of network an address is on: `lan` (private IPv4, `.local`,
+/// localhost), `tailscale` (100.64.0.0/10 or `*.ts.net`), else `other`.
+String gatewayRoute(String url) {
+  final h = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+  if (h.endsWith('.ts.net')) return 'tailscale';
+  final p = h.split('.').map(int.tryParse).toList();
+  if (p.length == 4 && !p.contains(null)) {
+    final a = p[0]!, b = p[1]!;
+    if (a == 100 && b >= 64 && b <= 127) return 'tailscale';
+    if (a == 10 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) || a == 127) return 'lan';
+    return 'other';
+  }
+  if (h == 'localhost' || h.endsWith('.local') || h.endsWith('.lan')) return 'lan';
+  return 'other';
+}
+
+/// LAN first (fastest), then Tailscale MagicDNS, then tailnet IPs, then the
+/// rest; the order within a group is kept and duplicates are dropped.
+List<String> orderedGatewayUrls(Iterable<String> urls) {
+  int rank(String u) {
+    final r = gatewayRoute(u);
+    if (r == 'lan') return 0;
+    if (r == 'tailscale') return (Uri.tryParse(u)?.host ?? '').endsWith('.ts.net') ? 1 : 2;
+    return 3;
+  }
+  final seen = <String>{};
+  final list = [for (final u in urls) if (seen.add(u)) u];
+  final idx = {for (final (i, u) in list.indexed) u: i};
+  list.sort((a, b) {
+    final c = rank(a).compareTo(rank(b));
+    return c != 0 ? c : idx[a]!.compareTo(idx[b]!);
+  });
+  return list;
 }

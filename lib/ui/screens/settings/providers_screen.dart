@@ -188,7 +188,7 @@ class _ProviderEditorState extends ConsumerState<ProviderEditor> {
       TextField(
         controller: _model,
         style: monoStyle(context, size: 13.5),
-        decoration: const InputDecoration(labelText: 'Model default', hintText: 'nousresearch/hermes-4-70b'),
+        decoration: const InputDecoration(labelText: 'Model default', hintText: 'qwen/qwen3-coder'),
         onChanged: (_) => setState(() {}),
       ),
       const SizedBox(height: 12),
@@ -196,7 +196,7 @@ class _ProviderEditorState extends ConsumerState<ProviderEditor> {
         OutlinedButton.icon(onPressed: busy ? null : _fetchModels, icon: const Icon(Icons.list, size: 18), label: const Text('Ambil daftar model')),
         OutlinedButton.icon(onPressed: busy ? null : _test, icon: const Icon(Icons.network_check, size: 18), label: const Text('Uji koneksi')),
       ]),
-      if (busy) const Padding(padding: EdgeInsets.only(top: 12), child: HermesLoader(size: 18)),
+      if (busy) const Padding(padding: EdgeInsets.only(top: 12), child: NvLoader(size: 18)),
       if (result != null) Padding(padding: const EdgeInsets.only(top: 12), child: resultOk ? NoteBanner(result!, ok: true) : ErrorBanner(result!)),
       if (favs.isNotEmpty) ...[
         const SectionLabel('Favorit', padding: EdgeInsets.fromLTRB(0, 18, 0, 6)),

@@ -1,14 +1,13 @@
-// JSON-RPC 2.0 over WebSocket to a Hermes `hermes serve` backend
-// (tui_gateway), modelled on apps/shared/src/json-rpc-channel.ts:
+// JSON-RPC 2.0 over WebSocket to the Neovarch core gateway (`/api/ws`):
 //
 //   client → {jsonrpc:'2.0', id, method, params}
 //   server → {id, result} | {id, error:{code,message}}
 //   server → {method:'event', params:{type, session_id, payload}}
 //   server → {id:'<string>', method, params}   (server request; we answer)
 //
-// Auth: token mode puts `?token=` on the URL (as buildHermesWebSocketUrl
-// does) and also sends `Authorization: Bearer` plus any extra headers on
-// native platforms.
+// Auth: `?token=` on the URL, plus `Authorization: Bearer` and any extra
+// headers on native platforms. Events carry a monotonically increasing `seq`
+// (core v1.4+) so a reconnecting client can replay what it missed.
 import 'dart:async';
 import 'dart:convert';
 
@@ -20,7 +19,10 @@ class GatewayEventFrame {
   final String type;
   final String? sessionId;
   final Map<String, dynamic> payload;
-  const GatewayEventFrame(this.type, this.sessionId, this.payload);
+  /// Core event sequence number (null on older cores and synthetic frames).
+  final int? seq;
+  final bool replayed;
+  const GatewayEventFrame(this.type, this.sessionId, this.payload, {this.seq, this.replayed = false});
 }
 
 class RpcError implements Exception {
@@ -33,7 +35,7 @@ class RpcError implements Exception {
 
 const jsonRpcMethodNotFound = -32601;
 
-Uri buildGatewayWsUri(String baseUrl, {String? token, String path = '/api/ws'}) {
+Uri buildGatewayWsUri(String baseUrl, {String? token, String path = '/api/ws', Map<String, String> query = const {}}) {
   var u = Uri.parse(baseUrl.trim());
   final scheme = (u.scheme == 'https' || u.scheme == 'wss') ? 'wss' : 'ws';
   final basePath = u.path.replaceAll(RegExp(r'/+$'), '');
@@ -46,15 +48,20 @@ Uri buildGatewayWsUri(String baseUrl, {String? token, String path = '/api/ws'}) 
     queryParameters: {
       ...u.queryParameters,
       if (token != null && token.isNotEmpty) 'token': token,
+      ...query,
     },
   );
 }
 
 class GatewayClient {
-  GatewayClient({required this.baseUrl, this.token, this.headers = const {}});
+  GatewayClient({required this.baseUrl, this.token, this.headers = const {}, this.connectTimeout = const Duration(seconds: 15)});
   final String baseUrl;
   final String? token;
   final Map<String, String> headers;
+  final Duration connectTimeout;
+
+  /// Extra query parameters for the next connect (e.g. `since`/`boot_id`).
+  Map<String, String> connectQuery = const {};
 
   WebSocketChannel? _ch;
   StreamSubscription? _sub;
@@ -71,13 +78,14 @@ class GatewayClient {
     if (_ch != null) return;
     if (_connecting != null) return _connecting!.future;
     final c = _connecting = Completer<void>();
+    WebSocketChannel? ch;
     try {
-      final uri = buildGatewayWsUri(baseUrl, token: token);
-      final ch = connectWs(uri, {
+      final uri = buildGatewayWsUri(baseUrl, token: token, query: connectQuery);
+      ch = connectWs(uri, {
         if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
         ...headers,
       });
-      await ch.ready.timeout(const Duration(seconds: 15));
+      await ch.ready.timeout(connectTimeout);
       _ch = ch;
       _sub = ch.stream.listen(_onFrame, onDone: _onClose, onError: (e) {
         lastError = '$e';
@@ -85,6 +93,9 @@ class GatewayClient {
       });
       c.complete();
     } catch (e) {
+      try {
+        unawaited(ch?.sink.close());
+      } catch (_) {}
       lastError = 'tidak bisa terhubung ke gateway: $e';
       c.completeError(RpcError(0, lastError!));
     } finally {
@@ -116,7 +127,8 @@ class GatewayClient {
     if (method == 'event' && f['params'] is Map) {
       final p = Map<String, dynamic>.from(f['params'] as Map);
       final payload = p['payload'] is Map ? Map<String, dynamic>.from(p['payload'] as Map) : <String, dynamic>{};
-      _events.add(GatewayEventFrame('${p['type']}', p['session_id'] as String?, payload));
+      _events.add(GatewayEventFrame('${p['type']}', p['session_id'] as String?, payload,
+          seq: (p['seq'] as num?)?.toInt(), replayed: p['replayed'] == true));
       return;
     }
     if (method is String && id != null) {

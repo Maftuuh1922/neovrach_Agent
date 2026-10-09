@@ -277,7 +277,7 @@ class AgentRuntime {
     final skills = store.skills.where((s) => s.enabled).toList();
     final agents = store.profiles.where((x) => !x.hidden).map((x) => '${x.name} (${x.role})').join(', ');
     final b = StringBuffer()
-      ..writeln('Kamu adalah "${p.name}", agen Neovarch (peran: ${p.role}) yang berjalan langsung di ponsel pengguna lewat aplikasi Neovarch Agent (dibangun di atas runtime Hermes Agent).')
+      ..writeln('Kamu adalah "${p.name}", agen Neovarch (peran: ${p.role}) yang berjalan langsung di ponsel pengguna lewat aplikasi Neovarch Agent.')
       ..writeln('Balas dalam bahasa yang dipakai pengguna (default Bahasa Indonesia). Gunakan Markdown; blok kode diberi nama bahasanya.')
       ..writeln('Tanggal/waktu perangkat: ${now.toIso8601String()} (UTC${now.timeZoneOffset.isNegative ? '-' : '+'}${now.timeZoneOffset.inHours}).')
       ..writeln('Agen lain di kantor: $agents.')
@@ -418,8 +418,6 @@ class AgentRuntime {
     final canReason = modelSupportsReasoning(model);
     final extra = canReason ? reasoningBody(wire, opt.effort, opt.reasoningBudget) : <String, dynamic>{};
     var sys = systemPrompt(profile, extra: extraSystem, project: project, options: opt);
-    final hermes4 = model.toLowerCase().contains('hermes-4') || model.toLowerCase().contains('hermes4');
-    if (hermes4 && opt.reasoningOn) sys = '$hermesThinkingPrompt\n\n$sys';
     final msgs = <Map<String, dynamic>>[
       {'role': 'system', 'content': sys},
       ...toOpenAi(history),
@@ -680,7 +678,7 @@ class AgentRuntime {
             images: img == null ? const [] : [img]);
       case 'task_action':
         final id = '${a['id'] ?? ''}';
-        final r = await o.request('POST', '/api/hermes/tasks/${Uri.encodeComponent(id)}', body: {
+        final r = await o.request('POST', '/api/neovarch/tasks/${Uri.encodeComponent(id)}', body: {
           'action': '${a['action']}',
           if (a['message'] != null) 'message': '${a['message']}',
           if (a['status'] != null) 'status': '${a['status']}',
@@ -688,7 +686,7 @@ class AgentRuntime {
         return fromApi(r, 'Tugas $id: ${a['action']}');
       case 'list_meetings':
         final id = a['id'] as String?;
-        final r = await o.request('GET', '/api/hermes/meeting', query: id != null && id.isNotEmpty ? {'id': id} : null);
+        final r = await o.request('GET', '/api/neovarch/meeting', query: id != null && id.isNotEmpty ? {'id': id} : null);
         if (!r.ok) return fromApi(r, '');
         if (id != null && id.isNotEmpty) return ToolResult(_clip('${r.map['body']}', 20000), 'Notulen $id');
         final live = r.list('live');
@@ -699,7 +697,7 @@ class AgentRuntime {
         ];
         return ToolResult(lines.isEmpty ? '(belum ada rapat)' : lines.join('\n'), '${live.length} berlangsung · ${arch.length} arsip');
       case 'start_meeting':
-        final r = await o.request('POST', '/api/hermes/meeting', body: {
+        final r = await o.request('POST', '/api/neovarch/meeting', body: {
           'topic': '${a['topic'] ?? ''}',
           'participants': a['participants'] is List ? a['participants'] : '${a['participants'] ?? ''}'.split(RegExp(r'[,\s]+')),
           'moderator': ?a['moderator'],
@@ -707,7 +705,7 @@ class AgentRuntime {
         });
         return fromApi(r, 'Rapat "${_clip('${a['topic']}', 40)}" dimulai');
       case 'list_cron':
-        final r = await o.request('GET', '/api/hermes/cron');
+        final r = await o.request('GET', '/api/neovarch/cron');
         if (!r.ok) return fromApi(r, '');
         final jobs = r.list('jobs');
         return ToolResult(
@@ -716,13 +714,13 @@ class AgentRuntime {
                 : jobs.map((j) => '${j['id']} "${j['name']}" ${j['schedule']} ${j['enabled'] == true ? 'aktif' : 'pause'} · berikut ${j['nextRunAt'] ?? '-'} · terakhir ${j['lastStatus'] ?? '-'}').join('\n'),
             '${jobs.length} job');
       case 'create_cron':
-        final r = await o.request('POST', '/api/hermes/cron', body: {'action': 'create', ...a});
+        final r = await o.request('POST', '/api/neovarch/cron', body: {'action': 'create', ...a});
         return fromApi(r, 'Cron "${a['name'] ?? a['schedule']}" dibuat${a['paused'] == false ? '' : ' (pause)'}');
       case 'cron_action':
-        final r = await o.request('POST', '/api/hermes/cron', body: {'action': '${a['action']}', 'id': '${a['id']}'});
+        final r = await o.request('POST', '/api/neovarch/cron', body: {'action': '${a['action']}', 'id': '${a['id']}'});
         return fromApi(r, 'Cron ${a['id']}: ${a['action']}');
       case 'manage_agent':
-        final r = await o.request('POST', '/api/hermes/agents', body: a);
+        final r = await o.request('POST', '/api/neovarch/agents', body: a);
         return fromApi(r, 'Agent ${a['name']}: ${a['action']}');
     }
     return null;

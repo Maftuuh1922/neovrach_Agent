@@ -65,7 +65,7 @@ class _ActionItemsPanelState extends State<ActionItemsPanel> {
       err = null;
       note = null;
     });
-    final res = await widget.backend.post('/api/hermes/tasks', {
+    final res = await widget.backend.post('/api/neovarch/tasks', {
       'origin': widget.origin.toJson(),
       'items': [
         for (final r in chosen)

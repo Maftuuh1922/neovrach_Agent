@@ -38,7 +38,7 @@ class _CronScreenState extends ConsumerState<CronScreen> {
       loading = true;
       err = null;
     });
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/cron');
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/cron');
     if (!mounted) return;
     setState(() {
       loading = false;
@@ -66,7 +66,7 @@ class _CronScreenState extends ConsumerState<CronScreen> {
       err = null;
       note = null;
     });
-    final res = await ref.read(officeProvider).backend.post('/api/hermes/cron', {'action': action, 'id': j.id});
+    final res = await ref.read(officeProvider).backend.post('/api/neovarch/cron', {'action': action, 'id': j.id});
     if (!mounted) return;
     setState(() {
       busy = null;
@@ -86,7 +86,7 @@ class _CronScreenState extends ConsumerState<CronScreen> {
 
   Future<void> _loadItems(String jobId) async {
     setState(() => busy = 'items$jobId');
-    final res = await ref.read(officeProvider).backend.get('/api/hermes/cron/actions', {'from': jobId});
+    final res = await ref.read(officeProvider).backend.get('/api/neovarch/cron/actions', {'from': jobId});
     if (!mounted) return;
     setState(() {
       busy = null;
@@ -237,7 +237,7 @@ class _NewCronScreenState extends ConsumerState<NewCronScreen> {
       busy = true;
       err = null;
     });
-    final res = await ref.read(officeProvider).backend.post('/api/hermes/cron', {
+    final res = await ref.read(officeProvider).backend.post('/api/neovarch/cron', {
       'action': 'create',
       'schedule': _schedule.text.trim(),
       'prompt': _prompt.text.trim(),

@@ -1,5 +1,5 @@
 // Phone remote ↔ desktop gateway, end to end against an in-process mock of
-// the Hermes `tui_gateway` WebSocket (`/api/ws`) and the Kanban REST plugin:
+// the Neovarch core gateway WebSocket (`/api/ws`) and its REST routes:
 // pair from a QR string, open a session, send a message, receive the
 // streamed events, approve the dangerous tool remotely (server→client
 // `approval` request), read and move a Kanban task.
@@ -8,6 +8,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:neovarch_agent/remote/remote_controller.dart';
+import 'package:neovarch_agent/remote/saved_desktops.dart';
+import 'package:neovarch_agent/remote/update_check.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:neovarch_agent/remote/pairing.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart';
 import 'package:neovarch_agent/remote/remote_transcript.dart';
@@ -24,11 +30,28 @@ class MockGateway {
   String? lastRestToken;
   int connections = 0;
   final sockets = <WebSocket>[];
+  // realtime: every event gets a seq; events.replay serves the log
+  int seq = 0;
+  String bootId = 'boot-1';
+  final log = <Map<String, dynamic>>[];
+  final replayCalls = <Map<String, dynamic>>[];
 
-  int get port => server.port;
+  /// Publish a global event (session_id null) to every socket and the log.
+  void publish(String type, Map<String, dynamic> payload) {
+    final ev = {'type': type, 'session_id': null, 'payload': payload, 'seq': ++seq};
+    log.add(ev);
+    for (final ws in sockets) {
+      try {
+        ws.add(jsonEncode({'jsonrpc': '2.0', 'method': 'event', 'params': ev}));
+      } catch (_) {}
+    }
+  }
+
+  late int port;
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    port = server.port;
     server.listen(_onRequest);
   }
 
@@ -52,14 +75,37 @@ class MockGateway {
       await res.close();
       return;
     }
-    lastRestToken = req.headers.value('X-Hermes-Session-Token');
+    lastRestToken = req.headers.value('X-Neovarch-Session-Token');
     if (lastRestToken != _token) {
       res.statusCode = 401;
       res.write('{"detail":"unauthorized"}');
       await res.close();
       return;
     }
-    if (path == '/api/plugins/kanban/board' && req.method == 'GET') {
+    if (path == '/api/office') {
+      res.write(jsonEncode({
+        'agents': [
+          {'id': 'session:st_1', 'session_id': 'st_1', 'name': 'Raka', 'role': 'Agen utama · desktop', 'status': 'working', 'current_task': 'Riset GPU'}
+        ],
+        'counts': {'working': 1},
+        'feed': [
+          {'id': 1, 'ts': 1760000000, 'kind': 'tool', 'agent': 'Raka', 'text': 'menjalankan web_search'}
+        ],
+      }));
+    } else if (path == '/api/appearance') {
+      res.write(jsonEncode({'accent': '#2563EB', 'base': 'light', 'on_accent': '#FFFFFF'}));
+    } else if (path == '/api/obsidian/note') {
+      res.write(jsonEncode({
+        'path': req.uri.queryParameters['path'],
+        'title': 'Skripsi',
+        'content': '[[Metode]]',
+        'outgoing': [
+          {'target': 'Metode', 'path': 'Metode.md'}
+        ],
+        'backlinks': [],
+        'open_uri': 'obsidian://open?vault=Kuliah&file=Skripsi'
+      }));
+    } else if (path == '/api/plugins/kanban/board' && req.method == 'GET') {
       res.write(jsonEncode({
         'columns': [
           {
@@ -86,15 +132,32 @@ class MockGateway {
   }
 
   void _serve(WebSocket ws) {
-    void event(String type, String? sid, Map<String, dynamic> payload) => ws.add(jsonEncode({
-          'jsonrpc': '2.0',
-          'method': 'event',
-          'params': {'type': type, 'session_id': ?sid, 'payload': payload}
-        }));
-    void reply(Object? id, Object? result) => ws.add(jsonEncode({'jsonrpc': '2.0', 'id': id, 'result': result}));
+    void event(String type, String? sid, Map<String, dynamic> payload) {
+      final ev = {'type': type, 'session_id': sid, 'payload': payload, 'seq': ++seq};
+      log.add(ev);
+      if (ws.closeCode != null) return;
+      try {
+        ws.add(jsonEncode({'jsonrpc': '2.0', 'method': 'event', 'params': ev}));
+      } catch (_) {}
+    }
+    void reply(Object? id, Object? result) {
+      if (ws.closeCode != null) return; // client went away mid-request
+      try {
+        ws.add(jsonEncode({'jsonrpc': '2.0', 'id': id, 'result': result}));
+      } catch (_) {}
+    }
     final pendingSrq = <String, Completer<Map<String, dynamic>>>{};
 
-    event('gateway.ready', null, {'skin': {}, 'change_events': true, 'replay_epoch': 'e1', 'heartbeat': true});
+    // like the core: the hello frame is sent directly, not through the event log
+    ws.add(jsonEncode({
+      'jsonrpc': '2.0',
+      'method': 'event',
+      'params': {
+        'type': 'gateway.ready',
+        'session_id': null,
+        'payload': {'product': 'neovarch', 'boot_id': bootId, 'seq': seq}
+      }
+    }));
     ws.listen((raw) async {
       final f = Map<String, dynamic>.from(jsonDecode(raw as String) as Map);
       final id = f['id'];
@@ -110,7 +173,19 @@ class MockGateway {
           serverRequests = p['server_requests'] == true;
           reply(id, {'server_requests': ['approval', 'clarify'], 'declines_not_shown': true});
         case 'ping':
-          reply(id, {'pong': true});
+          reply(id, {'pong': true, 'seq': seq, 'boot_id': bootId});
+        case 'events.replay':
+          replayCalls.add(p);
+          final since = (p['since'] as num?)?.toInt() ?? 0;
+          if (p['boot_id'] != bootId) {
+            reply(id, {'resync': true, 'reason': 'restart', 'boot_id': bootId, 'seq': seq, 'events': []});
+          } else {
+            reply(id, {'resync': false, 'boot_id': bootId, 'seq': seq, 'events': [for (final e in log) if ((e['seq'] as int) > since) e]});
+          }
+        case 'network.addresses':
+          reply(id, {
+            'urls': ['http://127.0.0.1:$port', 'http://pc.tail1234.ts.net:$port', 'http://100.101.2.3:$port']
+          });
         case 'session.list':
           reply(id, {
             'sessions': [
@@ -120,7 +195,7 @@ class MockGateway {
         case 'session.active_list':
           reply(id, {
             'sessions': [
-              {'id': 'rt_1', 'title': 'Riset GPU', 'status': 'idle', 'model': 'hermes-4', 'preview': '', 'current': false, 'last_active': 0, 'message_count': 3, 'session_key': 'k', 'started_at': 0}
+              {'id': 'rt_1', 'title': 'Riset GPU', 'status': 'idle', 'model': 'qwen3-coder', 'preview': '', 'current': false, 'last_active': 0, 'message_count': 3, 'session_key': 'k', 'started_at': 0}
             ]
           });
         case 'approval.pending':
@@ -190,11 +265,13 @@ class MockGateway {
             'usage': {'avg_tps': 42.0, 'context_percent': 7}
           });
         default:
-          ws.add(jsonEncode({
-            'jsonrpc': '2.0',
-            'id': id,
-            'error': {'code': -32601, 'message': 'unknown method $method'}
-          }));
+          if (ws.closeCode == null) {
+            ws.add(jsonEncode({
+              'jsonrpc': '2.0',
+              'id': id,
+              'error': {'code': -32601, 'message': 'unknown method $method'}
+            }));
+          }
       }
     });
   }
@@ -217,7 +294,7 @@ void main() {
       expect(c.url, 'http://10.0.0.2:47800');
       expect(c.token, 'zz');
 
-      expect(GatewayPairing.parse('https://hermes.example.com/?token=q')!.url, 'https://hermes.example.com');
+      expect(GatewayPairing.parse('https://gateway.example.com/?token=q')!.url, 'https://gateway.example.com');
       expect(GatewayPairing.parse('pc.local:9000')!.url, 'http://pc.local:9000');
       expect(GatewayPairing.parse(''), isNull);
       expect(GatewayPairing.parse('ftp://x'), isNull);
@@ -298,7 +375,7 @@ void main() {
 
       // status + Kanban REST with the same token
       expect((await g.serverStatus())['version'], '0.99.0');
-      expect((await g.activeSessions()).single.model, 'hermes-4');
+      expect((await g.activeSessions()).single.model, 'qwen3-coder');
       final board = await g.board();
       expect(board.lanes.first.name, 'ready');
       expect(board.lanes.first.cards.single.title, 'Tulis laporan');
@@ -338,6 +415,125 @@ void main() {
       await back.timeout(const Duration(seconds: 10));
       expect(mock.connections, greaterThanOrEqualTo(2));
       await g.close();
+    });
+
+    test('Office, appearance and vault over REST with the session token', () async {
+      final g = RemoteGateway(baseUrl: 'http://127.0.0.1:${mock.port}', token: _token, autoReconnect: false);
+      await g.connect();
+      final o = await g.office();
+      expect(o.agents.single.name, 'Raka');
+      expect(o.agents.single.statusLabel, 'bekerja');
+      expect(o.feed.single.text, 'menjalankan web_search');
+      expect((await g.appearance())!['accent'], '#2563EB');
+      final n = await g.vaultNote('Skripsi.md');
+      expect(n.resolve('Metode'), 'Metode.md');
+      expect(n.openUri, startsWith('obsidian://open'));
+      expect(mock.lastRestToken, _token);
+      await g.close();
+    });
+
+    test('office.update push arrives with seq; ping measures RTT and learns boot_id', () async {
+      final g = RemoteGateway(baseUrl: 'http://127.0.0.1:${mock.port}', token: _token, autoReconnect: false);
+      await g.connect();
+      final got = g.events.firstWhere((f) => f.type == 'office.update');
+      final sw = Stopwatch()..start();
+      mock.publish('office.update', {'agents': [], 'feed': []});
+      final f = await got.timeout(const Duration(seconds: 5));
+      expect(sw.elapsedMilliseconds, lessThan(300), reason: 'push latency on loopback');
+      expect(f.seq, mock.seq);
+      expect(g.lastSeq, mock.seq);
+      await g.ping();
+      expect(g.lastRtt, isNotNull);
+      expect(g.bootId, 'boot-1');
+      await g.close();
+    });
+
+    test('after a drop, missed events are replayed (no full resync)', () async {
+      final g = RemoteGateway(baseUrl: 'http://127.0.0.1:${mock.port}', token: _token, heartbeat: const Duration(seconds: 30));
+      await g.connect();
+      await g.ping(); // learn boot_id + seq
+      mock.publish('office.update', {'n': 1});
+      await g.events.firstWhere((f) => f.type == 'office.update').timeout(const Duration(seconds: 5));
+      final dropped = g.statusStream.firstWhere((s) => s == RemoteStatus.reconnecting);
+      for (final s in [...mock.sockets]) {
+        await s.close();
+      }
+      mock.sockets.clear();
+      await dropped.timeout(const Duration(seconds: 5));
+      // happens while the phone is offline
+      mock.publish('kanban.changed', {'task': 't_1'});
+      final replayed = g.events.firstWhere((f) => f.type == 'kanban.changed');
+      final ev = await replayed.timeout(const Duration(seconds: 10));
+      expect(ev.replayed, isTrue);
+      expect(mock.replayCalls, isNotEmpty);
+      expect(g.resyncNeeded, isFalse);
+      expect(g.status, RemoteStatus.connected);
+      await g.close();
+    });
+
+    test('PC restarted (new boot_id) → resync.required', () async {
+      final g = RemoteGateway(baseUrl: 'http://127.0.0.1:${mock.port}', token: _token, autoReconnect: false);
+      await g.connect();
+      await g.ping();
+      final resync = g.events.firstWhere((f) => f.type == 'resync.required');
+      mock.bootId = 'boot-2';
+      await g.ping();
+      await resync.timeout(const Duration(seconds: 5));
+      expect(g.resyncNeeded, isTrue);
+      await g.close();
+    });
+
+    test('LAN address down → next address; PC-reported routes are learned', () async {
+      final g = RemoteGateway(
+        baseUrl: 'http://127.0.0.1:1', // nothing listens there
+        alternates: ['http://127.0.0.1:${mock.port}'],
+        token: _token,
+        autoReconnect: false,
+        lanTimeout: const Duration(milliseconds: 800),
+      );
+      final routes = g.routesChanged.first;
+      await g.connect();
+      expect(g.activeUrl, 'http://127.0.0.1:${mock.port}');
+      final learned = await routes.timeout(const Duration(seconds: 5));
+      expect(learned, contains('http://pc.tail1234.ts.net:${mock.port}'));
+      // LAN, then MagicDNS, then the tailnet IP
+      expect(g.candidates.indexOf('http://pc.tail1234.ts.net:${mock.port}'), lessThan(g.candidates.indexOf('http://100.101.2.3:${mock.port}')));
+      await g.close();
+    });
+
+    test('controller: Office + appearance load once, then follow WebSocket pushes (no polling)', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final desktops = SavedDesktops(prefs)..load();
+      final r = RemoteController(desktops)
+        ..updateChecker = UpdateChecker(client: MockClient((_) async => http.Response('{"tag_name":"v1.4.0"}', 200)));
+      final looks = <Map<String, dynamic>>[];
+      r.onAppearance = looks.add;
+      final d = await desktops.upsert(GatewayPairing(url: 'http://127.0.0.1:${mock.port}', token: _token, name: 'PC'));
+      await r.connectTo(d);
+      for (var i = 0; i < 50 && (r.office == null || looks.isEmpty); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(r.connected, isTrue);
+      expect(r.office!.agents.single.name, 'Raka');
+      expect(looks.single['accent'], '#2563EB');
+      // pushes
+      mock.publish('office.update', {
+        'agents': [
+          {'id': 'session:x', 'session_id': 'x', 'name': 'Sari', 'role': 'Agen', 'status': 'idle'}
+        ],
+        'feed': [],
+      });
+      mock.publish('appearance.changed', {'accent': '#16A34A', 'base': 'dark'});
+      mock.publish('vault.changed', {'tool': 'obsidian_write'});
+      for (var i = 0; i < 50 && (r.office!.agents.single.name != 'Sari' || looks.length < 2); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(r.office!.agents.single.name, 'Sari');
+      expect(looks.last['accent'], '#16A34A');
+      expect(r.vaultRevision, 1);
+      expect(desktops.items.single.alternates, contains('http://pc.tail1234.ts.net:${mock.port}'));
+      await r.disconnect();
     });
   });
 }

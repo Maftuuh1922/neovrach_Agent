@@ -74,10 +74,10 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
         const SizedBox(height: 14),
         Text(
             'Neovarch Agent untuk Android & iPhone: chat dengan alat dan memori, sesi, skill, berkas, proyek, kantor isometrik, Kanban, rapat multi-agent, dan cron — '
-            'berjalan mandiri di ponsel, atau tersambung ke gateway Hermes / server kantor.',
+            'berjalan mandiri di ponsel, atau tersambung ke gateway Neovarch / server kantor.',
             style: context.tt.bodyMedium),
         const SectionLabel('Pembaruan', padding: EdgeInsets.fromLTRB(0, 22, 0, 8)),
-        TextField(controller: _repo, decoration: const InputDecoration(labelText: 'Repositori GitHub rilis aplikasi', hintText: 'pemilik/hermes-mobile')),
+        TextField(controller: _repo, decoration: const InputDecoration(labelText: 'Repositori GitHub rilis aplikasi', hintText: 'pemilik/neovrach_Agent')),
         const SizedBox(height: 10),
         Row(children: [
           OutlinedButton.icon(onPressed: busy ? null : _check, icon: const Icon(Icons.system_update_alt, size: 18), label: const Text('Periksa pembaruan')),
@@ -122,7 +122,7 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
           label: const Text('Ulangi onboarding'),
         ),
         const SizedBox(height: 24),
-        Text('Neovarch Agent dibangun di atas Hermes Agent (Nous Research, MIT). Warna Neovarch Red (crimson di atas hitam) dengan karakter visual situs Hermes Agent; logo & ilustrasi manga milik NeovarchLabs. Huruf: Big Shoulders Display, IBM Plex Mono, Barlow (SIL OFL). Hermes Agent © Nous Research, lisensi MIT.', style: context.tt.bodySmall),
+        Text('Neovarch Agent oleh NeovarchLabs. Logo & ilustrasi milik NeovarchLabs. Huruf: Big Shoulders Display, IBM Plex Mono, Barlow (SIL OFL). Lisensi pihak ketiga ada di berkas NOTICE.', style: context.tt.bodySmall),
       ]),
     );
   }
