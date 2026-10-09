@@ -188,9 +188,23 @@ The core, on the same machine, computes 9Router's local CLI token exactly like t
 `<9router data dir>/machine-id` and `<data dir>/auth/cli-secret` (data dir: `$DATA_DIR`,
 else `~/.9router`, Windows `%APPDATA%\9router`) — and with header `x-9r-cli-token` calls
 `GET /api/keys` (reuse a key named `neovarch`) or `POST /api/keys {"name":"neovarch"}`.
+A fresh 9Router writes `machine-id` and `auth/cli-secret` only the first time it checks a CLI
+token, so when they are missing the core first sends one request with a dummy
+`x-9r-cli-token` (it gets 401 and the files now exist), then derives the real token.
 The key is stored in `~/.neovarch/.env` as `NEOVARCH_9ROUTER_API_KEY`. If that fails,
 `setup.action = 'api_key'` and the UI shows the dashboard prompt + paste field.
 
 OpenCode Free is a no-auth provider in 9Router: it needs no connection, so it is usable as
 soon as 9Router runs. The core also registers the live OpenCode Free model ids as custom
 models (`POST /api/models/custom {providerAlias:"oc", id}`) so they appear in `/v1/models`.
+
+## Verified against 9router 0.5.99 (2026-10-09)
+
+* The core spawns `9router --tray --no-browser --skip-update -p <port> -H 127.0.0.1`; it is
+  reachable on `127.0.0.1`/`localhost` only (not `[::1]`, not the LAN IP).
+* `/v1/models` needs no key; `/v1/chat/completions` needs an API key even from loopback
+  (`requireApiKey`, 401 "Missing API key"). Bound to `0.0.0.0`, a request from the LAN IP is
+  refused earlier by 9Router's local-request check ("API key required for remote API access").
+* OpenCode Free models answer without any account; they can return HTTP 429
+  (`FreeUsageLimitError`) when the free quota for that model is used up — the chat then shows
+  an Indonesian hint to retry or pick another model in the composer picker.
