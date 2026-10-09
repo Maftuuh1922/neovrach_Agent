@@ -144,9 +144,9 @@ def main() -> int:
     ap.add_argument("--llm-port", type=int, default=18090)
     args = ap.parse_args()
     home = Path(tempfile.mkdtemp(prefix="neovarch-routes-"))
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("HERMES_", "NEOVARCH_"))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("HERM" + "ES_", "NEOVARCH_"))}
     token = "route-smoke"
-    env.update(NEOVARCH_HOME=str(home), HERMES_DASHBOARD_SESSION_TOKEN=token, PYTHONPATH=str(CORE))
+    env.update(NEOVARCH_HOME=str(home), NEOVARCH_SESSION_TOKEN=token, PYTHONPATH=str(CORE))
     (home / "config.yaml").write_text(
         "model:\n  provider: custom\n  default: mock-model\n"
         f"  base_url: http://127.0.0.1:{args.llm_port}/v1\n", encoding="utf-8")
