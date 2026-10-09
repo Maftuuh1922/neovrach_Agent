@@ -154,15 +154,15 @@ void main() {
           })));
       expect(find.text('r=24 ctl=12'), findsOneWidget);
       final b0 = builds;
-      corners.set(32);
+      corners.set(28);
       await tester.pumpAndSettle();
-      expect(find.text('r=32 ctl=20'), findsOneWidget);
+      expect(find.text('r=28 ctl=16'), findsOneWidget);
       expect(builds, greaterThan(b0));
       final theme = Theme.of(tester.element(find.byKey(const ValueKey('probe'))));
-      expect((theme.cardTheme.shape as RoundedRectangleBorder).borderRadius, BorderRadius.circular(32));
+      expect((theme.cardTheme.shape as RoundedRectangleBorder).borderRadius, BorderRadius.circular(28));
       final input = theme.inputDecorationTheme.border as OutlineInputBorder;
-      expect(input.borderRadius, BorderRadius.circular(20));
-      expect(prefs.getDouble('nv.ui.corner'), 32);
+      expect(input.borderRadius, BorderRadius.circular(16));
+      expect(prefs.getDouble('nv.ui.corner'), 28);
     });
 
     testWidgets('card: presets and slider change + persist the radius, preview follows', (tester) async {
@@ -173,18 +173,18 @@ void main() {
       }
       await tester.tap(find.byKey(const ValueKey('corner-preset-Pil')));
       await tester.pumpAndSettle();
-      expect(corners.value, 32);
-      expect(prefs.getDouble('nv.ui.corner'), 32);
+      expect(corners.value, 28);
+      expect(prefs.getDouble('nv.ui.corner'), 28);
       final preview = tester.widget<AnimatedContainer>(find.byKey(const ValueKey('corner-preview')));
-      expect((preview.decoration as BoxDecoration).borderRadius, BorderRadius.circular(32));
+      expect((preview.decoration as BoxDecoration).borderRadius, BorderRadius.circular(28));
       await tester.tap(find.byKey(const ValueKey('corner-preset-Kotak')));
       await tester.pumpAndSettle();
       expect(corners.value, 0);
-      // slider: tap at ~half → ~16 dp
+      // slider: tap at ~half → ~14 dp
       final s = find.byKey(const ValueKey('corner-slider'));
       await tester.tapAt(tester.getCenter(s));
       await tester.pumpAndSettle();
-      expect(corners.value, inInclusiveRange(15, 17));
+      expect(corners.value, inInclusiveRange(13, 15));
       expect(find.byKey(const ValueKey('corner-value')), findsOneWidget);
     });
   });

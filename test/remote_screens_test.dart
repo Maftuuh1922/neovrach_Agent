@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neovarch_agent/remote/ui/remote_profile_screen.dart' show ProfileGroup;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/main.dart' as app;
@@ -514,12 +515,16 @@ void main() {
   });
 
   testWidgets('37 Profil tab', (tester) async {
+    ProfileGroup.debugOpen = {'appearance', 'glass', 'icon'};
+    addTearDown(() => ProfileGroup.debugOpen = {});
     await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
     app.previewTab = 3;
     await run(tester, '37_profil', () => const RemoteShell());
   });
 
   testWidgets('38 Profil · icon picker + Gaya kaca', (tester) async {
+    ProfileGroup.debugOpen = {'appearance', 'glass', 'icon'};
+    addTearDown(() => ProfileGroup.debugOpen = {});
     await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
     app.previewTab = 3;
     await run(tester, '38_profil_icon_glass', () => const RemoteShell(), act: () async {

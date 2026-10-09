@@ -57,8 +57,10 @@ class _RemoteSocialScreenState extends ConsumerState<RemoteSocialScreen> {
 /// The embeddable profile + friends block (no Scaffold): the Profil tab puts it
 /// at its top; [RemoteSocialScreen] wraps it as a pushed page.
 class SocialSection extends ConsumerStatefulWidget {
-  const SocialSection({super.key, this.autoLoad = true});
+  const SocialSection({super.key, this.autoLoad = true, this.showProfile = true});
   final bool autoLoad;
+  /// False on the Profil tab, whose header already shows the profile.
+  final bool showProfile;
   @override
   ConsumerState<SocialSection> createState() => _SocialSectionState();
 }
@@ -92,8 +94,8 @@ class _SocialSectionState extends ConsumerState<SocialSection> {
           ),
         )
       else ...[
-        if (p != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SocialProfileCard(profile: p)),
-        if (p != null)
+        if (p != null && widget.showProfile) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SocialProfileCard(profile: p)),
+        if (p != null && widget.showProfile)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: OutlinedButton.icon(

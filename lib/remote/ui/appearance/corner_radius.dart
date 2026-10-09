@@ -1,4 +1,4 @@
-// "Kelengkungan sudut": one user-set outer radius (0–32 dp) from which every
+// "Kelengkungan sudut": one user-set outer radius (0–28 dp) from which every
 // rounded shape of the app derives (cards, sheets, dialogs, buttons, inputs,
 // chat bubbles, the floating nav bar). Persisted in shared_preferences and
 // mirrored into the global [NV.corner] token, so widgets and the Material
@@ -15,11 +15,12 @@ const cornerPresets = <(String, double)>[
   ('Kotak', 0),
   ('Sedang', 12),
   ('Bulat', 24),
-  ('Pil', 32),
+  ('Pil', 28),
 ];
 
 const kCornerMin = 0.0;
-const kCornerMax = 32.0;
+// 1.4.4: capped at 28 (32 looked over-rounded on cards and sheets).
+const kCornerMax = 28.0;
 
 /// All radii derived from one outer card radius. Inner shapes are
 /// concentric: `inner = outer − padding` ([inner]).

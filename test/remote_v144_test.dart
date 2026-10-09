@@ -6,6 +6,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:neovarch_agent/remote/github_public.dart';
+import 'package:neovarch_agent/remote/ui/profile_header_slot.dart';
 import 'package:neovarch_agent/data/gateway_client.dart';
 import 'package:neovarch_agent/remote/appearance.dart';
 import 'package:neovarch_agent/remote/office_models.dart';
@@ -230,4 +234,92 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('agent-sheet')), matching: find.text('Tugas baru dari PC')), findsOneWidget);
     });
   });
+
+  group('Profil GitHub (public, no token)', () {
+    String html() {
+      final b = StringBuffer('<table>');
+      final start = DateTime.utc(2025, 10, 5);
+      for (var i = 0; i < 371; i++) {
+        final d = start.add(Duration(days: i));
+        final date = d.toIso8601String().substring(0, 10);
+        final n = i % 7 == 0 ? 0 : (i % 4) * 3;
+        final lvl = n == 0 ? 0 : (n > 6 ? 3 : 1);
+        b.write('<td tabindex="0" data-date="$date" id="contribution-day-component-${i % 7}-${i ~/ 7}" data-level="$lvl" class="ContributionCalendar-day"></td>');
+        b.write('<tool-tip id="t$i" for="contribution-day-component-${i % 7}-${i ~/ 7}" class="sr-only">${n == 0 ? 'No contributions' : '$n contributions'} on day.</tool-tip>');
+      }
+      return '$b</table>';
+    }
+
+    test('contributions HTML parses into a heatmap with exact counts', () {
+      final h = parseContributionsHtml(html())!;
+      expect(h.start, '2025-10-05');
+      expect(h.counts.length, 371);
+      expect(h.counts.take(5).toList(), [0, 3, 6, 9, 0]);
+      expect(h.max, 9);
+      expect(h.total, h.counts.fold<int>(0, (a, b) => a + b));
+      expect(h.weeks().length, 53);
+      expect(parseContributionsHtml('<html>nothing</html>'), isNull);
+    });
+
+    test('languages from public repos (forks ignored)', () {
+      final l = languagesFromRepos([
+        {'language': 'Dart'}, {'language': 'Dart'}, {'language': 'Python'}, {'language': 'Go', 'fork': true}, {'language': null},
+      ]);
+      expect(l.map((e) => e.name).toList(), ['Dart', 'Python']);
+      expect(l.first.share, closeTo(2 / 3, 1e-9));
+    });
+
+    test('fetch, cache, and offline keeps the last copy', () async {
+      SharedPreferences.setMockInitialValues({});
+      final p = await SharedPreferences.getInstance();
+      var online = true;
+      final client = MockClient((req) async {
+        if (!online) throw const SocketExceptionLike();
+        final u = req.url.toString();
+        if (u.endsWith('/users/octo')) return http.Response(jsonEncode({'login': 'octo', 'name': 'Octo Cat', 'bio': 'hi', 'avatar_url': 'https://a/x.png'}), 200);
+        if (u.contains('/contributions')) return http.Response(html(), 200);
+        if (u.contains('/repos')) return http.Response(jsonEncode([{'language': 'Dart'}]), 200);
+        return http.Response('', 404);
+      });
+      final gh = GithubPublicController(prefs: p, client: client);
+      await gh.setLogin('@octo');
+      expect(gh.login, 'octo');
+      expect(gh.profile!.name, 'Octo Cat');
+      expect(gh.profile!.heatmap!.max, 9);
+      expect(gh.profile!.languages.single.name, 'Dart');
+      // a new controller reads the cache (app restart, offline)
+      online = false;
+      final again = GithubPublicController(prefs: p, client: client);
+      expect(again.profile!.name, 'Octo Cat');
+      await again.refresh();
+      expect(again.profile!.name, 'Octo Cat');
+      expect(again.error, contains('Offline'));
+    });
+
+    testWidgets('graph paints GitHub greens from sample data and scrolls sideways at 390 dp', (tester) async {
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      NV.palette = NvPalette.from(const Color(0xFFEE1C1C), Brightness.light);
+      final h = parseContributionsHtml(html())!;
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: Padding(padding: const EdgeInsets.all(16), child: ContributionGraphCard(heatmap: h)))));
+      final painter = tester.widget<CustomPaint>(find.byKey(const ValueKey('contribution-graph'))).painter! as ContributionPainter;
+      expect(painter.weeks.length, 53);
+      expect(painter.levelOf(0), 0);
+      expect(painter.levelOf(9), 4);
+      expect(contributionColor(4, dark: false), const Color(0xFF216E39));
+      expect(contributionColor(0, dark: true), const Color(0xFF2D333B));
+      // wider than the card: it scrolls, opened on the latest weeks
+      expect(tester.getSize(find.byKey(const ValueKey('contribution-graph'))).width, greaterThan(358));
+      expect(find.byKey(const ValueKey('contribution-scroll')), findsOneWidget);
+      expect(find.text('${h.total} kontribusi'), findsOneWidget);
+      NV.palette = NvPalette.red;
+    });
+  });
+}
+
+class SocketExceptionLike implements Exception {
+  const SocketExceptionLike();
+  @override
+  String toString() => 'SocketException: offline';
 }
