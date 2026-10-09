@@ -274,7 +274,7 @@ class _BragSharePreviewState extends State<BragSharePreview> {
                 style: _compact,
                 onPressed: busy ? null : () => _export((png) => shareBragPng(context, png, link: widget.data.link)),
                 icon: const Icon(CupertinoIcons.share, size: 17),
-                label: const Text('Bagikan', maxLines: 1, softWrap: false),
+                label: const Text('Bagikan', maxLines: 1, softWrap: false, style: TextStyle(fontSize: 13.5)),
               ),
             ),
             const SizedBox(width: 8),
@@ -288,7 +288,7 @@ class _BragSharePreviewState extends State<BragSharePreview> {
                   toast(context, 'Tautan disalin');
                 },
                 icon: const Icon(CupertinoIcons.link, size: 17),
-                label: const Text('Salin tautan', maxLines: 1, softWrap: false),
+                label: const Text('Salin tautan', maxLines: 1, softWrap: false, style: TextStyle(fontSize: 13.5)),
               ),
             ),
             const SizedBox(width: 8),
@@ -299,7 +299,7 @@ class _BragSharePreviewState extends State<BragSharePreview> {
                 style: _compact,
                 onPressed: busy ? null : () => _export((png) => saveBragPng(context, png)),
                 icon: const Icon(CupertinoIcons.arrow_down_to_line, size: 17),
-                label: const Text('Unduh', maxLines: 1, softWrap: false),
+                label: const Text('Unduh', maxLines: 1, softWrap: false, style: TextStyle(fontSize: 13.5)),
               ),
             ),
           ]),
@@ -311,7 +311,6 @@ class _BragSharePreviewState extends State<BragSharePreview> {
 
 final _compact = ButtonStyle(
   padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
-  textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
   visualDensity: VisualDensity.compact,
 );
 

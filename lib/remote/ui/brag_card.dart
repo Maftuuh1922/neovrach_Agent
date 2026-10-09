@@ -439,7 +439,7 @@ class _OfficeShot extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), color: c.cell, border: Border.all(color: c.line)),
       child: Stack(fit: StackFit.expand, children: [
-        Image.memory(data.officeShot!, fit: BoxFit.cover, alignment: const Alignment(0, -0.4), gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+        Image.memory(data.officeShot!, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink()),
         Positioned(
           left: 8,
           bottom: 8,
