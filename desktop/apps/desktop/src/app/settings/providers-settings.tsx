@@ -31,6 +31,7 @@ import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
 
 import { isKeyVar, ProviderKeyRows } from './credential-key-ui'
 import { CustomEndpointsSettings } from './custom-endpoints-settings'
+import { GithubAccountSettings } from './github-account-settings'
 import { SettingsCategoryHeading, useEnvCredentials } from './env-credentials'
 import { providerGroup, providerMeta, providerPriority } from './helpers'
 import { LocalModelsSettings } from './local-models-settings'
@@ -53,7 +54,9 @@ function GroupLabel({ children }: { children: ReactNode }) {
 }
 
 // Sub-views surfaced as a sidebar subnav: account sign-in vs raw API keys.
-export const PROVIDER_VIEWS = ['accounts', 'keys', 'custom-endpoints', 'local'] as const
+// 'github' is Neovarch's Akun page; 'accounts' (provider OAuth logins the core
+// does not support) is no longer listed in the nav.
+export const PROVIDER_VIEWS = ['github', 'accounts', 'keys', 'custom-endpoints', 'local'] as const
 
 export type ProviderView = (typeof PROVIDER_VIEWS)[number]
 
@@ -537,6 +540,12 @@ export function ProvidersSettings({
 
   if (!vars && loadError) {
     return <SettingsLoadError error={loadError} onRetry={reload} title="Penyedia belum bisa dimuat" />
+  }
+
+  // Neovarch's only account is GitHub (token sign-in); provider OAuth logins
+  // are not supported by the core.
+  if (view === 'github') {
+    return <GithubAccountSettings />
   }
 
   if (!vars) {

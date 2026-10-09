@@ -16,6 +16,7 @@ import {
   Info,
   Keyboard,
   KeyRound,
+  LogIn,
   QrCode,
   RefreshCw,
   Settings2,
@@ -174,7 +175,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
   }, [activeView, setActiveView])
   // Providers subnav (Accounts vs API keys) lives in its own param so each
   // sub-view is deep-linkable and survives a refresh.
-  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'accounts')
+  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'keys')
   const [keysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
   const [billingView] = useRouteEnumParam<BillingSubView>('bview', BILLING_VIEWS, 'overview')
   const billingState = useBillingState()
@@ -208,7 +209,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
   )
 
   const openProviderView = useCallback(
-    (view: ProviderView) => openSubView('providers', 'pview', view, 'accounts'),
+    (view: ProviderView) => openSubView('providers', 'pview', view, 'keys'),
     [openSubView]
   )
 
@@ -330,6 +331,13 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
           {
             active: activeView === 'providers',
             children: [
+              {
+                active: activeView === 'providers' && providerView === 'github',
+                icon: LogIn,
+                id: 'pview:github',
+                label: t.settings.nav.providerAccounts,
+                onSelect: () => openProviderView('github')
+              },
               {
                 active: activeView === 'providers' && providerView === 'keys',
                 icon: KeyRound,

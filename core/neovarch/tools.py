@@ -101,7 +101,7 @@ async def tool_shell(args: dict, ctx: ToolContext) -> str:
     started = time.monotonic()
     proc = await asyncio.create_subprocess_shell(
         command, cwd=str(workdir), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-        env={**os.environ, "NEOVARCH_CORE": "1"}, start_new_session=True,
+        env={**os.environ, **_account_env(), "NEOVARCH_CORE": "1"}, start_new_session=True,
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -512,3 +512,11 @@ async def run_tool(name: str, args: dict, ctx: ToolContext) -> str:
         return f"error: not found: {exc.filename or exc}"
     except Exception as exc:  # tools report errors to the model instead of crashing the turn
         return f"error: {type(exc).__name__}: {exc}"
+
+
+def _account_env() -> dict[str, str]:
+    try:
+        from neovarch import account
+        return account.shell_env()
+    except Exception:  # a broken .env must never stop a command
+        return {}

@@ -1329,6 +1329,22 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/obsidian/note", vault_note)
     r.add_get("/api/obsidian/graph", vault_graph)
     r.add_get("/api/obsidian/search", vault_search)
+    async def account_get(_):
+        from neovarch import account
+        return web.json_response(await account.status())
+
+    async def account_connect(request):
+        from neovarch import account
+        res = await account.connect(str((await _json(request)).get("token") or ""))
+        return web.json_response(res)
+
+    async def account_disconnect(_):
+        from neovarch import account
+        return web.json_response(account.disconnect())
+
+    r.add_get("/api/account/github", account_get)
+    r.add_post("/api/account/github", account_connect)
+    r.add_delete("/api/account/github", account_disconnect)
     r.add_get("/api/appearance", appearance_get)
     r.add_put("/api/appearance", appearance_put)
     r.add_post("/api/appearance", appearance_put)
