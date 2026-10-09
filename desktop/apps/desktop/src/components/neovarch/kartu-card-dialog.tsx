@@ -19,7 +19,7 @@ import {
   type ShareCardStyle,
   shareLinks,
   statsFromOffice
-} from './share-card'
+} from './kartu-card'
 
 const NAME_KEY = 'nv.shareCard.name'
 const HANDLE_KEY = 'nv.shareCard.handle'
@@ -41,7 +41,7 @@ function writePref(key: string, value: string) {
   }
 }
 
-export function ShareCardButton() {
+export function KartuCardButton() {
   const [open, setOpen] = useState(false)
   const [shot, setShot] = useState<null | string>(null)
 
@@ -52,15 +52,15 @@ export function ShareCardButton() {
 
   return (
     <>
-      <button className="nv-office-open" data-slot="nv-share-card-open" onClick={() => void start()} type="button">
+      <button className="nv-office-open" data-slot="nv-kartu-open" onClick={() => void start()} type="button">
         Bagikan kartu
       </button>
-      <ShareCardDialog officeShot={shot} onOpenChange={setOpen} open={open} />
+      <KartuCardDialog officeShot={shot} onOpenChange={setOpen} open={open} />
     </>
   )
 }
 
-export function ShareCardDialog({ officeShot, onOpenChange, open }: { officeShot: null | string; onOpenChange: (open: boolean) => void; open: boolean }) {
+export function KartuCardDialog({ officeShot, onOpenChange, open }: { officeShot: null | string; onOpenChange: (open: boolean) => void; open: boolean }) {
   const office = useStore($office)
   const appearance = useStore($nvAppearance)
   const [style, setStyle] = useState<ShareCardStyle>('kaca')
@@ -134,18 +134,18 @@ export function ShareCardDialog({ officeShot, onOpenChange, open }: { officeShot
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="nv-share-card-dialog" data-slot="nv-share-card-dialog">
+      <DialogContent className="nv-kartu-dialog" data-slot="nv-kartu-dialog">
         <DialogHeader>
           <DialogTitle>Kartu Neovarch</DialogTitle>
           <DialogDescription>Pamerkan kantor AI-mu. Kartu tidak memuat token, alamat PC, atau path file.</DialogDescription>
         </DialogHeader>
 
-        <div className="nv-share-card-body">
-          <div className="nv-share-card-preview" data-format={format}>
-            {url ? <img alt="Pratinjau Kartu Neovarch" data-slot="nv-share-card-preview" src={url} /> : <p>Membuat kartu…</p>}
+        <div className="nv-kartu-body">
+          <div className="nv-kartu-preview" data-format={format}>
+            {url ? <img alt="Pratinjau Kartu Neovarch" data-slot="nv-kartu-preview" src={url} /> : <p>Membuat kartu…</p>}
           </div>
 
-          <div className="nv-share-card-controls">
+          <div className="nv-kartu-controls">
             <div aria-label="Gaya kartu" className="nv-office-view-toggle" role="group">
               {SHARE_CARD_STYLES.map(s => (
                 <button aria-pressed={style === s.value} key={s.value} onClick={() => setStyle(s.value)} type="button">
@@ -161,7 +161,7 @@ export function ShareCardDialog({ officeShot, onOpenChange, open }: { officeShot
                 Feed 1:1
               </button>
             </div>
-            <label className="nv-share-card-field">
+            <label className="nv-kartu-field">
               <span>Nama di kartu</span>
               <input
                 maxLength={32}
@@ -173,7 +173,7 @@ export function ShareCardDialog({ officeShot, onOpenChange, open }: { officeShot
                 value={name}
               />
             </label>
-            <label className="nv-share-card-field">
+            <label className="nv-kartu-field">
               <span>GitHub (opsional)</span>
               <input
                 maxLength={40}
@@ -185,20 +185,20 @@ export function ShareCardDialog({ officeShot, onOpenChange, open }: { officeShot
                 value={handle}
               />
             </label>
-            <label className="nv-share-card-check">
+            <label className="nv-kartu-check">
               <input checked={showStats} onChange={e => setShowStats(e.target.checked)} type="checkbox" /> Tampilkan statistik
             </label>
-            {!officeShot && <p className="nv-share-card-note">Buka tampilan 3D untuk menyertakan cuplikan kantor.</p>}
+            {!officeShot && <p className="nv-kartu-note">Buka tampilan 3D untuk menyertakan cuplikan kantor.</p>}
 
-            <div className="nv-share-card-actions">
-              <Button data-slot="nv-share-card-save" disabled={!url} onClick={save} size="sm">
+            <div className="nv-kartu-actions">
+              <Button data-slot="nv-kartu-save" disabled={!url} onClick={save} size="sm">
                 Simpan PNG
               </Button>
-              <Button data-slot="nv-share-card-copy" disabled={!png} onClick={() => void copy()} size="sm" variant="secondary">
+              <Button data-slot="nv-kartu-copy" disabled={!png} onClick={() => void copy()} size="sm" variant="secondary">
                 Salin gambar
               </Button>
             </div>
-            <div className="nv-share-card-actions">
+            <div className="nv-kartu-actions">
               {shareLinks(NEOVARCH_LANDING_URL, SHARE_TEXT).map(l => (
                 <Button key={l.label} onClick={() => openExternalLink(l.url)} size="sm" variant="outline">
                   {l.label}
@@ -206,7 +206,7 @@ export function ShareCardDialog({ officeShot, onOpenChange, open }: { officeShot
               ))}
             </div>
             {note && (
-              <p className="nv-share-card-note" role="status">
+              <p className="nv-kartu-note" role="status">
                 {note}
               </p>
             )}

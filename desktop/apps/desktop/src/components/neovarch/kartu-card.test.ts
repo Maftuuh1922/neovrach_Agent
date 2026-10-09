@@ -17,7 +17,7 @@ import {
   type ShareCardData,
   shareLinks,
   statsFromOffice
-} from './share-card'
+} from './kartu-card'
 
 const office = {
   agents: [
