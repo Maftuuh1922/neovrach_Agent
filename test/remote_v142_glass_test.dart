@@ -20,6 +20,7 @@ import 'package:neovarch_agent/remote/remote_gateway.dart';
 import 'package:neovarch_agent/remote/remote_transcript.dart';
 import 'package:neovarch_agent/remote/saved_desktops.dart';
 import 'package:neovarch_agent/remote/ui/app_icon_panel.dart';
+import 'package:neovarch_agent/remote/ui/appearance/appearance_section.dart' show NvAppearanceSection;
 import 'package:neovarch_agent/remote/ui/glass_style_picker.dart';
 import 'package:neovarch_agent/remote/wallpaper_palette.dart';
 import 'package:neovarch_agent/remote/ui/nv_glass_text.dart';
@@ -28,7 +29,6 @@ import 'package:neovarch_agent/remote/ui/profile_header_slot.dart';
 import 'package:neovarch_agent/remote/ui/remote_app.dart' show PaletteScope, themeFor;
 import 'package:neovarch_agent/remote/ui/remote_intro_screen.dart';
 import 'package:neovarch_agent/remote/ui/remote_kantor_tab.dart';
-import 'package:neovarch_agent/remote/ui/remote_pc_screen.dart' show AppearancePanel;
 import 'package:neovarch_agent/remote/ui/remote_shell.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
@@ -274,16 +274,17 @@ void main() {
       await settle(tester, 4);
       expect(find.byType(ProfileHeaderSlot), findsOneWidget);
       expect(find.text('Profil & teman — segera'), findsOneWidget);
-      expect(find.byType(AppearancePanel), findsOneWidget);
+      expect(find.byType(NvAppearanceSection), findsOneWidget);
       expect(find.text('Ikuti tema PC'), findsOneWidget);
+      expect(find.byKey(const ValueKey('corner-card')), findsOneWidget);
       await tester.scrollUntilVisible(find.byKey(const ValueKey('app-icon-panel')), 300,
           scrollable: find.descendant(of: find.byKey(const ValueKey('profile-list')), matching: find.byType(Scrollable)).first);
       expect(find.byType(AppIconPanel), findsOneWidget);
       expect(find.byKey(const ValueKey('app-icon-note')), findsOneWidget);
       await tester.tap(inNav('PC'));
       await settle(tester, 4);
-      // AppearancePanel is gone from PC (only the Profil one, offstage, remains)
-      expect(find.byType(AppearancePanel, skipOffstage: true), findsNothing);
+      // the Tampilan section is gone from PC (only the Profil one, offstage, remains)
+      expect(find.byType(NvAppearanceSection, skipOffstage: true), findsNothing);
       expect(find.byKey(const ValueKey('pc-licenses'), skipOffstage: false), findsOneWidget);
     });
   });
@@ -531,16 +532,19 @@ void main() {
       expect(again.wallpaperSwatches, isNotEmpty);
     });
 
-    testWidgets('panel: toggle + suggested swatches; tapping a swatch sets the accent', (tester) async {
+    testWidgets('toggle panel + "Dari wallpaper" row (from the extracted swatches); a suggestion keeps the toggle on', (tester) async {
       prefs.setString('nv.bg.source', 'asset:assets/art/feat-remote.webp');
       prefs.setStringList('nv.bg.swatches', ['#3B82F6', '#A855F7', '#22C55E']);
-      final look = await pump(tester, const Scaffold(body: SingleChildScrollView(child: WallpaperColorsPanel())));
+      final look = await pump(tester, const Scaffold(body: SingleChildScrollView(child: Column(children: [WallpaperColorsPanel(), NvAppearanceSection()]))));
+      await settle(tester, 2);
       expect(find.byKey(const ValueKey('wallpaper-colors')), findsOneWidget);
-      expect(find.byKey(const ValueKey('wallpaper-swatch-#A855F7')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('wallpaper-swatch-#A855F7')));
+      final wall = find.byKey(const ValueKey('accent-wall-1'));
+      expect(wall, findsOneWidget);
+      await tester.ensureVisible(wall);
+      await tester.tap(wall);
       await settle(tester, 2);
       expect(look.accent.toARGB32(), const Color(0xFFA855F7).toARGB32());
-      expect(look.wallpaperColors, isTrue); // a suggestion keeps it on
+      expect(look.wallpaperColors, isTrue);
     });
   });
 }

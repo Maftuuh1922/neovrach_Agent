@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/main.dart' as app;
 import 'package:neovarch_agent/remote/appearance.dart';
+import 'package:neovarch_agent/remote/ui/appearance/accent_picker.dart' show nvAccentSwatches;
 import 'package:neovarch_agent/remote/remote_controller.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart';
 import 'package:neovarch_agent/remote/remote_transcript.dart';
@@ -134,27 +135,39 @@ void main() {
     testWidgets('theme picker: preset, custom hue, Sistem; applies live with a cross-fade', (tester) async {
       final look = await pump(tester, const Scaffold(body: SingleChildScrollView(child: AppearancePanel())));
       expect(find.byKey(const ValueKey('appearance-panel')), findsOneWidget);
-      for (final (name, _) in accentPresets) {
+      for (final (name, _) in nvAccentSwatches) {
         expect(find.byKey(ValueKey('accent-$name')), findsOneWidget, reason: name);
       }
+      const toska = Color(0xFF18A7A1);
+      await tester.ensureVisible(find.byKey(const ValueKey('accent-Toska')));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.tap(find.byKey(const ValueKey('accent-Toska')));
       await tester.pump();
       expect(look.followPc, isFalse);
-      expect(NV.red, const Color(0xFF0D9488));
+      expect(NV.red, toska);
       // old look is snapshotted and fades out over the new one
       expect(find.byKey(const ValueKey('nv-theme-crossfade')), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const ValueKey('nv-theme-crossfade')), findsNothing);
-      expect(Theme.of(tester.element(find.byType(AppearancePanel))).colorScheme.primary, const Color(0xFF0D9488));
-      expect(find.text('Toska · #0D9488'), findsOneWidget);
+      expect(Theme.of(tester.element(find.byType(AppearancePanel))).colorScheme.primary, toska);
+      expect(find.text('Toska · #18A7A1'), findsOneWidget);
 
-      // custom colour from the hue strip
-      final strip = find.byKey(const ValueKey('accent-hue'));
-      await tester.tapAt(tester.getTopLeft(strip) + const Offset(4, 10));
+      // custom colour from the HSV picker (hue slider at the far left = red)
+      await tester.ensureVisible(find.byKey(const ValueKey('accent-custom')));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byKey(const ValueKey('accent-custom')));
       await tester.pumpAndSettle();
-      expect(HSLColor.fromColor(NV.red).hue, lessThan(16));
+      final hue = find.byKey(const ValueKey('hsv-hue'));
+      expect(hue, findsOneWidget);
+      await tester.tapAt(tester.getTopLeft(hue) + Offset(4, tester.getSize(hue).height / 2));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('hsv-apply')));
+      await tester.pumpAndSettle();
+      expect(HSVColor.fromColor(NV.red).hue, lessThan(16));
       expect(find.textContaining('Kustom ·'), findsOneWidget);
 
+      await tester.ensureVisible(find.text('Terang'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Terang'));
       await tester.pumpAndSettle();
       expect(NV.palette.dark, isFalse);
@@ -164,6 +177,8 @@ void main() {
       expect(NV.palette.dark, isTrue); // test "phone" is dark
 
       // back to following the PC
+      await tester.ensureVisible(find.text('Ikuti tema PC'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Ikuti tema PC'));
       await tester.pumpAndSettle();
       expect(look.followPc, isTrue);

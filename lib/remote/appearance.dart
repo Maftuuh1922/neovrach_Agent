@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/neovarch_mobile_theme.dart';
+import 'ui/appearance/panel_tone.dart' show NvGlassFx;
 import 'wallpaper_palette.dart';
 
 /// Accent presets. The first six match the desktop theme picker; the rest
@@ -192,16 +193,23 @@ class AppearanceController extends ChangeNotifier {
     );
     NV.glassSigma.value = background.glass;
     glassStyle = NvGlassStyle.parse(_prefs.getString(_kGlassStyle));
-    NV.glassStyle = glassStyle;
+    _bindGlass();
     wallpaperColors = _prefs.getBool(_kWallColors) ?? true;
     wallpaperSwatches = [for (final h in _prefs.getStringList(_kWallSwatches) ?? const <String>[]) ?parseHexColor(h)];
+  }
+
+  /// The style goes app-wide; "Tanpa efek" is the appearance UI's
+  /// reduce-transparency switch.
+  void _bindGlass() {
+    NV.glassStyle = glassStyle;
+    NvGlassFx.reduceTransparency.value = glassStyle == NvGlassStyle.tanpa;
   }
 
   void setGlassStyle(NvGlassStyle s) {
     if (s == glassStyle) return;
     onBeforeChange?.call();
     glassStyle = s;
-    NV.glassStyle = s;
+    _bindGlass();
     _prefs.setString(_kGlassStyle, s.name);
     revision++;
     notifyListeners();
@@ -292,7 +300,7 @@ class AppearanceController extends ChangeNotifier {
     final gs = a['glass_style'];
     if (gs is String && followPc) {
       glassStyle = NvGlassStyle.parse(gs);
-      NV.glassStyle = glassStyle;
+      _bindGlass();
       _prefs.setString(_kGlassStyle, glassStyle.name);
     }
     _prefs.setString(_kPcAccent, hexOf(c));

@@ -114,7 +114,8 @@ class GlassStylePicker extends ConsumerWidget {
   }
 }
 
-/// "Warna dari wallpaper": accent from the background image + suggestions.
+/// "Warna dari wallpaper": accent from the background image. Its suggested
+/// swatches show in the accent picker's "Dari wallpaper" row.
 class WallpaperColorsPanel extends ConsumerWidget {
   const WallpaperColorsPanel({super.key, this.margin = const EdgeInsets.symmetric(horizontal: 16)});
   final EdgeInsets margin;
@@ -138,32 +139,6 @@ class WallpaperColorsPanel extends ConsumerWidget {
           value: look.wallpaperColors,
           onChanged: on ? (v) => look.setWallpaperColors(v) : null,
         ),
-        if (on && look.wallpaperSwatches.isNotEmpty) ...[
-          Text('SARAN DARI WALLPAPER', style: NV.monoLabel(size: 9.5, color: NV.faint)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 10, runSpacing: 10, children: [
-            for (final c in look.wallpaperSwatches)
-              Semantics(
-                button: true,
-                selected: look.accent.toARGB32() == c.toARGB32(),
-                label: 'Warna ${hexOf(c)}',
-                child: GestureDetector(
-                  key: ValueKey('wallpaper-swatch-${hexOf(c)}'),
-                  onTap: () => look.pickWallpaperSwatch(c),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: look.accent.toARGB32() == c.toARGB32() ? NV.text : NV.border, width: 2),
-                    ),
-                    child: DecoratedBox(decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-                  ),
-                ),
-              ),
-          ]),
-        ],
       ]),
     );
   }

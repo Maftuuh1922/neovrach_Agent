@@ -27,9 +27,12 @@ import 'package:neovarch_agent/remote/ui/nv_widgets.dart' show NvGlassButton;
 import 'package:neovarch_agent/remote/ui/remote_shell.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
 import 'package:neovarch_agent/state/settings_controller.dart';
+import 'package:neovarch_agent/remote/ui/appearance/appearance_section.dart' show NvAppearanceSection;
 import 'package:neovarch_agent/theme/neovarch_mobile_theme.dart';
 
 const _biru = Color(0xFF2563EB);
+// The curated "Biru" swatch of the redesigned accent picker.
+const _biruSwatch = Color(0xFF487CDE);
 
 void main() {
   late SharedPreferences prefs;
@@ -114,18 +117,20 @@ void main() {
       expect(find.text('Hubungkan PC'), findsOneWidget); // last page
       expect(look.followPc, isTrue);
 
+      await tester.ensureVisible(find.byKey(const ValueKey('accent-Biru')));
+      await settle(tester);
       await tester.tap(find.byKey(const ValueKey('accent-Biru')));
       await settle(tester);
       expect(look.followPc, isFalse);
-      expect(NV.red, _biru);
+      expect(NV.red, _biruSwatch);
       expect(prefs.getBool('nv.theme.follow'), isFalse);
-      expect(prefs.getString('nv.theme.accent'), '#2563EB');
+      expect(prefs.getString('nv.theme.accent'), '#487CDE');
       // the button and progress dots follow the accent
       final btn = tester.widget<NvGlassButton>(find.byKey(const ValueKey('intro-next')));
-      expect(Theme.of(tester.element(find.byKey(const ValueKey('intro-next')))).colorScheme.primary, _biru);
+      expect(Theme.of(tester.element(find.byKey(const ValueKey('intro-next')))).colorScheme.primary, _biruSwatch);
       expect(btn.onPressed, isNotNull);
       final dot = tester.widget<Container>(find.byKey(const ValueKey('intro-dot-3')));
-      expect((dot.decoration as BoxDecoration).color, _biru);
+      expect((dot.decoration as BoxDecoration).color, _biruSwatch);
       expect(find.byKey(const ValueKey('intro-theme-note')), findsOneWidget);
 
       await tester.tap(find.text('Terang'));
@@ -139,7 +144,7 @@ void main() {
       expect(settings.introSeen, isTrue);
       final again = AppearanceController(prefs, systemBrightness: Brightness.dark);
       expect(again.followPc, isFalse);
-      expect(again.accent, _biru);
+      expect(again.accent, _biruSwatch);
       expect(again.dark, isFalse);
     });
 
@@ -195,10 +200,12 @@ void main() {
       expect(find.byKey(const ValueKey('appearance-sheet')), findsOneWidget);
       expect(find.byType(AppearancePanel), findsOneWidget);
       expect(find.text('Ikuti tema PC'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('accent-Hijau')));
+      await settle(tester);
       await tester.tap(find.byKey(const ValueKey('accent-Hijau')));
       await settle(tester);
       expect(look.followPc, isFalse);
-      expect(NV.red, const Color(0xFF16A34A));
+      expect(NV.red, const Color(0xFF4FA866));
     });
 
     testWidgets('"Tambah PC" header also has it', (tester) async {
@@ -391,7 +398,7 @@ void main() {
         const red = Color(0xFFEE1C1C);
         final bad = <String>[];
         // (the Merah swatch in the theme picker is red on purpose)
-        final swatches = find.descendant(of: find.byType(AppearancePanel), matching: find.byWidgetPredicate((_) => true)).evaluate().toSet();
+        final swatches = find.descendant(of: find.byType(NvAppearanceSection), matching: find.byWidgetPredicate((_) => true)).evaluate().toSet();
         for (final e in find.byWidgetPredicate((_) => true).evaluate()) {
           if (swatches.contains(e)) continue;
           final w = e.widget;

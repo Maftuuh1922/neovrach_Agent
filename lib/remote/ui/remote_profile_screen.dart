@@ -10,7 +10,7 @@ import 'app_icon_panel.dart';
 import 'glass_style_picker.dart';
 import 'nv_widgets.dart';
 import 'profile_header_slot.dart';
-import 'remote_pc_screen.dart' show AppearancePanel;
+import 'appearance/appearance_section.dart' show NvAppearanceSection;
 
 class RemoteProfileScreen extends StatelessWidget {
   const RemoteProfileScreen({super.key});
@@ -24,7 +24,8 @@ class RemoteProfileScreen extends StatelessWidget {
             NvHeader(kicker: 'hp ini', title: 'Profil'),
             Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ProfileHeaderSlot()),
             NvSection('tampilan'),
-            AppearancePanel(),
+            // NvAppearanceSection hosts its own NvPanelToneHost (wallpaper tone)
+            NvAppearanceSection(),
             SizedBox(height: 12),
             WallpaperColorsPanel(),
             NvSection('gaya kaca'),
