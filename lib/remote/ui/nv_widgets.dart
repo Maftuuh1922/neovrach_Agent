@@ -572,7 +572,7 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
       final h = outer.maxHeight.isFinite ? outer.maxHeight : 64.0;
       return NvGlass(
         key: const ValueKey('nv-nav-bar'),
-        radius: h / 2,
+        radius: NV.navFor(h),
         tint: NV.navGlass,
         padding: const EdgeInsets.all(4),
         child: LayoutBuilder(builder: (context, c) {
@@ -606,7 +606,7 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
                     width: lensW,
                     height: lensH,
                     child: IgnorePointer(
-                      child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH), magnification: _dragging ? 1.24 : 1.14),
+                      child: NvLens(key: const ValueKey('nv-nav-lens'), size: Size(lensW, lensH), magnification: _dragging ? 1.24 : 1.14, radius: NV.inner(NV.navFor(h), 4)),
                     ),
                   ),
                 ]);
@@ -664,12 +664,14 @@ class _NvNavBarState extends State<NvNavBar> with SingleTickerProviderStateMixin
 /// under it, with a light accent tint, a bright rim and a faint chromatic
 /// edge. Used by [NvNavBar]; also usable for round glass buttons.
 class NvLens extends StatelessWidget {
-  const NvLens({super.key, required this.size, this.magnification = 1.14});
+  const NvLens({super.key, required this.size, this.magnification = 1.14, this.radius});
   final Size size;
   final double magnification;
+  /// Corner radius; null = capsule.
+  final double? radius;
   @override
   Widget build(BuildContext context) {
-    final r = size.shortestSide / 2;
+    final r = math.min(radius ?? size.shortestSide / 2, size.shortestSide / 2);
     final paint = CustomPaint(
       size: size,
       painter: _LensFillPainter(radius: r, fill: NV.lensFill),
@@ -792,9 +794,10 @@ ImageFilter nvGlassFilter(double sigma) => ImageFilter.compose(
 /// Liquid glass surface: backdrop blur + saturation, a translucent
 /// accent-tinted fill, a hairline and a specular rim. No drop shadow.
 class NvGlass extends StatelessWidget {
-  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true});
+  const NvGlass({super.key, required this.child, this.radius,  this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true});
   final Widget child;
-  final double radius;
+  /// Null: the card radius ([NV.rCard], follows "Kelengkungan sudut").
+  final double? radius;
   final BorderRadius? borderRadius;
   final EdgeInsetsGeometry padding;
   /// Fixed blur sigma; null follows the user's "Kekuatan kaca" ([NV.glassSigma]).
@@ -804,7 +807,7 @@ class NvGlass extends StatelessWidget {
   final bool rim;
   @override
   Widget build(BuildContext context) {
-    final br = borderRadius ?? BorderRadius.circular(radius);
+    final br = borderRadius ?? BorderRadius.circular(radius ?? NV.rCard);
     final inner = CustomPaint(
       foregroundPainter: rim ? NvGlassRimPainter(borderRadius: br, rim: NV.glassRim) : null,
       child: DecoratedBox(

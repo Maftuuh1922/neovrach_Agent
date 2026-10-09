@@ -15,6 +15,7 @@ import '../../theme/neovarch_mobile_theme.dart';
 import '../appearance.dart';
 import '../remote_controller.dart';
 import '../saved_desktops.dart';
+import 'appearance/corner_radius.dart';
 import 'connect_screen.dart';
 import 'remote_intro_screen.dart';
 import 'remote_launch.dart';
@@ -46,12 +47,14 @@ Future<void> runRemoteApp(
   final desktops = SavedDesktops(prefs)..load();
   final remote = RemoteController(desktops);
   final look = AppearanceController(prefs);
+  final corners = CornerRadiusController(prefs);
   remote.onAppearance = look.applyPc;
   runApp(ProviderScope(
     overrides: [
       settingsProvider.overrideWith((ref) => settings),
       remoteProvider.overrideWith((ref) => remote),
       appearanceProvider.overrideWith((ref) => look),
+      cornerRadiusProvider.overrideWith((ref) => corners),
     ],
     child: RemoteNeovarchApp(skipSplash: skipSplash),
   ));
@@ -62,12 +65,15 @@ Future<void> runRemoteApp(
 
 ThemeData? _theme;
 int _themeRev = -1;
+double _themeCorner = -1;
 
-/// Rebuilt only when the palette changes (PC appearance / local override).
+/// Rebuilt only when the palette (PC appearance / local override) or the
+/// corner radius ("Kelengkungan sudut", [NV.corner]) changes.
 ThemeData themeFor(AppearanceController look) {
-  if (_theme == null || _themeRev != look.revision) {
+  if (_theme == null || _themeRev != look.revision || _themeCorner != NV.corner) {
     _theme = buildNeovarchMobileTheme();
     _themeRev = look.revision;
+    _themeCorner = NV.corner;
   }
   return _theme!;
 }
@@ -81,6 +87,7 @@ class RemoteNeovarchApp extends ConsumerWidget {
     final s = ref.watch(settingsProvider);
     final remote = ref.watch(remoteProvider);
     final look = ref.watch(appearanceProvider);
+    final corners = ref.watch(cornerRadiusProvider);
     final paired = remote.desktop != null || remote.desktops.items.isNotEmpty;
     final theme = themeFor(look);
     return MaterialApp(
@@ -93,7 +100,7 @@ class RemoteNeovarchApp extends ConsumerWidget {
       themeMode: look.dark ? ThemeMode.dark : ThemeMode.light,
       // Theme changes cross-fade (snapshot of the old look fades out).
       themeAnimationDuration: Duration.zero,
-      builder: (context, child) => PaletteScope(revision: look.revision, look: look, child: child!),
+      builder: (context, child) => AppCornerRadius(controller: corners, child: PaletteScope(revision: look.revision, look: look, child: child!)),
       // Every cold start opens on the intro in the saved theme; the first
       // launch then shows the onboarding slides.
       home: NvLaunchIntro(

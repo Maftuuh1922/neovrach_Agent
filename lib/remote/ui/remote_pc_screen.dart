@@ -9,13 +9,13 @@ import '../../state/settings_controller.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import 'remote_intro_screen.dart';
 import '../../ui/widgets/common.dart';
-import '../appearance.dart';
 import '../pairing.dart';
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import 'connect_screen.dart';
 import 'nv_widgets.dart';
-import 'remote_background.dart' show BackgroundSection;
+import 'appearance/appearance_section.dart' show NvAppearanceSection, NvGlassToneHost;
+import 'appearance/glass_surfaces.dart' show NvGlassSectionHeader;
 
 class RemotePcScreen extends ConsumerWidget {
   const RemotePcScreen({super.key, this.onOpenChat});
@@ -184,7 +184,7 @@ class RemotePcScreen extends ConsumerWidget {
                   ),
                 ),
             ]),
-          const NvSection('tampilan'),
+          const NvGlassToneHost(child: NvGlassSectionHeader('Tampilan', icon: CupertinoIcons.paintbrush)),
           const AppearancePanel(),
           const NvSection('hp ini'),
           NvList(children: [
@@ -271,10 +271,11 @@ String routeLabel(String url) => switch (gatewayRoute(url)) {
       _ => Uri.tryParse(url)?.host ?? url,
     };
 
-/// Theme picker: follow the PC (default) or a local look — 14 accent
-/// presets, a custom colour (flat hue strip or hex) and Gelap / Terang /
-/// Sistem. Every change applies live and cross-fades the whole app.
-class AppearancePanel extends ConsumerStatefulWidget {
+/// Theme picker ("Tampilan"): follow the PC (default) or a local look —
+/// liquid glass cards for theme mode, accent (curated swatches, wallpaper
+/// colours, HSV custom), corner roundness and the app background. Every
+/// change applies live. See lib/remote/ui/appearance/.
+class AppearancePanel extends StatelessWidget {
   const AppearancePanel({super.key, this.showFollowPc = true, this.showBackground = true, this.margin = const EdgeInsets.symmetric(horizontal: 16)});
   /// Onboarding hides "Ikuti tema PC" (no PC yet); picking there is a local override.
   final bool showFollowPc;
@@ -282,189 +283,5 @@ class AppearancePanel extends ConsumerStatefulWidget {
   final bool showBackground;
   final EdgeInsets margin;
   @override
-  ConsumerState<AppearancePanel> createState() => _AppearancePanelState();
-}
-
-class _AppearancePanelState extends ConsumerState<AppearancePanel> {
-  late final TextEditingController _hex = TextEditingController(text: hexOf(ref.read(appearanceProvider).localAccent));
-
-  @override
-  void dispose() {
-    _hex.dispose();
-    super.dispose();
-  }
-
-  void _pick(AppearanceController look, Color c) {
-    look.setLocal(accent: c);
-    _hex.text = hexOf(c);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final look = ref.watch(appearanceProvider);
-    final current = look.accent.toARGB32();
-    String? presetName;
-    for (final (n, c) in accentPresets) {
-      if (c.toARGB32() == current) presetName = n;
-    }
-    final dur = reduceMotion(context) ? Duration.zero : const Duration(milliseconds: 220);
-    return NvPanel(
-      key: const ValueKey('appearance-panel'),
-      margin: widget.margin,
-      padding: EdgeInsets.zero,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (widget.showFollowPc) ...[
-        _SwitchRow(
-          icon: CupertinoIcons.desktopcomputer,
-          title: 'Ikuti tema PC',
-          subtitle: look.followPc ? 'Warna ${hexOf(look.pcAccent)} · ${look.pcDark ? 'gelap' : 'terang'}' : 'Pakai tema khusus HP ini',
-          value: look.followPc,
-          onChanged: look.setFollowPc,
-        ),
-        Divider(height: 1, color: NV.border),
-        ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
-          child: Row(children: [
-            Text('WARNA AKSEN', style: NV.monoLabel(size: 10)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text('${presetName ?? 'Kustom'} · ${hexOf(look.accent)}',
-                  key: const ValueKey('accent-current'),
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: NV.code(size: 11, color: NV.text)),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
-          child: Wrap(spacing: 10, runSpacing: 10, children: [
-            for (final (name, c) in accentPresets)
-              Semantics(
-                button: true,
-                selected: current == c.toARGB32(),
-                label: name,
-                child: Tooltip(
-                  message: name,
-                  child: GestureDetector(
-                    key: ValueKey('accent-$name'),
-                    onTap: () => _pick(look, c),
-                    child: AnimatedContainer(
-                      duration: dur,
-                      curve: Curves.easeOutCubic,
-                      width: 40,
-                      height: 40,
-                      padding: EdgeInsets.all(current == c.toARGB32() ? 3 : 0),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: current == c.toARGB32() ? NV.text : NV.border, width: current == c.toARGB32() ? 2 : 1),
-                      ),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-                        child: AnimatedOpacity(
-                          duration: dur,
-                          opacity: current == c.toARGB32() ? 1 : 0,
-                          child: Icon(CupertinoIcons.checkmark, size: 18, color: NvPalette.from(c, Brightness.dark).onAccent),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-          child: Text('WARNA KUSTOM', style: NV.monoLabel(size: 10)),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-          child: _HueStrip(key: const ValueKey('accent-hue'), current: look.accent, onPick: (c) => _pick(look, c)),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-          child: TextField(
-            key: const ValueKey('accent-hex'),
-            controller: _hex,
-            decoration: InputDecoration(
-              labelText: 'Warna kustom (hex)',
-              hintText: '#FF0066',
-              prefixIcon: Padding(
-                padding: const EdgeInsets.all(12),
-                child: AnimatedContainer(duration: dur, width: 20, height: 20, decoration: BoxDecoration(color: look.accent, shape: BoxShape.circle)),
-              ),
-            ),
-            onSubmitted: (v) {
-              final c = parseHexColor(v);
-              if (c != null) _pick(look, c);
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          child: SegmentedButton<NvBrightnessMode>(
-            key: const ValueKey('theme-mode'),
-            segments: const [
-              ButtonSegment(value: NvBrightnessMode.dark, label: Text('Gelap'), icon: Icon(CupertinoIcons.moon, size: 18)),
-              ButtonSegment(value: NvBrightnessMode.light, label: Text('Terang'), icon: Icon(CupertinoIcons.sun_max, size: 18)),
-              ButtonSegment(value: NvBrightnessMode.system, label: Text('Sistem'), icon: Icon(CupertinoIcons.circle_lefthalf_fill, size: 18)),
-            ],
-            selected: {look.followPc ? (look.pcDark ? NvBrightnessMode.dark : NvBrightnessMode.light) : look.localMode},
-            onSelectionChanged: (v) => look.setLocal(mode: v.first),
-          ),
-        ),
-        if (widget.showBackground) const BackgroundSection(),
-      ]),
-    );
-  }
-}
-
-/// Custom accent: a strip of flat hue blocks (no gradient). Tap or drag.
-class _HueStrip extends StatelessWidget {
-  const _HueStrip({super.key, required this.current, required this.onPick});
-  final Color current;
-  final ValueChanged<Color> onPick;
-  static const steps = 24;
-  static Color hueColor(int i) => HSLColor.fromAHSL(1, i * 360 / steps, 0.72, 0.50).toColor();
-
-  @override
-  Widget build(BuildContext context) {
-    final curHue = HSLColor.fromColor(current).hue;
-    var sel = -1;
-    var best = 999.0;
-    for (var i = 0; i < steps; i++) {
-      final d = ((i * 360 / steps) - curHue).abs();
-      final dd = d > 180 ? 360 - d : d;
-      if (dd < best) {
-        best = dd;
-        sel = i;
-      }
-    }
-    if (best > 360 / steps / 2 || HSLColor.fromColor(current).saturation < 0.2) sel = -1;
-    return LayoutBuilder(builder: (context, c) {
-      void at(double x) => onPick(hueColor((x / c.maxWidth * steps).floor().clamp(0, steps - 1)));
-      return GestureDetector(
-        onTapDown: (d) => at(d.localPosition.dx),
-        onHorizontalDragUpdate: (d) => at(d.localPosition.dx),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(NV.rCtl),
-          child: SizedBox(
-            height: 34,
-            child: Row(children: [
-              for (var i = 0; i < steps; i++)
-                Expanded(
-                  child: Container(
-                    color: hueColor(i),
-                    alignment: Alignment.center,
-                    child: i == sel ? Container(width: 4, height: 18, decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(2))) : null,
-                  ),
-                ),
-            ]),
-          ),
-        ),
-      );
-    });
-  }
+  Widget build(BuildContext context) => NvAppearanceSection(showFollowPc: showFollowPc, showBackground: showBackground, margin: margin);
 }

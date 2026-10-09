@@ -240,9 +240,11 @@ void main() {
     expect(t.colorScheme.primary, NV.red);
     expect(t.colorScheme.surfaceTint, Colors.transparent);
     final card = t.cardTheme.shape as RoundedRectangleBorder;
-    expect(card.borderRadius, BorderRadius.circular(16));
+    // radii follow "Kelengkungan sudut" (default 24: card 24, dialog 28)
+    expect(card.borderRadius, BorderRadius.circular(NV.rCard));
+    expect(NV.rCard, NV.corner);
     final dlg = t.dialogTheme.shape as RoundedRectangleBorder;
-    expect(dlg.borderRadius, BorderRadius.circular(20));
+    expect(dlg.borderRadius, BorderRadius.circular(NV.rDialog));
     expect(t.cardTheme.elevation, 0);
     expect(t.floatingActionButtonTheme.elevation, 0);
   });

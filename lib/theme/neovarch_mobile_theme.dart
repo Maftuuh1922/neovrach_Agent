@@ -63,7 +63,9 @@ class NvPalette {
     final a = accent.withAlpha(255);
     if (b == Brightness.dark && a.toARGB32() == defaultAccent.toARGB32()) return red;
     Color t(int base, double f) => Color.lerp(Color(base), a, f)!;
-    final on = onAccent ?? (_contrast(a, const Color(0xFFFFFFFF)) >= 4.0 ? const Color(0xFFFFFFFF) : const Color(0xFF000000));
+    // White when it reaches AA (4.5:1), else whichever of white/black reads better.
+    final cw = _contrast(a, const Color(0xFFFFFFFF)), cb = _contrast(a, const Color(0xFF000000));
+    final on = onAccent ?? (cw >= 4.5 || cw >= cb ? const Color(0xFFFFFFFF) : const Color(0xFF000000));
     if (b == Brightness.dark) {
       // Same tint strength as the original red set (bg/surface/border/wash
       // visibly carry the hue), so a new accent recolours the whole UI.
@@ -146,10 +148,22 @@ abstract final class NV {
   /// Live glass blur strength ("Kekuatan kaca"); [NvGlass] listens to it.
   static final glassSigma = ValueNotifier<double>(glassBlur);
 
-  static const rCard = 16.0;
-  static const rCtl = 12.0;
-  static const rDialog = 20.0;
-  static const rMsg = 14.0;
+  /// User "Kelengkungan sudut" (outer card radius, 0–32 dp), set by
+  /// `CornerRadiusController` (lib/remote/ui/appearance/corner_radius.dart).
+  /// Every radius below derives from it (concentric: inner = outer − padding).
+  static double corner = defaultCorner;
+  static const defaultCorner = 24.0;
+  static double get rCard => corner;
+  static double get rCtl => ctlFor(corner);
+  static double get rDialog => math.min(corner + 4, 36);
+  static double get rMsg => corner * 0.75;
+  /// Controls (buttons, inputs, tiles): half the card radius, at least
+  /// card − 12 (the usual card padding) so nested shapes stay concentric.
+  static double ctlFor(double c) => c <= 0 ? 0 : math.max(c * 0.5, c - 12);
+  /// Concentric inner radius for a shape inset by [padding] inside [outer].
+  static double inner(double outer, double padding) => math.max(0, outer - padding);
+  /// Floating bars of height [h]: a capsule from ~24 dp up, squarer below.
+  static double navFor(double h) => math.min(h / 2, corner * 1.4);
 
   // iOS-like type: Inter (OFL, closest open SF Pro look-alike) for UI text,
   // Inter Display for large titles. Mono only for code, tokens, addresses.
