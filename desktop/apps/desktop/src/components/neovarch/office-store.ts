@@ -4,12 +4,28 @@ import { pluginRest } from '@/api/plugins'
 import { onGatewayEvent } from '@/contrib/events'
 import { $gateway } from '@/store/gateway'
 
+/** Extra facts on a desk that belongs to a Perusahaan (company) agent. */
+export interface OfficeCompanyDesk {
+  agent_id: number
+  agent_status: string
+  budget_pct: null | number
+  pause_reason: null | string
+  paused: boolean
+  reports_to: null | number
+  ticket_key: null | string
+  ticket_status: null | string
+  ticket_title: null | string
+  title: string
+}
+
 /** One agent at its desk, as the core's `office.snapshot` / `office.update` describe it. */
 export interface OfficeAgent {
+  /** Set when the desk is a Perusahaan agent (kind 'company'). */
+  company?: OfficeCompanyDesk
   current_task: null | string
   current_tool: null | string
   id: string
-  kind: 'kanban' | 'session'
+  kind: 'company' | 'kanban' | 'session'
   last_activity: number
   last_activity_text: null | string
   message_count: number
@@ -115,11 +131,25 @@ export function setOfficeView(view: OfficeView): void {
 /** "Kasih tugas": a Kanban card assigned to this agent, through the Kanban
  *  plugin's own REST door (`POST /api/plugins/kanban/tasks`). The core then
  *  pushes `office.update`, so the desk picks the task up live. */
-export async function assignOfficeTask(agent: Pick<OfficeAgent, 'name'>, title: string): Promise<unknown> {
+export async function assignOfficeTask(
+  agent: Pick<OfficeAgent, 'name'> & Partial<Pick<OfficeAgent, 'company'>>,
+  title: string
+): Promise<unknown> {
   const trimmed = title.trim()
 
   if (!trimmed) {
     throw new Error('Judul tugas kosong')
+  }
+
+  // A Perusahaan agent gets a real ticket (it wakes them when "Jalan otomatis" is on).
+  if (agent.company) {
+    const gateway = $gateway.get()
+
+    if (!gateway) {
+      throw new Error('Belum terhubung ke core')
+    }
+
+    return gateway.request('company.ticket.save', { assignee_id: agent.company.agent_id, title: trimmed })
   }
 
   return pluginRest('kanban', '/tasks', {
@@ -192,6 +222,7 @@ async function refresh(): Promise<void> {
 // reconnect), then each `office.update` push replaces it.
 onMount($office, () => {
   void refresh()
+
   const offUpdate = onGatewayEvent('office.update', event => {
     const payload = event.payload as OfficeSnapshot | undefined
 
@@ -199,6 +230,7 @@ onMount($office, () => {
       $office.set(normalizeOfficeSnapshot(payload))
     }
   })
+
   const offReady = onGatewayEvent('gateway.ready', () => void refresh())
   const offGateway = $gateway.listen(() => void refresh())
 

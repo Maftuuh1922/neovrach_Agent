@@ -306,6 +306,19 @@ const ERROR_TASK_STATUSES = new Set(['blocked', 'error', 'failed'])
 export function sceneStatusOf(agent: OfficeAgent, feed: OfficeFeedItem[] = []): SceneStatus {
   const raw = agent.status as string
 
+  // A Perusahaan desk follows its real ticket: blocked work shows red, review waits.
+  if (agent.company && raw !== 'working') {
+    if (agent.company.agent_status === 'error' || agent.company.ticket_status === 'blocked') {
+      return 'error'
+    }
+
+    if (agent.company.ticket_status === 'review' || raw === 'waiting-approval') {
+      return 'waiting'
+    }
+
+    return 'idle'
+  }
+
   if (raw === 'error') {
     return 'error'
   }
@@ -343,6 +356,39 @@ function latestFeedFor(sessionId: string, feed: OfficeFeedItem[]): OfficeFeedIte
   return best
 }
 
+/** Ticket statuses as the desk label shows them (Perusahaan desks). */
+export const TICKET_STATUS_TEXT: Record<string, string> = {
+  backlog: 'Backlog',
+  blocked: 'Terhambat',
+  cancelled: 'Dibatalkan',
+  done: 'Selesai',
+  in_progress: 'Dikerjakan',
+  review: 'Ditinjau',
+  todo: 'Akan dikerjakan'
+}
+
+function companyStatusText(agent: OfficeAgent): null | string {
+  const c = agent.company
+
+  if (!c) {
+    return null
+  }
+
+  if (c.paused) {
+    return c.pause_reason === 'budget' ? 'Dijeda · anggaran habis' : 'Dijeda'
+  }
+
+  if (c.ticket_status === 'blocked') {
+    return 'Terhambat'
+  }
+
+  if (c.ticket_status === 'review') {
+    return 'Menunggu tinjauan'
+  }
+
+  return null
+}
+
 /** Snapshot → what the scene draws. Order follows the snapshot (stable desks). */
 export function sceneAgentsFromSnapshot(snapshot: null | OfficeSnapshot): SceneAgent[] {
   if (!snapshot) {
@@ -353,14 +399,19 @@ export function sceneAgentsFromSnapshot(snapshot: null | OfficeSnapshot): SceneA
 
   return snapshot.agents.map((agent, i) => {
     const status = sceneStatusOf(agent, snapshot.feed)
-    const statusText = OFFICE3D_STATUS[status].text
+    const statusText = companyStatusText(agent) ?? OFFICE3D_STATUS[status].text
+
+    const company = agent.company?.ticket_key
+      ? `${agent.company.ticket_key} · ${TICKET_STATUS_TEXT[agent.company.ticket_status ?? ''] ?? agent.company.ticket_status}`
+      : null
 
     const detail =
-      status === 'waiting'
+      company ??
+      (status === 'waiting'
         ? agent.pending_approval?.command || agent.current_task
         : status === 'error'
           ? agent.last_activity_text || agent.current_task
-          : agent.current_tool || agent.current_task
+          : agent.current_tool || agent.current_task)
 
     return {
       coat: coatFor(agent.id),

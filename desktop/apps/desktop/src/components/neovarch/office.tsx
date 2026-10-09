@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { $activeSessionId, $busy } from '@/store/session'
 
 import { OfficeAgentAvatar } from './agent-identity'
+import { COMPANY_TABS, CompanyPanel, type CompanyTab } from './company'
 import { Office3D } from './office-3d'
 import { MiniOffice3D } from './office-mini-3d'
 import { OfficeModelSelect } from './office-model-select'
@@ -131,6 +132,40 @@ export function ViewToggle({ onChange, value }: { onChange: (view: OfficeView) =
   )
 }
 
+type OfficeTab = 'room' | CompanyTab
+const OFFICE_TAB_KEY = 'neovarch.desktop.office-tab.v1'
+const OFFICE_TABS: { label: string; value: OfficeTab }[] = [{ label: 'Ruang', value: 'room' }, ...COMPANY_TABS]
+
+function readOfficeTab(): OfficeTab {
+  try {
+    const saved = window.localStorage.getItem(OFFICE_TAB_KEY)
+
+    return OFFICE_TABS.some(t => t.value === saved) ? (saved as OfficeTab) : 'room'
+  } catch {
+    return 'room'
+  }
+}
+
+/** Kantor sections: the room itself, then the Perusahaan views (org chart, tickets, approvals, costs, activity). */
+export function OfficeTabs({ onChange, value }: { onChange: (tab: OfficeTab) => void; value: OfficeTab }) {
+  return (
+    <nav aria-label="Bagian kantor" className="nv-office-tabs" data-slot="nv-office-tabs" role="tablist">
+      {OFFICE_TABS.map(tab => (
+        <button
+          aria-selected={value === tab.value}
+          data-tab={tab.value}
+          key={tab.value}
+          onClick={() => onChange(tab.value)}
+          role="tab"
+          type="button"
+        >
+          {tab.label}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 /** The Office page: every agent the core runs, at its desk, plus a live feed. */
 export function NeovarchOfficePage() {
   const office = useStore($office)
@@ -138,6 +173,17 @@ export function NeovarchOfficePage() {
   const now = useNow()
   const navigate = useNavigate()
   const view = useStore($officeView)
+  const [tab, setTabState] = useState<OfficeTab>(readOfficeTab)
+
+  const setTab = (next: OfficeTab) => {
+    setTabState(next)
+
+    try {
+      window.localStorage.setItem(OFFICE_TAB_KEY, next)
+    } catch {
+      // storage unavailable: the choice holds for this run
+    }
+  }
 
   const list = (
     <section aria-label="Meja agen" className="nv-office-grid">
@@ -173,7 +219,7 @@ export function NeovarchOfficePage() {
           </p>
         </div>
         <div className="nv-office-header-tools">
-          <ViewToggle onChange={setOfficeView} value={view} />
+          {tab === 'room' && <ViewToggle onChange={setOfficeView} value={view} />}
           <div className="nv-office-counters">
             <span>
               <StatusDot status="working" /> {officeWorkingCount(office)} bekerja
@@ -188,58 +234,64 @@ export function NeovarchOfficePage() {
         </div>
       </header>
 
-      <div className="nv-office-body">
-        {view === '3d' ? (
-          <Office3D fallback={list} office={office} onOpenSession={id => navigate(sessionRoute(id))} />
-        ) : (
-          list
-        )}
+      <OfficeTabs onChange={setTab} value={tab} />
 
-        <aside className="nv-office-side">
-          <section className="nv-office-card" data-slot="nv-office-vault">
-            <h2 className="nv-office-card-title">
-              <Brain className="size-3.5" /> Memori Obsidian
-            </h2>
-            {office?.vault.connected ? (
-              <>
-                <p className="nv-office-vault-state" data-state="connected">
-                  <StatusDot status="working" /> Terhubung · {office.vault.note_count} catatan
-                </p>
-                <p className="nv-office-mono nv-office-path" title={office.vault.path}>
-                  {office.vault.path}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="nv-office-vault-state" data-state="off">
-                  <StatusDot status="idle" />{' '}
-                  {office?.vault.configured ? `Folder tidak ditemukan: ${office.vault.path}` : 'Belum dihubungkan'}
-                </p>
-                <button
-                  className="nv-office-open"
-                  onClick={() => navigate('/settings?tab=config%3Amemory')}
-                  type="button"
-                >
-                  Pilih vault
-                </button>
-              </>
-            )}
-          </section>
+      {tab !== 'room' ? (
+        <CompanyPanel tab={tab} />
+      ) : (
+        <div className="nv-office-body">
+          {view === '3d' ? (
+            <Office3D fallback={list} office={office} onOpenSession={id => navigate(sessionRoute(id))} />
+          ) : (
+            list
+          )}
 
-          <section className="nv-office-card nv-office-feed-card">
-            <h2 className="nv-office-card-title">Aktivitas</h2>
-            {office && office.feed.length === 0 ? (
-              <p className="nv-office-empty-line">Belum ada aktivitas.</p>
-            ) : (
-              <ol className="nv-office-feed" data-slot="nv-office-feed">
-                {office?.feed.map(item => (
-                  <FeedRow item={item} key={item.id} now={now} />
-                ))}
-              </ol>
-            )}
-          </section>
-        </aside>
-      </div>
+          <aside className="nv-office-side">
+            <section className="nv-office-card" data-slot="nv-office-vault">
+              <h2 className="nv-office-card-title">
+                <Brain className="size-3.5" /> Memori Obsidian
+              </h2>
+              {office?.vault.connected ? (
+                <>
+                  <p className="nv-office-vault-state" data-state="connected">
+                    <StatusDot status="working" /> Terhubung · {office.vault.note_count} catatan
+                  </p>
+                  <p className="nv-office-mono nv-office-path" title={office.vault.path}>
+                    {office.vault.path}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="nv-office-vault-state" data-state="off">
+                    <StatusDot status="idle" />{' '}
+                    {office?.vault.configured ? `Folder tidak ditemukan: ${office.vault.path}` : 'Belum dihubungkan'}
+                  </p>
+                  <button
+                    className="nv-office-open"
+                    onClick={() => navigate('/settings?tab=config%3Amemory')}
+                    type="button"
+                  >
+                    Pilih vault
+                  </button>
+                </>
+              )}
+            </section>
+
+            <section className="nv-office-card nv-office-feed-card">
+              <h2 className="nv-office-card-title">Aktivitas</h2>
+              {office && office.feed.length === 0 ? (
+                <p className="nv-office-empty-line">Belum ada aktivitas.</p>
+              ) : (
+                <ol className="nv-office-feed" data-slot="nv-office-feed">
+                  {office?.feed.map(item => (
+                    <FeedRow item={item} key={item.id} now={now} />
+                  ))}
+                </ol>
+              )}
+            </section>
+          </aside>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,391 @@
+/* Kantor · Perusahaan views. Flat, rounded, no gradients (house rules). */
+.nv-office-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 3px;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel, 14px);
+  background: var(--nv-ink-2);
+  align-self: flex-start;
+}
+.nv-office-tabs button {
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--nv-r-control, 10px);
+  font-size: 0.8rem;
+  color: var(--nv-text-2);
+}
+.nv-office-tabs button[aria-selected='true'] {
+  background: var(--nv-red);
+  color: var(--nv-on-accent, #fff);
+}
+.nv-co {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+}
+.nv-co-setup,
+.nv-co-card,
+.nv-co-bar,
+.nv-co-detail,
+.nv-co-node {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel, 14px);
+  background: var(--nv-ink-2);
+  padding: 0.9rem;
+}
+.nv-co-setup {
+  max-width: 40rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.nv-co-setup h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.nv-co-setup p,
+.nv-co-desc,
+.nv-co-muted {
+  color: var(--nv-text-2);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.nv-co-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.nv-co-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--nv-text-2);
+}
+.nv-co input,
+.nv-co select,
+.nv-co textarea,
+.nv-co-setup input,
+.nv-co-setup textarea {
+  min-width: 0;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control, 10px);
+  background: var(--nv-ink);
+  color: var(--nv-text);
+  font-size: 0.82rem;
+}
+.nv-co-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.nv-co-btn {
+  padding: 0.36rem 0.8rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control, 10px);
+  background: var(--nv-ink-3);
+  color: var(--nv-text);
+  font-size: 0.78rem;
+}
+.nv-co-btn[data-variant='primary'] {
+  background: var(--nv-red);
+  border-color: var(--nv-red);
+  color: var(--nv-on-accent, #fff);
+}
+.nv-co-btn:disabled {
+  opacity: 0.5;
+}
+.nv-co-error {
+  color: var(--nv-red-text);
+  font-size: 0.8rem;
+}
+.nv-co-empty {
+  color: var(--nv-text-3);
+  font-size: 0.85rem;
+  list-style: none;
+}
+.nv-co-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.nv-co-name {
+  font-weight: 600;
+}
+.nv-co-mission {
+  color: var(--nv-text-2);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 48rem;
+}
+.nv-co-bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.nv-co-chip,
+.nv-co-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--nv-line);
+  font-size: 0.72rem;
+  color: var(--nv-text-2);
+  white-space: nowrap;
+}
+.nv-co-pill[data-status='running'],
+.nv-co-pill[data-ticket='in_progress'] {
+  border-color: #6fcf8a;
+  color: #6fcf8a;
+}
+.nv-co-pill[data-status='paused'],
+.nv-co-pill[data-status='pending_approval'],
+.nv-co-pill[data-ticket='review'] {
+  border-color: #f2b544;
+  color: #f2b544;
+}
+.nv-co-pill[data-status='error'],
+.nv-co-pill[data-ticket='blocked'] {
+  border-color: var(--nv-red);
+  color: var(--nv-red-text);
+}
+.nv-co-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--nv-text-2);
+}
+.nv-co-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: 1rem;
+  align-items: start;
+}
+.nv-co-org,
+.nv-co-list,
+.nv-co-thread,
+.nv-co-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nv-co-node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-left-width: 3px;
+}
+.nv-co-node[data-status='running'] {
+  border-left-color: #6fcf8a;
+}
+.nv-co-node[data-status='paused'] {
+  border-left-color: #f2b544;
+}
+.nv-co-node-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nv-co-node-name {
+  font-weight: 600;
+}
+.nv-co-node-title,
+.nv-co-node-task {
+  color: var(--nv-text-2);
+  font-size: 0.78rem;
+}
+.nv-co-meter-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+}
+.nv-co-meter {
+  display: block;
+  width: 100%;
+  min-width: 5rem;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--nv-ink-3);
+  overflow: hidden;
+}
+.nv-co-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #6fcf8a;
+}
+.nv-co-meter[data-level='warning'] i {
+  background: #f2b544;
+}
+.nv-co-meter[data-level='exceeded'] i {
+  background: var(--nv-red);
+}
+.nv-co-tickets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+.nv-co-newticket input {
+  flex: 1 1 16rem;
+}
+.nv-co-board-wrap {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  min-height: 0;
+}
+.nv-co-board {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(11rem, 1fr));
+  gap: 0.6rem;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+.nv-co-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel, 14px);
+  background: var(--nv-ink-2);
+  min-height: 8rem;
+}
+.nv-co-col h3 {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--nv-text-2);
+}
+.nv-co-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control, 10px);
+  background: var(--nv-ink);
+  text-align: left;
+}
+.nv-co-ticket:hover {
+  border-color: var(--nv-red);
+}
+.nv-co-key,
+.nv-co-mono {
+  font-family: var(--nv-font-mono);
+  font-size: 0.7rem;
+  color: var(--nv-red-text);
+}
+.nv-co-ticket-title {
+  font-size: 0.82rem;
+  color: var(--nv-text);
+}
+.nv-co-ticket-meta {
+  font-size: 0.7rem;
+  color: var(--nv-text-3);
+}
+.nv-co-detail {
+  flex: 0 0 24rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: calc(100vh - 14rem);
+  overflow-y: auto;
+}
+.nv-co-detail h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.nv-co-detail-head .nv-co-close {
+  margin-left: auto;
+}
+.nv-co-ancestry {
+  font-size: 0.74rem;
+  color: var(--nv-text-3);
+}
+.nv-co-thread li,
+.nv-co-activity li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--nv-r-control, 10px);
+  background: var(--nv-ink);
+}
+.nv-co-thread li p {
+  grid-column: 1 / -1;
+  white-space: pre-wrap;
+  color: var(--nv-text-2);
+}
+.nv-co-thread li[data-author='user'] {
+  border-left: 3px solid var(--nv-red);
+}
+.nv-co-thread time,
+.nv-co-activity time,
+.nv-co-card time {
+  color: var(--nv-text-3);
+  font-size: 0.7rem;
+}
+.nv-co-who {
+  font-weight: 600;
+}
+.nv-co-costs,
+.nv-co-approvals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.nv-co-big {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.nv-co-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.nv-co-table th,
+.nv-co-table td {
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--nv-line);
+}
+.nv-co-table th {
+  color: var(--nv-text-3);
+  font-weight: 500;
+}
+.nv-co-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.5rem;
+}
+@media (max-width: 960px) {
+  .nv-co-split {
+    grid-template-columns: 1fr;
+  }
+  .nv-co-board-wrap {
+    flex-direction: column;
+  }
+  .nv-co-detail {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
