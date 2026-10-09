@@ -3231,3 +3231,17 @@
     transition: none;
   }
 }
+
+/* Kartu Neovarch dialog (Kantor → Bagikan kartu) */
+.nv-kartu-dialog { max-width: min(880px, 94vw); }
+.nv-kartu-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.nv-kartu-preview { display: flex; justify-content: center; align-items: center; min-height: 320px; border-radius: 16px; background: var(--nv-surface, rgba(127, 127, 127, 0.08)); padding: 12px; }
+.nv-kartu-preview img { max-height: 62vh; max-width: 100%; border-radius: 14px; box-shadow: none; }
+.nv-kartu-preview[data-format='feed'] img { max-height: 46vh; }
+.nv-kartu-controls { display: flex; flex-direction: column; gap: 12px; }
+.nv-kartu-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; opacity: 0.9; }
+.nv-kartu-field input { border-radius: 10px; border: 1px solid var(--nv-border, rgba(127, 127, 127, 0.3)); background: transparent; padding: 7px 10px; font-size: 13px; color: inherit; }
+.nv-kartu-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.nv-kartu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nv-kartu-note { font-size: 12px; opacity: 0.75; margin: 0; }
+@media (max-width: 720px) { .nv-kartu-body { grid-template-columns: 1fr; } }
