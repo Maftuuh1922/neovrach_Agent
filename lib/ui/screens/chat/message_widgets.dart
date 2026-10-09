@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/models.dart';
+import '../../../remote/ui/glass/liquid_glass.dart' show GlassForeground;
 import '../../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/markdown_view.dart';
@@ -438,13 +439,15 @@ class FailureCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final (layer, provider) = _layer;
     final c = context.hc.destructive;
+    // On liquid glass (phone remote): neutral inset, only the icon is red.
+    final glass = GlassForeground.maybeOf(context)?.tone;
     return Container(
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 4),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.06),
-        border: Border.all(color: c.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
+        color: glass != null ? glass.text.withValues(alpha: 0.06) : c.withValues(alpha: 0.06),
+        border: Border.all(color: glass != null ? glass.text.withValues(alpha: 0.14) : c.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(glass != null ? 14 : 8),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [

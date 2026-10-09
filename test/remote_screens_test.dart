@@ -213,8 +213,9 @@ void main() {
     await settings.load();
   });
 
-  Future<void> run(WidgetTester tester, String name, Widget Function() home, {RemoteController? remote, Future<void> Function()? act}) async {
-    tester.view.physicalSize = const Size(1170, 2532);
+  Future<void> run(WidgetTester tester, String name, Widget Function() home,
+      {RemoteController? remote, Future<void> Function()? act, double width = 390, bool settleAfterAct = true}) async {
+    tester.view.physicalSize = Size(width * 3, 2532);
     tester.view.devicePixelRatio = 3;
     tester.view.padding = const FakeViewPadding(top: 141, bottom: 102);
     tester.view.viewPadding = const FakeViewPadding(top: 141, bottom: 102);
@@ -227,7 +228,7 @@ void main() {
     debugPrint('[$name] settled');
     if (act != null) {
       await act();
-      await _settle(tester);
+      if (settleAfterAct) await _settle(tester);
     }
     await _shot(tester, name);
     debugPrint('[$name] shot');
@@ -459,6 +460,99 @@ void main() {
     app.previewTab = 3;
     await run(tester, '27_pc_icons_font', () => const RemoteShell());
   });
+
+  // v1.4.2 (second batch): 4-tab nav, wider lens, merged tabs, Profil,
+  // glass greeting, glass intro, Gaya kaca.
+  Future<void> glassStyle(String name) async => prefs.setString('nv.glass.style', name);
+  RemoteController emptyChat() => _controller(prefs)
+    ..transcript = RemoteTranscript()
+    ..title = ''
+    ..storedId = null
+    ..debugApprovals = [];
+
+  for (final (tab, name) in [(1, 'kantor'), (2, 'profil')]) {
+    for (final w in [390.0, 360.0]) {
+      testWidgets('28 nav at rest · $name · ${w.toInt()} dp', (tester) async {
+        await background('assets/art/feat-remote.webp', dim: 0.4, blur: 4);
+        app.previewTab = tab;
+        await run(tester, '28_nav_rest_${name}_${w.toInt()}', () => const RemoteShell(), width: w);
+      });
+    }
+  }
+
+  testWidgets('32 greeting · dark + background', (tester) async {
+    await background('assets/art/feat-remote.webp', dim: 0.35, blur: 6);
+    app.previewTab = 0;
+    await run(tester, '32_greeting_dark_bg', () => const RemoteShell(), remote: emptyChat());
+  });
+
+  testWidgets('33 greeting · light', (tester) async {
+    await accent('#2563EB', 'light');
+    await background('assets/art/portal-banner.webp', dim: 0.3, blur: 6);
+    app.previewTab = 0;
+    await run(tester, '33_greeting_light', () => const RemoteShell(), remote: emptyChat());
+    NV.palette = NvPalette.red;
+  });
+
+  testWidgets('34 greeting · Polos', (tester) async {
+    app.previewTab = 0;
+    await run(tester, '34_greeting_polos', () => const RemoteShell(), remote: emptyChat());
+  });
+
+  testWidgets('35 Kantor tab · Kantor segment', (tester) async {
+    app.previewTab = 1;
+    await run(tester, '35_kantor_segment', () => const RemoteShell());
+  });
+
+  testWidgets('36 Kantor tab · Tugas segment', (tester) async {
+    app.previewTab = 1;
+    previewKantorSegment = kantorSegTasks;
+    addTearDown(() => previewKantorSegment = kantorSegOffice);
+    await run(tester, '36_tugas_segment', () => const RemoteShell());
+  });
+
+  testWidgets('37 Profil tab', (tester) async {
+    await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
+    app.previewTab = 2;
+    await run(tester, '37_profil', () => const RemoteShell());
+  });
+
+  testWidgets('38 Profil · icon picker + Gaya kaca', (tester) async {
+    await background('assets/art/feat-remote.webp', dim: 0.45, blur: 8);
+    app.previewTab = 2;
+    await run(tester, '38_profil_icon_glass', () => const RemoteShell(), act: () async {
+      await tester.drag(find.byKey(const ValueKey('profile-list')), const Offset(0, -1500));
+    });
+  });
+
+  for (final (i, n) in [(0, 1), (1, 2), (2, 3), (3, 4)]) {
+    testWidgets('39 intro page $n (glass)', (tester) async {
+      await run(tester, '39_intro_page_$n', () => RemoteIntroScreen(initialPage: i), remote: _controller(prefs, demo: false));
+    });
+  }
+
+  testWidgets('40 intro mid-transition (drag)', (tester) async {
+    TestGesture? g;
+    await run(tester, '40_intro_mid_transition', () => const RemoteIntroScreen(), remote: _controller(prefs, demo: false), settleAfterAct: false,
+        act: () async {
+      g = await tester.startGesture(const Offset(330, 420));
+      for (var i = 0; i < 10; i++) {
+        await g!.moveBy(const Offset(-16, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    });
+    await g?.up();
+  });
+
+  for (final st in ['reguler', 'bening', 'gelap', 'warna', 'tanpa']) {
+    testWidgets('41 chat · Gaya kaca $st', (tester) async {
+      await background('assets/art/feat-remote.webp', dim: 0.3, blur: 4);
+      await glassStyle(st);
+      app.previewTab = 0;
+      await run(tester, '41_chat_glass_$st', () => const RemoteShell());
+      NV.glassStyle = NvGlassStyle.reguler;
+    });
+  }
 
 }
 

@@ -23,6 +23,7 @@ import 'nv_widgets.dart';
 import 'remote_background.dart' show NvAppBackground;
 import '../appearance.dart' show appearanceProvider;
 import '../profile_avatar.dart';
+import 'glass/glass_style.dart' show GlassStyle, glassStyleProvider;
 
 class RemoteShell extends ConsumerStatefulWidget {
   const RemoteShell({super.key});
@@ -148,6 +149,13 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     // transparent so the glass nav/composer refract the image.
     final look = ref.watch(appearanceProvider);
     final bgOn = look.background.active;
+    // "Gaya kaca" (persisted in AppearanceController) → the chat-glass scope.
+    final gs = GlassStyle.parse(look.glassStyle.name);
+    if (ref.read(glassStyleProvider) != gs) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(glassStyleProvider.notifier).state = gs;
+      });
+    }
     // Always wrapped (same tree shape) so toggling keeps every tab's state.
     final theme = Theme.of(context);
     final themed = Theme(data: bgOn ? theme.copyWith(scaffoldBackgroundColor: Colors.transparent) : theme, child: pages);

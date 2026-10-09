@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/neovarch_mobile_theme.dart';
 import '../appearance.dart';
+import 'glass/glass_style.dart' show GlassStyle, glassStyleProvider;
 import 'nv_widgets.dart';
 import 'remote_background.dart' show backgroundImage;
 
@@ -33,7 +34,8 @@ class GlassStylePicker extends ConsumerWidget {
           key: ValueKey('glass-style-${st.name}'),
           onTap: () {
             HapticFeedback.selectionClick();
-            look.setGlassStyle(st);
+            look.setGlassStyle(st); // persisted
+            ref.read(glassStyleProvider.notifier).state = GlassStyle.parse(st.name);
           },
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(
