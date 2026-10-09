@@ -71,7 +71,7 @@ export const deOverrides = {
       kindCatalog: 'MCP · Katalog',
       kindCustom: 'MCP · Benutzerdefiniert',
       kindPlugin: (plugin: string) => `MCP · Plugin ${plugin}`,
-      inCatalog: 'Im Hermes-Katalog',
+      inCatalog: 'Im Neovarch-Katalog',
       hostedTwin: 'Verwaltete Version verfügbar',
       alsoLocal: 'Läuft auch auf diesem Gerät',
       open: (name: string) => `${name} öffnen`,
@@ -423,10 +423,10 @@ export const deOverrides = {
     copyDetailFailed: 'Notification-Detail konnte nicht kopiert werden',
     backendOutOfDateTitle: 'Backend veraltet',
     backendOutOfDateMessage:
-      'Ihr Hermes-Backend ist älter als dieser Desktop-Build und funktioniert möglicherweise nicht richtig. Aktualisieren Sie, um beide abzugleichen.',
-    desktopOutOfDateTitle: 'Hermes-App veraltet',
+      'Ihr Neovarch-Backend ist älter als dieser Desktop-Build und funktioniert möglicherweise nicht richtig. Aktualisieren Sie, um beide abzugleichen.',
+    desktopOutOfDateTitle: 'Neovarch-App veraltet',
     desktopOutOfDateMessage:
-      'Diese Hermes-App ist älter als das verbundene Backend und funktioniert möglicherweise nicht richtig. Aktualisieren Sie die App, um beide abzugleichen.',
+      'Diese Neovarch-App ist älter als das verbundene Backend und funktioniert möglicherweise nicht richtig. Aktualisieren Sie die App, um beide abzugleichen.',
     updateDesktopApp: 'App aktualisieren',
     installMethodUnsupportedTitle: 'Nicht unterstützte Installationsmethode',
     updateHermes: 'Neovarch aktualisieren',
@@ -758,7 +758,7 @@ export const deOverrides = {
     exportConfig: 'Konfiguration exportieren',
     importConfig: 'Konfiguration importieren',
     resetToDefaults: 'Auf Standard zurücksetzen',
-    resetConfirm: 'Alle Einstellungen auf Hermes-Standard zurücksetzen?',
+    resetConfirm: 'Alle Einstellungen auf Neovarch-Standard zurücksetzen?',
     exportFailed: 'Export fehlgeschlagen',
     resetFailed: 'Zurücksetzen fehlgeschlagen',
     pluginPages: {
@@ -813,7 +813,7 @@ export const deOverrides = {
         agentTargetLocal: (profile, dir) => `Wird in das Backend ${profile} installiert (${dir})`,
         agentTargetRemote: profile => `Installiert in das verbundene ${profile}-Backend`,
         catalogPinned: (name, sha) =>
-          `Hermes-Katalog-Eintrag „${name}" — die Agent-Komponente wird am geprüften Pin installiert${sha ? ` ${sha}` : ''}, nicht an der Spitze des Branches.`,
+          `Neovarch-Katalog-Eintrag „${name}" — die Agent-Komponente wird am geprüften Pin installiert${sha ? ` ${sha}` : ''}, nicht an der Spitze des Branches.`,
         reviewedHeading: 'Geprüfter Katalog-Eintrag',
         reviewedIntro:
           'Dieser Eintrag wurde an seinem gepinnten Commit von einem Menschen geprüft. Sie können den genauen Code trotzdem unten ansehen.',
@@ -1487,22 +1487,22 @@ export const deOverrides = {
         gui: {
           title: 'Nur die Chat-Oberfläche deinstallieren',
           description:
-            'Entfernt diese Desktop-App. Der Hermes-Agent, Ihre Konfiguration und Ihre Chats bleiben erhalten.',
+            'Entfernt diese Desktop-App. Der Neovarch-Agent, Ihre Konfiguration und Ihre Chats bleiben erhalten.',
           consequence: 'die Desktop-Chat-Oberfläche (diese App und ihre Daten)'
         },
         lite: {
           title: 'Oberfläche + Agent deinstallieren, Daten behalten',
           description:
-            'Entfernt die App und den Hermes-Agent, behält aber Konfiguration, Chats und Geheimnisse für eine spätere Neuinstallation.',
+            'Entfernt die App und den Neovarch-Agent, behält aber Konfiguration, Chats und Geheimnisse für eine spätere Neuinstallation.',
           consequence:
-            'die Chat-Oberfläche und den Hermes-Agent (Konfiguration, Chats und Geheimnisse bleiben erhalten)'
+            'die Chat-Oberfläche und den Neovarch-Agent (Konfiguration, Chats und Geheimnisse bleiben erhalten)'
         },
         full: {
           title: 'Alles deinstallieren',
           description:
             'Entfernt die App, den Agent und alle Benutzerdaten – Konfiguration, Chats, geplante Jobs, Geheimnisse, Logs.',
           consequence:
-            'ALLES – die Chat-Oberfläche, den Hermes-Agent sowie Ihre gesamte Konfiguration, Chats, Geheimnisse und Logs'
+            'ALLES – die Chat-Oberfläche, den Neovarch-Agent sowie Ihre gesamte Konfiguration, Chats, Geheimnisse und Logs'
         }
       }
     },
@@ -1575,7 +1575,7 @@ export const deOverrides = {
       searchPlaceholder: 'Suchen…',
       noResults: 'Keine Ergebnisse gefunden',
       systemDefault: 'Systemstandard',
-      loading: 'Hermes-Konfiguration wird geladen...',
+      loading: 'Neovarch-Konfiguration wird geladen...',
       emptyTitle: 'Nichts zu konfigurieren',
       emptyDesc: 'Dieser Bereich hat keine einstellbaren Optionen.',
       failedLoad: 'Einstellungen konnten nicht geladen werden',
@@ -1615,14 +1615,14 @@ export const deOverrides = {
       unavailable:
         'Das Hilfsprogramm für die HUD-Geste konnte nicht starten oder wurde unerwartet beendet. Versuchen Sie es erneut oder starten Sie Neovarch neu. Das bestehende HUD-Tastenkürzel funktioniert innerhalb von Neovarch weiterhin.',
       missingHelper:
-        'In dieser Hermes-Installation fehlt das Hilfsprogramm für die HUD-Geste. Aktualisieren oder installieren Sie Neovarch neu und versuchen Sie es erneut.',
+        'In dieser Neovarch-Installation fehlt das Hilfsprogramm für die HUD-Geste. Aktualisieren oder installieren Sie Neovarch neu und versuchen Sie es erneut.',
       unsupportedSession:
         'Diese Desktop-Session unterstützt keine globalen Modifikator-Taps. Linux erfordert X11; Wayland wird nicht unterstützt.'
     },
     screenshot: {
       enabledTitle: 'Screenshot-Kurzbefehl',
       enabledDesc:
-        'Drücken Sie in einer beliebigen App beide Befehlstasten gleichzeitig, um deren vorderstes Fenster aufzunehmen und an Ihren aktuellen Hermes-Entwurf anzuhängen. Es wird nie automatisch gesendet. Standardmäßig aus; gilt nur für diesen Mac. Fensterinhalte können vertraulich sein – prüfen Sie den Anhang vor dem Senden.',
+        'Drücken Sie in einer beliebigen App beide Befehlstasten gleichzeitig, um deren vorderstes Fenster aufzunehmen und an Ihren aktuellen Neovarch-Entwurf anzuhängen. Es wird nie automatisch gesendet. Standardmäßig aus; gilt nur für diesen Mac. Fensterinhalte können vertraulich sein – prüfen Sie den Anhang vor dem Senden.',
       statusTitle: 'Status des Screenshot-Kurzbefehls',
       checking: 'Screenshot-Kurzbefehl wird geprüft…',
       disabled: 'Der Screenshot-Kurzbefehl ist aus.',
@@ -1712,10 +1712,10 @@ export const deOverrides = {
       kindRemote: 'Remote-Gateway',
       kindCloud: 'Hermes Cloud',
       kindSsh: 'SSH',
-      kindLocalDesc: 'Die Hermes-Laufzeitumgebung, die von dieser App verwaltet wird.',
+      kindLocalDesc: 'Die Neovarch-Laufzeitumgebung, die von dieser App verwaltet wird.',
       kindRemoteDesc: 'Ein Neovarch Gateway, das über HTTP(S) erreichbar ist – LAN, Tailscale oder das Internet.',
       kindCloudDesc: 'Eine gehostete Instanz, die über Ihr Hermes-Cloud-Konto gefunden wurde.',
-      kindSshDesc: 'Eine Hermes-Installation, die über SSH erreicht wird.',
+      kindSshDesc: 'Eine Neovarch-Installation, die über SSH erreicht wird.',
       labelTitle: 'Name',
       labelDesc:
         'Pflichtfeld. Wird überall angezeigt, wo diese Instanz erscheint; muss eindeutig sein (z. B. „Homelab“, „Arbeitslaptop“).',
@@ -1767,15 +1767,15 @@ export const deOverrides = {
       title: 'Gateway-Verbindung',
       envOverride: 'ENV-Überschreibung',
       intro:
-        'Standardmäßig lokal. Verwenden Sie Remote, wenn diese App ein Hermes-Backend an einem anderen Ort steuern soll. Gateway-Verbindungen gelten pro Gerät; Profile werden von den Gateways ermittelt, mit denen Sie sich verbinden.',
+        'Standardmäßig lokal. Verwenden Sie Remote, wenn diese App ein Neovarch-Backend an einem anderen Ort steuern soll. Gateway-Verbindungen gelten pro Gerät; Profile werden von den Gateways ermittelt, mit denen Sie sich verbinden.',
       envOverrideTitle: 'Umgebungsvariablen steuern diese Desktop-Session.',
       envOverrideDesc:
         'Entfernen Sie HERMES_DESKTOP_REMOTE_URL und HERMES_DESKTOP_REMOTE_TOKEN, um die unten gespeicherte Einstellung zu verwenden.',
       modeTitle: 'Verbindungsmodus',
       localTitle: 'Lokales Gateway',
-      localDesc: 'Startet ein privates Hermes-Backend auf localhost. Das ist der Standard und funktioniert offline.',
+      localDesc: 'Startet ein privates Neovarch-Backend auf localhost. Das ist der Standard und funktioniert offline.',
       remoteTitle: 'Remote-Gateway',
-      remoteDesc: 'Verbindet diese Desktop-Shell mit einem entfernten Hermes-Backend.',
+      remoteDesc: 'Verbindet diese Desktop-Shell mit einem entfernten Neovarch-Backend.',
       remoteAuthHint:
         'Gehostete Gateways verwenden OAuth oder Benutzername und Passwort; selbst gehostete können ein Session-Token verwenden.',
       cloudTitle: 'Hermes Cloud',
@@ -1868,7 +1868,7 @@ export const deOverrides = {
       restartingMessage:
         'Neovarch Agent stellt mit den gespeicherten Einstellungen die Verbindung wieder her — die Shell bleibt offen.',
       savedMessage: 'Für den nächsten Neustart gespeichert.',
-      connectedTo: (baseUrl, version) => `Verbunden mit ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `Verbunden mit ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: 'Remote-Gateway erreichbar',
       signedOutTitle: 'Abgemeldet',
       signedOutMessage: 'Die Remote-Gateway-Session wurde geleert.',
@@ -1895,8 +1895,8 @@ export const deOverrides = {
       sshPortDesc: 'Leer = 22 oder der Port aus ~/.ssh/config.',
       sshKeyTitle: 'Identitätsdatei',
       sshKeyDesc: 'Pfad zum privaten Schlüssel. Leer = ssh-agent oder ~/.ssh/config.',
-      sshHermesPathTitle: 'Hermes-Pfad (optional)',
-      sshHermesPathDesc: 'Vollständiger Pfad zum Remote-Hermes-Binary. Leer = automatisch erkennen.',
+      sshHermesPathTitle: 'Neovarch-Pfad (optional)',
+      sshHermesPathDesc: 'Vollständiger Pfad zum Remote-Neovarch-Binary. Leer = automatisch erkennen.',
       sshHermesPathPlaceholder: 'automatisch erkennen',
       sshTestConnection: 'SSH testen',
       sshConnect: 'Verbinden',
@@ -1909,7 +1909,7 @@ export const deOverrides = {
       sshErrHostKey:
         'Der Host-Key hat sich seit Ihrer letzten Verbindung GEÄNDERT. Prüfen Sie, ob das erwartet ist, führen Sie dann ssh-keygen -R <host> aus und verbinden Sie sich erneut.',
       sshErrNotInstalled:
-        'Neovarch ist auf dem Remote-Host nicht installiert. Installieren Sie es dort (curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh) oder legen Sie den Hermes-Pfad fest.',
+        'Neovarch ist auf dem Remote-Host nicht installiert. Installieren Sie es dort (curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh) oder legen Sie den Neovarch-Pfad fest.',
       sshErrPlatform:
         'Nicht unterstützte Remote-Plattform. Der Desktop-SSH-Modus von Neovarch unterstützt Linux-, macOS- und Windows-Remote-Hosts.',
       sshErrTimeout: 'SSH-Verbindung ist ausgelaufen. Der Host ist möglicherweise nicht erreichbar oder schläft.',
@@ -2258,7 +2258,7 @@ export const deOverrides = {
         cliBillingDisabled: {
           title: 'Remote-Ausgaben sind deaktiviert',
           message:
-            'Remote-Ausgaben sind für dieses Konto deaktiviert – ein Abrechnungsadministrator kann sie auf der Hermes-Agent-Seite des Portals aktivieren.'
+            'Remote-Ausgaben sind für dieses Konto deaktiviert – ein Abrechnungsadministrator kann sie auf der Neovarch-Agent-Seite des Portals aktivieren.'
         },
         roleRequired: {
           title: 'Administratorrolle erforderlich',
@@ -2615,7 +2615,7 @@ export const deOverrides = {
       catalogHint:
         'Klicken Sie bei einem Plugin auf „+ Zu diesem Agenten hinzufügen“ – geprüfte Einträge werden an ihrem gepinnten Commit in das gewählte Profil installiert. Gebündelte Agent+Desktop-Plugins bieten beide Hälften an.',
       alreadyInstalled: name => `${name} ist in diesem Profil bereits installiert.`,
-      catalogProvenance: sha => `Aus dem Hermes-Katalog installiert${sha ? ` am Pin ${sha}` : ''}.`,
+      catalogProvenance: sha => `Aus dem Neovarch-Katalog installiert${sha ? ` am Pin ${sha}` : ''}.`,
       pinnedProvenance: sha =>
         `An Commit ${sha} gepinnt. Updates werden abgelehnt, bis es mit einem neuen Pin neu installiert wird.`,
       pinnedBadge: sha => `gepinnt @ ${sha}`,
@@ -2643,9 +2643,9 @@ export const deOverrides = {
       deepLinkErrorTitle: 'Plugin-Installationslink abgelehnt',
       deepLinkCatalogInvalidName: 'Der Katalogname im Link fehlt oder ist ungültig.',
       deepLinkCatalogUnknown: (name: string) =>
-        `\u201E${name}\u201C ist nicht im Hermes-Plugin-Katalog. Es wurde nichts installiert.`,
+        `\u201E${name}\u201C ist nicht im Neovarch-Plugin-Katalog. Es wurde nichts installiert.`,
       deepLinkCatalogUnavailable:
-        'Der Hermes-Plugin-Katalog konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und öffnen Sie den Link erneut.',
+        'Der Neovarch-Plugin-Katalog konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und öffnen Sie den Link erneut.',
       settingsToggle: (name: string) => `Einstellungen: ${name}`,
       settingsForm: {
         save: 'Einstellungen speichern',
@@ -3099,7 +3099,7 @@ export const deOverrides = {
     telegramQr: {
       title: 'Wählen Sie, wie Sie Ihren Telegram-Bot verbinden',
       subtitle:
-        'Beide Optionen verbinden einen Bot, den Sie kontrollieren, und speichern seine Zugangsdaten nur in dieser Hermes-Installation.',
+        'Beide Optionen verbinden einen Bot, den Sie kontrollieren, und speichern seine Zugangsdaten nur in dieser Neovarch-Installation.',
       quickSetup: 'Schnelleinrichtung',
       recommended: 'Empfohlen',
       quickHelp:
@@ -3371,7 +3371,7 @@ export const deOverrides = {
       badge: (host: string) => `Läuft auf ${host}`,
       title: (profile: string) => `${profile} mit einem Remote-Host verbinden`,
       description:
-        'Sessions in diesem Profil laufen auf dem von Ihnen festgelegten Remote-Hermes statt auf diesem Computer.',
+        'Sessions in diesem Profil laufen auf dem von Ihnen festgelegten Remote-Neovarch statt auf diesem Computer.',
       urlLabel: 'Remote-Adresse',
       urlPlaceholder: 'https://hermes.example.com',
       urlInvalid: 'Geben Sie eine vollständige Adresse ein, die mit http:// oder https:// beginnt',
@@ -3444,7 +3444,7 @@ export const deOverrides = {
     deleteDescMid: ' und entfernt sein ',
     deleteDescSuffix: ' Verzeichnis. Das kann nicht rückgängig gemacht werden.',
     deleting: 'Wird gelöscht...',
-    createDesc: 'Profile sind unabhängige Hermes-Umgebungen: eigene Config, eigene Skills und eigene SOUL.md.',
+    createDesc: 'Profile sind unabhängige Neovarch-Umgebungen: eigene Config, eigene Skills und eigene SOUL.md.',
     nameLabel: 'Name',
     cloneFrom: 'Klonen von',
     cloneFromNone: 'Keine (leer)',
@@ -3877,7 +3877,7 @@ export const deOverrides = {
     transcribingDictation: 'Transkribiert Diktat',
     voiceControls: 'Sprache',
     voiceEngine: 'Sprachchat-Engine',
-    voiceEngineChained: 'Sprache-zu-Text + Hermes-Stimme',
+    voiceEngineChained: 'Sprache-zu-Text + Neovarch-Stimme',
     voiceEngineLive: 'GPT-Live (Vollduplex, delegiert an Neovarch)',
     voiceEngineLiveNeedsKey: 'Benötigt einen OpenAI-API-Schlüssel',
     voiceEngineChangeFailed: 'Sprachchat-Engine konnte nicht geändert werden',
@@ -3942,7 +3942,7 @@ export const deOverrides = {
       '/context':
         'Detaillierte Ansicht des Kontextfensters mit Nutzungsanzeige, Aufschlüsselung nach Kategorie, Komprimierungsstatistik und Durchsatz anzeigen',
       '/whoami': 'Ihren Zugriff auf Slash-Befehle anzeigen (Admin / Benutzer)',
-      '/profile': 'Aktives Hermes-Profil wechseln',
+      '/profile': 'Aktives Neovarch-Profil wechseln',
       '/codex-runtime': 'Codex-App-Server-Runtime für OpenAI/Codex-Modelle umschalten',
       '/personality': 'Eine vordefinierte Persönlichkeit festlegen',
       '/battery': 'Farbcodierte Akkuanzeige in der Statusleiste umschalten',
@@ -3970,7 +3970,7 @@ export const deOverrides = {
       '/subscription': 'Ihren Nous-Tarif ansehen und im Browser ändern',
       '/topup': 'Ihr Nous-Guthaben anzeigen und die Abrechnung im Portal verwalten',
       '/platform': 'Eine fehlerhafte Gateway-Plattform pausieren, fortsetzen oder auflisten',
-      '/version': 'Hermes-Agent-Version anzeigen',
+      '/version': 'Neovarch-Agent-Version anzeigen',
       '/debug': 'Debug-Bericht (Systeminfos + Logs) hochladen und teilbare Links erhalten',
       '/model': 'Modell für diese Session wechseln'
     },
@@ -4256,16 +4256,16 @@ export const deOverrides = {
     }
   },
   updates: {
-    discontinuedTitle: 'Dieser Hermes-Build wird nicht mehr unterstützt',
+    discontinuedTitle: 'Dieser Neovarch-Build wird nicht mehr unterstützt',
     discontinuedBody:
-      'Dieser Hermes-Build wird nicht mehr unterstützt und funktioniert möglicherweise nicht mehr — deinstallieren Sie ihn. Ihre Daten bleiben auf dem Datenträger.',
+      'Dieser Neovarch-Build wird nicht mehr unterstützt und funktioniert möglicherweise nicht mehr — deinstallieren Sie ihn. Ihre Daten bleiben auf dem Datenträger.',
     channels: { stable: 'Stabil', canary: 'Canary' },
     appName: 'Neovarch',
     availableBodyRelease: tag => `Version ${tag} ist bereit zur Installation.`,
     releaseAvailable: tag => `Version ${tag} ist verfügbar.`,
     checkingShort: 'Wird geprüft…',
     availableBodyAppInstaller:
-      'Eine neue Hermes-Version ist bereit. Neovarch wird geschlossen, Windows schließt das Update ab und Neovarch startet automatisch neu.',
+      'Eine neue Neovarch-Version ist bereit. Neovarch wird geschlossen, Windows schließt das Update ab und Neovarch startet automatisch neu.',
     applyingBodyAppInstaller:
       'Neovarch wird geschlossen und Windows schließt das Update ab. Danach startet Neovarch automatisch neu.',
     applyingCloseAppInstaller:
@@ -4297,7 +4297,7 @@ export const deOverrides = {
     versionUnavailable: 'Version nicht verfügbar',
     bundleOutOfSync: 'App-Build ist veraltet',
     bundleOutOfSyncDesc:
-      'Die Hermes-Laufzeit wurde aktualisiert, die Desktop-App selbst ist aber noch ein älterer Build – neue Oberflächenfunktionen (wie der Bot-Modus) fehlen, bis sie aktualisiert wird. Führen Sie das Update unten aus, um die App neu zu bauen. Falls das die Warnung nicht behebt, installieren Sie den neuesten Desktop-Installer neu.',
+      'Die Neovarch-Laufzeit wurde aktualisiert, die Desktop-App selbst ist aber noch ein älterer Build – neue Oberflächenfunktionen (wie der Bot-Modus) fehlen, bis sie aktualisiert wird. Führen Sie das Update unten aus, um die App neu zu bauen. Falls das die Warnung nicht behebt, installieren Sie den neuesten Desktop-Installer neu.',
     bundleOutOfSyncAction: 'Installer herunterladen',
     bundleSwapPending: 'Neustart zum Abschließen des Updates',
     bundleSwapPendingDesc:
@@ -4337,7 +4337,7 @@ export const deOverrides = {
     checkFailedTitle: 'Update-Check fehlgeschlagen',
     tryAgain: 'Erneut versuchen',
     notAvailableTitle: 'Kein Update verfügbar',
-    unsupportedMessage: 'Diese Hermes-Version kann sich nicht aus der App heraus aktualisieren.',
+    unsupportedMessage: 'Diese Neovarch-Version kann sich nicht aus der App heraus aktualisieren.',
     connectionRetry: 'Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
     gitUnusable: 'Neovarch konnte Git auf diesem Computer nicht ausführen und daher nicht nach Updates suchen.',
     connectionSettings: 'Verbindungseinstellungen',
@@ -4346,9 +4346,9 @@ export const deOverrides = {
     latestBodyBackend: 'Das Backend läuft mit der neuesten Version.',
     allSetTitle: 'Alles bereit',
     availableTitle: 'Neues Update verfügbar',
-    availableBody: 'Eine neue Hermes-Version ist bereit zur Installation.',
+    availableBody: 'Eine neue Neovarch-Version ist bereit zur Installation.',
     availableTitleBackend: 'Backend-Update verfügbar',
-    availableBodyBackend: 'Eine neuere Version des verbundenen Hermes-Backends ist bereit zur Installation.',
+    availableBodyBackend: 'Eine neuere Version des verbundenen Neovarch-Backends ist bereit zur Installation.',
     availableBodyNoChangelog:
       'Eine neuere Version ist bereit. Release-Notizen sind für diesen Installationstyp nicht verfügbar.',
     updateNow: 'Jetzt aktualisieren',
@@ -4361,16 +4361,16 @@ export const deOverrides = {
       'Sie haben Neovarch über die Befehlszeile installiert, daher laufen Updates auch dort. Fügen Sie dies in Ihr Terminal ein:',
     manualPickedUp: 'Neovarch übernimmt die neue Version beim nächsten Start.',
     manualBodyBackend:
-      'Das Hermes-Backend wird außerhalb dieser App verwaltet. Führen Sie dies auf dem Server aus, der es hostet:',
+      'Das Neovarch-Backend wird außerhalb dieser App verwaltet. Führen Sie dies auf dem Server aus, der es hostet:',
     manualPickedUpBackend: 'Das Backend lädt die neue Version, sobald das Update abgeschlossen ist.',
     guiSkewTitle: 'Desktop-App aktualisieren',
     guiSkewBody:
-      'Das Backend wurde aktualisiert, aber dieses Desktop-App-Paket nicht. Aktualisieren oder installieren Sie die Hermes-Desktop-App neu (Ihr AppImage / .deb / .rpm), um beide abzugleichen.',
+      'Das Backend wurde aktualisiert, aber dieses Desktop-App-Paket nicht. Aktualisieren oder installieren Sie die Neovarch-Desktop-App neu (Ihr AppImage / .deb / .rpm), um beide abzugleichen.',
     copy: 'Kopieren',
     copied: 'Kopiert',
     done: 'Fertig',
     applyingBody:
-      'Der Hermes-Updater übernimmt in einem eigenen Fenster und öffnet Neovarch automatisch wieder, wenn er fertig ist. Bitte öffnen Sie Neovarch während des Updates nicht selbst erneut.',
+      'Der Neovarch-Updater übernimmt in einem eigenen Fenster und öffnet Neovarch automatisch wieder, wenn er fertig ist. Bitte öffnen Sie Neovarch während des Updates nicht selbst erneut.',
     applyingBodyBackend:
       'Das Remote-Backend wendet das Update an und startet neu. Neovarch verbindet sich automatisch wieder, wenn es zurück ist.',
     applyingClose: 'Dieses Fenster schließt sich während des Updates, dann öffnet sich Neovarch von selbst wieder.',
@@ -4486,12 +4486,12 @@ export const deOverrides = {
     applyRemote: 'Übernehmen und neu verbinden',
     backToSetup: 'Zurück',
     failedTitle: 'Installation fehlgeschlagen',
-    settingUpTitle: 'Hermes Agent wird eingerichtet',
+    settingUpTitle: 'Neovarch Agent wird eingerichtet',
     finishingTitle: 'Wird abgeschlossen',
     failedDesc:
-      'Einer der Installationsschritte ist fehlgeschlagen. Unter Windows kann das passieren, wenn eine andere Hermes-CLI- oder Desktop-Instanz läuft. Beenden Sie alle laufenden Hermes-Instanzen und versuchen Sie es dann erneut. Das vollständige Protokoll finden Sie in den Details unten oder im Desktop-Log.',
+      'Einer der Installationsschritte ist fehlgeschlagen. Unter Windows kann das passieren, wenn eine andere Neovarch-CLI- oder Desktop-Instanz läuft. Beenden Sie alle laufenden Neovarch-Instanzen und versuchen Sie es dann erneut. Das vollständige Protokoll finden Sie in den Details unten oder im Desktop-Log.',
     activeDesc:
-      'Das ist eine einmalige Einrichtung. Der Hermes-Installer lädt Abhängigkeiten herunter und konfiguriert Ihren Computer. Bei späteren Starts wird dieser Schritt übersprungen.',
+      'Das ist eine einmalige Einrichtung. Der Neovarch-Installer lädt Abhängigkeiten herunter und konfiguriert Ihren Computer. Bei späteren Starts wird dieser Schritt übersprungen.',
     progress: (completed, total) => `${completed} von ${total} Schritten fertig`,
     currentStage: stage => ` – gerade: ${stage}`,
     fetchingManifest: 'Installer-Manifest wird geholt...',
@@ -4564,7 +4564,7 @@ export const deOverrides = {
     },
     setupFailed: {
       gateClosed:
-        'Diese Hermes-Version kann ohne Nous-Konto nicht starten. Melden Sie sich an oder legen Sie eines an – kostenlos und in einer Minute erledigt.',
+        'Diese Neovarch-Version kann ohne Nous-Konto nicht starten. Melden Sie sich an oder legen Sie eines an – kostenlos und in einer Minute erledigt.',
       paused:
         'Chatten ohne Anmeldung ist vorübergehend pausiert. Neovarch prüft weiter. Die Anmeldung ist kostenlos, und Sie können sofort weitermachen.',
       rateLimited: wait =>
@@ -5176,7 +5176,7 @@ export const deOverrides = {
         },
         SESSION_NOT_OWNED: {
           title: 'Dieser Chat ist woanders offen',
-          body: 'Dieser Chat ist gerade in einem anderen Hermes-Fenster oder Terminal geöffnet. Schließen Sie ihn dort und senden Sie Ihre Nachricht erneut, oder starten Sie hier einen neuen Chat.'
+          body: 'Dieser Chat ist gerade in einem anderen Neovarch-Fenster oder Terminal geöffnet. Schließen Sie ihn dort und senden Sie Ihre Nachricht erneut, oder starten Sie hier einen neuen Chat.'
         },
         disk_full: {
           title: 'Festplatte voll',
@@ -5234,8 +5234,8 @@ export const deOverrides = {
       errorChooseModel: 'Modell wählen',
       errorCompressConversation: 'Gespräch komprimieren',
       errorCompressFailed: 'Das Gespräch konnte nicht komprimiert werden',
-      errorOpenHermesFolder: 'Hermes-Ordner öffnen',
-      errorOpenHermesFolderFailed: 'Der Hermes-Ordner konnte nicht geöffnet werden',
+      errorOpenHermesFolder: 'Neovarch-Ordner öffnen',
+      errorOpenHermesFolderFailed: 'Der Neovarch-Ordner konnte nicht geöffnet werden',
       errorUpdateApiKey: 'API-Key aktualisieren',
       errorSignInAgain: provider => `Erneut bei ${provider} anmelden`,
       errorSignInFreeTier: 'Mit einem Nous-Konto anmelden',
@@ -5270,7 +5270,7 @@ export const deOverrides = {
       attachingFile: 'Hängt an…'
     },
     approval: {
-      gatewayDisconnected: 'Hermes-Gateway ist nicht verbunden',
+      gatewayDisconnected: 'Neovarch-Gateway ist nicht verbunden',
       sendFailed: 'Genehmigungsantwort konnte nicht gesendet werden',
       reconnect: 'Neu verbinden',
       timedOutSystemLine:
@@ -5290,7 +5290,7 @@ export const deOverrides = {
     },
     clarify: {
       notReady: 'Klärungsanfrage ist noch nicht bereit',
-      gatewayDisconnected: 'Hermes-Gateway ist nicht verbunden',
+      gatewayDisconnected: 'Neovarch-Gateway ist nicht verbunden',
       sendFailed: 'Klärungsantwort konnte nicht gesendet werden',
       loadingQuestion: 'Frage wird geladen…',
       other: 'Anderes (Antwort eingeben)',
@@ -5380,7 +5380,7 @@ export const deOverrides = {
       sendFailed: 'MCP-Einrichtungsantwort konnte nicht gesendet werden',
       reloadFailed:
         'Server gespeichert, aber das Neuladen der MCP-Tools schlug fehl — sie laden in der nächsten Session',
-      gatewayDisconnected: 'Hermes-Gateway ist nicht verbunden'
+      gatewayDisconnected: 'Neovarch-Gateway ist nicht verbunden'
     },
     tool: {
       copyCode: 'Code kopieren',
@@ -5571,7 +5571,7 @@ export const deOverrides = {
     }
   },
   prompts: {
-    gatewayDisconnected: 'Das Hermes-Gateway ist nicht verbunden',
+    gatewayDisconnected: 'Das Neovarch-Gateway ist nicht verbunden',
     reconnect: 'Neu verbinden',
     sudoSendFailed: 'Sudo-Passwort konnte nicht gesendet werden',
     secretSendFailed: 'Geheimnis konnte nicht gesendet werden',

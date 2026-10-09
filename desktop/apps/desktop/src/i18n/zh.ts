@@ -1556,7 +1556,7 @@ export const zhOverrides = {
       savedTitle: '网关设置已保存',
       restartingMessage: 'Neovarch Agent 将使用已保存设置重新连接（界面保持打开）。',
       savedMessage: '已保存，下一次重启生效。',
-      connectedTo: (baseUrl, version) => `已连接到 ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `已连接到 ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: '远程网关可访问',
       signedOutTitle: '已退出登录',
       signedOutMessage: '已清除远程网关会话。',
@@ -1906,7 +1906,7 @@ export const zhOverrides = {
         sessionRevoked: { title: '会话已登出', message: '你的会话已登出。请从“设置 → 网关”重新登录。' },
         cliBillingDisabled: {
           title: '远程支出已关闭',
-          message: '此账户的远程支出已关闭，账单管理员可在门户的 Hermes Agent 页面开启。'
+          message: '此账户的远程支出已关闭，账单管理员可在门户的 Neovarch Agent 页面开启。'
         },
         roleRequired: {
           title: '需要管理员权限',
@@ -3443,7 +3443,7 @@ export const zhOverrides = {
       '/subscription': '查看你的 Nous 方案，并在浏览器中更改',
       '/topup': '显示你的 Nous 余额，并在 Portal 管理账务',
       '/platform': '暂停、恢复或列出故障的网关平台',
-      '/version': '显示 Hermes Agent 版本',
+      '/version': '显示 Neovarch Agent 版本',
       '/debug': '上传调试报告（系统信息与日志），并获取可分享链接',
       '/model': '切换此会话的模型'
     },
@@ -3926,7 +3926,7 @@ export const zhOverrides = {
     applyRemote: '应用并重新连接',
     backToSetup: '返回',
     failedTitle: '安装失败',
-    settingUpTitle: '正在设置 Hermes Agent',
+    settingUpTitle: '正在设置 Neovarch Agent',
     finishingTitle: '正在收尾',
     failedDesc:
       '某个安装步骤失败。在 Windows 上，如果另一个 Neovarch CLI 或桌面实例正在运行，可能会出现这种情况。请停止正在运行的 Neovarch 实例后重试。可查看下面的详情或 desktop 日志中的完整记录。',

@@ -60,7 +60,7 @@ export const arBoot = {
   butterbar: {
     goTo: (index, total) => `عرض الإشعار ${index} من ${total}`,
     legal: {
-      before: 'يخضع استخدام Hermes Agent لـ',
+      before: 'يخضع استخدام Neovarch Agent لـ',
       terms: 'شروط الخدمة',
       between: ' و',
       privacy: 'سياسة الخصوصية',
@@ -248,7 +248,7 @@ export const arBoot = {
     reloadRetry: 'إعادة التحميل وإعادة المحاولة'
   },
   onboarding: {
-    headerTitle: 'لنُعِدّ لك Hermes Agent',
+    headerTitle: 'لنُعِدّ لك Neovarch Agent',
     headerDesc: 'اربط مزوّد نماذج لبدء المحادثة. معظم الخيارات تتطلب نقرة واحدة.',
     preparingInstall: 'يُكمل Neovarch التثبيت. عادة ما يستغرق ذلك أقل من دقيقة في أول تشغيل.',
     starting: 'جار بدء Neovarch...',

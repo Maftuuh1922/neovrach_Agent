@@ -1,7 +1,7 @@
 import type { TranslationOverrides } from './define-locale'
 
 export const jaOnboarding: TranslationOverrides['onboarding'] = {
-  headerTitle: 'Hermes Agent のセットアップをしましょう',
+  headerTitle: 'Neovarch Agent のセットアップをしましょう',
   headerDesc: 'チャットを始めるにはモデルプロバイダーを接続してください。ほとんどのオプションはワンクリックです。',
   preparingInstall: 'Neovarch はインストールを完了中です。初回実行では通常 1 分以内に完了します。',
   starting: 'Neovarch を起動中…',

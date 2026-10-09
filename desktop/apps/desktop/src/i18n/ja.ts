@@ -1158,7 +1158,7 @@ export const jaOverrides = {
       savedTitle: 'ゲートウェイ設定を保存しました',
       restartingMessage: 'Neovarch Agent は保存された設定を使用して再接続します。',
       savedMessage: '次回起動時に保存されます。',
-      connectedTo: (baseUrl, version) => `${baseUrl}${version ? ` · Hermes ${version}` : ''} に接続しました`,
+      connectedTo: (baseUrl, version) => `${baseUrl}${version ? ` · Neovarch ${version}` : ''} に接続しました`,
       reachableTitle: 'リモートゲートウェイに到達可能',
       signedOutTitle: 'サインアウトしました',
       signedOutMessage: 'リモートゲートウェイセッションをクリアしました。',
@@ -2563,7 +2563,7 @@ export const jaOverrides = {
       '/subscription': 'Nous のプランを確認し、ブラウザーで変更',
       '/topup': 'Nous の残高を表示し、請求を管理',
       '/platform': '問題のあるゲートウェイプラットフォームを一時停止、再開、一覧表示',
-      '/version': 'Hermes Agent のバージョンを表示',
+      '/version': 'Neovarch Agent のバージョンを表示',
       '/debug': 'デバッグレポートを作成',
       '/model': 'このセッションのモデルを切り替え'
     },
@@ -2999,7 +2999,7 @@ export const jaOverrides = {
     applyRemote: '適用して再接続',
     backToSetup: '戻る',
     failedTitle: 'インストールに失敗しました',
-    settingUpTitle: 'Hermes Agent を設定中',
+    settingUpTitle: 'Neovarch Agent を設定中',
     finishingTitle: '仕上げ中',
     failedDesc:
       'インストール手順のいずれかが失敗しました。Windows では、別の Neovarch CLI またはデスクトップインスタンスが実行中の場合に発生することがあります。実行中の Neovarch インスタンスをすべて停止してから再試行してください。詳細は以下またはデスクトップログで確認できます。',

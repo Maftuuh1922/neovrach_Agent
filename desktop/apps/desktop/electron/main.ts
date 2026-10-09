@@ -797,7 +797,7 @@ if (REMOTE_DISPLAY_REASON) {
   }
 
   console.log(
-    `[hermes] remote display detected (${REMOTE_DISPLAY_REASON}); disabling GPU hardware acceleration to prevent flicker`
+    `[neovarch] remote display detected (${REMOTE_DISPLAY_REASON}); disabling GPU hardware acceleration to prevent flicker`
   )
 }
 
@@ -833,7 +833,7 @@ if (IS_WINDOWS) {
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu-compositing')
     console.log(
-      `[hermes] Windows GPU stack-cookie fallback enabled (${gpuStackCookieDecision.reason}); disabling GPU hardware acceleration (0xC0000409 / #108047)`
+      `[neovarch] Windows GPU stack-cookie fallback enabled (${gpuStackCookieDecision.reason}); disabling GPU hardware acceleration (0xC0000409 / #108047)`
     )
   }
 }
@@ -850,14 +850,14 @@ if (DEV_CDP.port) {
   // so a future edit can't widen it by omission.
   app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1')
   console.log(
-    `[hermes] renderer debugging on http://127.0.0.1:${DEV_CDP.port} — anything that can reach it ` +
+    `[neovarch] renderer debugging on http://127.0.0.1:${DEV_CDP.port} — anything that can reach it ` +
       'can run code in the renderer. HERMES_DESKTOP_CDP_PORT=off to disable.'
   )
 } else {
   const why = describeDevCdpDecision(DEV_CDP)
 
   if (why) {
-    console.warn(`[hermes] ${why}`)
+    console.warn(`[neovarch] ${why}`)
   }
 }
 
@@ -874,7 +874,7 @@ if (
   app.commandLine.appendSwitch('ignore-gpu-blocklist')
   app.commandLine.appendSwitch('enable-gpu-rasterization')
   app.commandLine.appendSwitch('enable-zero-copy')
-  console.log('[hermes] WSL GPU passthrough (/dev/dxg) detected; enabling GPU acceleration')
+  console.log('[neovarch] WSL GPU passthrough (/dev/dxg) detected; enabling GPU acceleration')
 }
 
 // #40077 / #124255: NVIDIA driver 580.x breaks ANGLE's EGL probing (Invalid
@@ -931,7 +931,7 @@ if (NVIDIA_DRIVER_MAJOR !== null) {
 if (NVIDIA_EGL_FALLBACK.enable) {
   app.commandLine.appendSwitch('use-angle', 'swiftshader')
   console.log(
-    `[hermes] NVIDIA EGL fallback enabled (${NVIDIA_EGL_FALLBACK.reason}); routing ANGLE ` +
+    `[neovarch] NVIDIA EGL fallback enabled (${NVIDIA_EGL_FALLBACK.reason}); routing ANGLE ` +
       'through SwiftShader. Witnessed GPU-process death probe (#40077, #124255); an app or ' +
       'driver update re-probes hardware GL once. HERMES_DESKTOP_NVIDIA_SWIFTSHADER=0 to opt out.'
   )
@@ -966,7 +966,7 @@ if (NVIDIA_DRIVER_MAJOR !== null && process.platform === 'linux') {
     }
 
     console.warn(
-      `[hermes] NVIDIA GPU process died (reason=${details?.reason}, exit=${details?.exitCode}); ` +
+      `[neovarch] NVIDIA GPU process died (reason=${details?.reason}, exit=${details?.exitCode}); ` +
         'relaunching once with --use-angle=swiftshader (#40077, #124255)'
     )
 
@@ -976,7 +976,7 @@ if (NVIDIA_DRIVER_MAJOR !== null && process.platform === 'linux') {
       })
       void exitAfterBackendShutdown(0)
     } catch (error) {
-      console.error(`[hermes] NVIDIA SwiftShader relaunch failed: ${error?.message || error}`)
+      console.error(`[neovarch] NVIDIA SwiftShader relaunch failed: ${error?.message || error}`)
     }
   })
 }
@@ -1020,7 +1020,7 @@ if (process.platform === 'linux') {
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu-compositing')
     console.log(
-      `[hermes] Linux GPU software fallback enabled (${linuxGpuDecision.reason}); disabling GPU ` +
+      `[neovarch] Linux GPU software fallback enabled (${linuxGpuDecision.reason}); disabling GPU ` +
         'hardware acceleration after a GPU-child init failure (#124843). HERMES_DESKTOP_DISABLE_GPU=0 to opt out.'
     )
   }
@@ -1034,12 +1034,12 @@ if (process.platform === 'linux') {
 const PASSWORD_STORE = resolveLinuxPasswordStore()
 
 if (PASSWORD_STORE.warning) {
-  console.warn(`[hermes] ${PASSWORD_STORE.warning}`)
+  console.warn(`[neovarch] ${PASSWORD_STORE.warning}`)
 }
 
 if (PASSWORD_STORE.store) {
   app.commandLine.appendSwitch('password-store', PASSWORD_STORE.store)
-  console.log(`[hermes] using password-store backend: ${PASSWORD_STORE.store}`)
+  console.log(`[neovarch] using password-store backend: ${PASSWORD_STORE.store}`)
 }
 
 // Windows sandbox / GPU breakpoint crash recovery (#38216).
@@ -1084,9 +1084,9 @@ if (IS_WINDOWS || process.platform === 'linux') {
     const acl = grantAllApplicationPackagesAcl(exeDir, { execFileSync })
 
     if (acl.ok) {
-      console.log(`[hermes] granted ALL APPLICATION PACKAGES RX on ${exeDir} (#38216)`)
+      console.log(`[neovarch] granted ALL APPLICATION PACKAGES RX on ${exeDir} (#38216)`)
     } else if (acl.error && acl.error !== 'missing-target-or-exec') {
-      console.warn(`[hermes] AppContainer ACL grant failed on ${exeDir}: ${acl.error}`)
+      console.warn(`[neovarch] AppContainer ACL grant failed on ${exeDir}: ${acl.error}`)
     }
   }
 
@@ -1108,7 +1108,7 @@ if (IS_WINDOWS || process.platform === 'linux') {
     app.commandLine.appendSwitch('no-sandbox')
     process.env.ELECTRON_DISABLE_SANDBOX = '1'
     console.log(
-      `[hermes] sandbox fallback enabled (${sandboxDecision.reason}); launching with --no-sandbox (#38216, #121954)`
+      `[neovarch] sandbox fallback enabled (${sandboxDecision.reason}); launching with --no-sandbox (#38216, #121954)`
     )
   }
 
@@ -1143,14 +1143,14 @@ if (IS_WINDOWS || process.platform === 'linux') {
       }
 
       console.warn(
-        `[hermes] GPU child died with the sandbox signature (exit=${details?.exitCode}); relaunching once with --no-sandbox (#38216)`
+        `[neovarch] GPU child died with the sandbox signature (exit=${details?.exitCode}); relaunching once with --no-sandbox (#38216)`
       )
 
       try {
         app.relaunch({ args: buildNoSandboxRelaunchArgs(process.argv.slice(1)) })
         void exitAfterBackendShutdown(0)
       } catch (error) {
-        console.error(`[hermes] --no-sandbox relaunch failed: ${error?.message || error}`)
+        console.error(`[neovarch] --no-sandbox relaunch failed: ${error?.message || error}`)
       }
 
       return
@@ -1180,14 +1180,14 @@ if (IS_WINDOWS || process.platform === 'linux') {
       }
 
       console.warn(
-        `[hermes] Linux GPU child died with the sandbox signature (exit=${details?.exitCode}); relaunching once with --no-sandbox (#121954)`
+        `[neovarch] Linux GPU child died with the sandbox signature (exit=${details?.exitCode}); relaunching once with --no-sandbox (#121954)`
       )
 
       try {
         app.relaunch({ args: buildNoSandboxRelaunchArgs(process.argv.slice(1)) })
         void exitAfterBackendShutdown(0)
       } catch (error) {
-        console.error(`[hermes] --no-sandbox relaunch failed: ${error?.message || error}`)
+        console.error(`[neovarch] --no-sandbox relaunch failed: ${error?.message || error}`)
       }
 
       return
@@ -1208,14 +1208,14 @@ if (IS_WINDOWS || process.platform === 'linux') {
       }
 
       console.warn(
-        `[hermes] Linux GPU child gone (reason=${details?.reason}); relaunching once with --disable-gpu (#124843)`
+        `[neovarch] Linux GPU child gone (reason=${details?.reason}); relaunching once with --disable-gpu (#124843)`
       )
 
       try {
         app.relaunch({ args: buildDisableGpuRelaunchArgs(process.argv.slice(1)) })
         void exitAfterBackendShutdown(0)
       } catch (error) {
-        console.error(`[hermes] --disable-gpu relaunch failed: ${error?.message || error}`)
+        console.error(`[neovarch] --disable-gpu relaunch failed: ${error?.message || error}`)
       }
     }
   })
@@ -1251,13 +1251,13 @@ const SOURCE_REPO_ROOT = path.join(NEOVARCH_REPO_ROOT, 'core')
 // Runtime identity comes only from the baked artifact stamp. Dev runs have none.
 if (INSTALL_STAMP) {
   console.log(
-    `[hermes] install stamp: ${INSTALL_STAMP.commit ? INSTALL_STAMP.commit.slice(0, 12) : 'no-commit'}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ''}${INSTALL_STAMP.dirty ? ' [DIRTY]' : ''} from ${INSTALL_STAMP.source || 'unknown'}`
+    `[neovarch] install stamp: ${INSTALL_STAMP.commit ? INSTALL_STAMP.commit.slice(0, 12) : 'no-commit'}${INSTALL_STAMP.branch ? ` (${INSTALL_STAMP.branch})` : ''}${INSTALL_STAMP.dirty ? ' [DIRTY]' : ''} from ${INSTALL_STAMP.source || 'unknown'}`
   )
 } else if (IS_PACKAGED) {
   // Dev builds without a stamp are normal; packaged builds without one
   // mean the bootstrap won't know what to clone. Surface clearly.
   console.error(
-    '[hermes] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.'
+    '[neovarch] WARNING: no install-stamp.json found in packaged build. First-launch bootstrap will not have a pinned ref to install.'
   )
 }
 
@@ -1277,7 +1277,7 @@ function acquireSingleInstanceLock(): boolean {
   const stalePid = removeStaleSingletonLock(app.getPath('userData'))
 
   if (stalePid !== null) {
-    console.error(`[hermes] removed stale SingletonLock (owner ${stalePid} dead); retrying launch`)
+    console.error(`[neovarch] removed stale SingletonLock (owner ${stalePid} dead); retrying launch`)
 
     return app.requestSingleInstanceLock()
   }
@@ -1356,7 +1356,7 @@ let desktopSshPathOverride = ''
     }
 
     console.log(
-      `[hermes] desktop launch switch from config.yaml: --${planned.name}${planned.value === undefined ? '' : `=${planned.value}`}`
+      `[neovarch] desktop launch switch from config.yaml: --${planned.name}${planned.value === undefined ? '' : `=${planned.value}`}`
     )
   }
 }
@@ -2284,7 +2284,7 @@ let bootProgressState = {
   error: null,
   fakeMode: BOOT_FAKE_MODE,
   isCloudBackendDown: false,
-  message: 'Waiting to start Hermes backend',
+  message: 'Waiting to start Neovarch backend',
   phase: 'idle',
   progress: 0,
   retryable: false,
@@ -5452,14 +5452,14 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
       )
 
       if (userBackend) {
-        rememberLog(`[boot] Using Hermes install at ${userInstall.root} (published launcher ${userInstall.launcher})`)
+        rememberLog(`[boot] Using Neovarch install at ${userInstall.root} (published launcher ${userInstall.launcher})`)
 
         return userBackend
       }
 
-      rememberLog(`[bootstrap] Hermes install at ${userInstall.root} (from ${userInstall.launcher}) is not usable`)
+      rememberLog(`[bootstrap] Neovarch install at ${userInstall.root} (from ${userInstall.launcher}) is not usable`)
     } else {
-      rememberLog(`[bootstrap] no usable Hermes install at ${ACTIVE_HERMES_ROOT} and no published user-bin launcher`)
+      rememberLog(`[bootstrap] no usable Neovarch install at ${ACTIVE_HERMES_ROOT} and no published user-bin launcher`)
     }
   }
 
@@ -5475,7 +5475,7 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
   //    is a recoverable state the GUI can drive through.
   return {
     kind: 'bootstrap-needed',
-    label: 'Hermes Agent not installed yet; bootstrap required',
+    label: 'Neovarch core not installed yet; bootstrap required',
     command: null,
     args: backendArgs,
     bootstrap: true,
@@ -5547,7 +5547,7 @@ async function ensureRuntime(
   }
 
   if (backend.kind === 'bootstrap-needed') {
-    rememberLog('[bootstrap] no Hermes install found; starting first-launch bootstrap')
+    rememberLog('[bootstrap] no Neovarch install found; starting first-launch bootstrap')
 
     if (await handOffWindowsBootstrapRecovery('bootstrap-needed')) {
       const handoffError: Error & { isBootstrapFailure?: boolean; bootstrapHandedOff?: boolean } = new Error(
@@ -6282,7 +6282,7 @@ async function watchPreviewFile(owner, rawUrl) {
     },
     onPollChange: emit,
     onTrip: ({ events, windowMs }) =>
-      console.warn(`[hermes] fs.watch storm on ${watchDir} (${events} events within ${windowMs}ms); polling instead`)
+      console.warn(`[neovarch] fs.watch storm on ${watchDir} (${events} events within ${windowMs}ms); polling instead`)
   })
 
   previewWatchers.set(id, {
@@ -6373,7 +6373,7 @@ function watchDirectory(owner, rawDir) {
     snapshot: () => fs.readdirSync(watchDir).sort().join('\0'),
     onPollChange: emit,
     onTrip: ({ events, windowMs }) =>
-      console.warn(`[hermes] fs.watch storm on ${watchDir} (${events} events within ${windowMs}ms); polling instead`)
+      console.warn(`[neovarch] fs.watch storm on ${watchDir} (${events} events within ${windowMs}ms); polling instead`)
   })
 
   previewWatchers.set(id, {
@@ -7702,7 +7702,7 @@ function openOauthLoginWindow(
       win = new BrowserWindow({
         width: 520,
         height: 720,
-        title: silent ? 'Connecting to Hermes Cloud agent…' : 'Sign in to Hermes gateway',
+        title: silent ? 'Connecting to Hermes Cloud agent…' : 'Sign in to Neovarch gateway',
         autoHideMenuBar: true,
         // Silent cascade: start HIDDEN. The auto-SSO 302 chain completes in
         // well under a second, so the window normally never needs to show. We
@@ -12324,7 +12324,7 @@ async function runPoolBackendStart(
   assertLocalProfileCanStart(profile, profileDeletionGate, key =>
     directoryExists(path.join(HERMES_HOME, 'profiles', key))
   )
-  rememberLog(`Starting Hermes backend for profile "${profile}" via ${backend.label}`)
+  rememberLog(`Starting Neovarch backend for profile "${profile}" via ${backend.label}`)
 
   const parentStartMarker = await desktopParentStartMarker()
   const backendNonce = crypto.randomBytes(16).toString('hex')
@@ -12383,7 +12383,7 @@ async function runPoolBackendStart(
   startFailed.catch(() => {})
 
   child.once('error', error => {
-    rememberLog(`Hermes backend for profile "${profile}" failed to start: ${error.message}`)
+    rememberLog(`Neovarch backend for profile "${profile}" failed to start: ${error.message}`)
     void teardownFailedLocalBackend(poolKey, entry).catch(cleanupError => {
       rememberLog(
         `Hermes backend for profile "${profile}" cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
@@ -12392,7 +12392,7 @@ async function runPoolBackendStart(
     rejectStart?.(error)
   })
   child.once('exit', (code, signal) => {
-    rememberLog(formatBackendExitLine(`Hermes backend for profile "${profile}" exited`, code, signal, outputTail))
+    rememberLog(formatBackendExitLine(`Neovarch backend for profile "${profile}" exited`, code, signal, outputTail))
     releaseBackendChild(child)
 
     if (!ready) {
@@ -12440,7 +12440,7 @@ async function runPoolBackendStart(
 
   const authToken = await adoptServedDashboardToken(baseUrl, token, {
     childAlive,
-    label: `Hermes backend for profile "${profile}"`,
+    label: `Neovarch backend for profile "${profile}"`,
     rememberLog
   })
 
@@ -13099,7 +13099,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
 
       updateBootProgress({
         phase: 'backend.ready',
-        message: 'Remote Hermes backend is ready',
+        message: 'Remote Neovarch backend is ready',
         progress: 94,
         running: true,
         error: null
@@ -13196,7 +13196,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
 
       updateBootProgress({
         phase: 'backend.ready',
-        message: 'Attached to the running Hermes backend',
+        message: 'Attached to the running Neovarch backend',
         progress: 94,
         running: true,
         error: null
@@ -13236,7 +13236,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
     const readyFile = backend.readyFile ? makeDashboardReadyFile() : null
 
     await advanceBootProgress('backend.spawn', `Starting Hermes backend via ${backend.label}`, 84)
-    rememberLog(`Starting Hermes backend via ${backend.label}`)
+    rememberLog(`Starting Neovarch backend via ${backend.label}`)
 
     const profile = primaryProfile
     const parentStartMarker = await desktopParentStartMarker()
@@ -13340,7 +13340,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
       releaseBackendChild(hermesProcess)
 
       if (!backendConnectionState.clearForCurrentProcess(processOwner)) {
-        rememberLog(`Ignoring stale Hermes backend error: ${error.message}`)
+        rememberLog(`Ignoring stale Neovarch backend error: ${error.message}`)
         scheduleUnexpectedPrimaryRecovery({ error: error.message, ready: backendReady })
         rejectBackendStart?.(new Error('Hermes backend start was superseded by a newer connection attempt.'))
 
@@ -13352,11 +13352,11 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
       // (#108417), and the stale branch above never reaches this clear.
       primaryProfilePin.clear()
 
-      rememberLog(`Hermes backend failed to start: ${error.message}`)
+      rememberLog(`Neovarch backend failed to start: ${error.message}`)
       updateBootProgress(
         {
           error: error.message,
-          message: `Hermes backend failed to start: ${error.message}`,
+          message: `Neovarch backend failed to start: ${error.message}`,
           phase: 'backend.error',
           running: false
         },
@@ -13369,7 +13369,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
       releaseBackendChild(hermesProcess)
 
       if (!backendConnectionState.clearForCurrentProcess(processOwner)) {
-        rememberLog(formatBackendExitLine('Ignoring stale Hermes backend exit', code, signal, primaryOutputTail))
+        rememberLog(formatBackendExitLine('Ignoring stale Neovarch backend exit', code, signal, primaryOutputTail))
 
         scheduleUnexpectedPrimaryRecovery({ code, signal, ready: backendReady })
 
@@ -13380,7 +13380,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
         return
       }
 
-      rememberLog(formatBackendExitLine('Hermes backend exited', code, signal, primaryOutputTail))
+      rememberLog(formatBackendExitLine('Neovarch backend exited', code, signal, primaryOutputTail))
 
       // The current primary child is gone; release its routing pin so the
       // next startHermes() re-reads active-profile.json instead of re-pinning
@@ -13463,7 +13463,7 @@ async function runHermesStart({ supervisorRecovery = false }: { supervisorRecove
 
     updateBootProgress({
       phase: 'backend.ready',
-      message: 'Hermes backend is ready. Finalizing desktop startup',
+      message: 'Neovarch backend is ready. Finalizing desktop startup',
       progress: 94,
       running: true,
       error: null
@@ -13802,7 +13802,7 @@ const neovarchRemote = createRemoteController({
     const backend = await resolveHermesBackend(args)
 
     if (backend.bootstrap || !backend.command) {
-      throw new Error('Runtime Hermes belum terpasang. Selesaikan penyiapan aplikasi dulu, lalu aktifkan lagi.')
+      throw new Error('Runtime Neovarch belum terpasang. Selesaikan penyiapan aplikasi dulu, lalu aktifkan lagi.')
     }
 
     backend.args = await getBackendArgsForRuntime(backend)
@@ -14684,7 +14684,7 @@ function startHudGameOverlayFeed(win: BrowserWindow) {
 
     if (!reported) {
       reported = true
-      console.warn(`[hermes] HUD cannot enumerate windows: ${windows.reason}`)
+      console.warn(`[neovarch] HUD cannot enumerate windows: ${windows.reason}`)
     }
 
     return null
@@ -15392,7 +15392,7 @@ function createWindow() {
               }
 
               console.warn(
-                '[hermes] Linux: no GPU child after window reveal — GPU init is retrying silently; software fallback engaged for the next launch (#124843)'
+                '[neovarch] Linux: no GPU child after window reveal — GPU init is retrying silently; software fallback engaged for the next launch (#124843)'
               )
             }
           }
@@ -18556,7 +18556,7 @@ ipcMain.handle('hermes:quick-entry:submit', (event, payload) => {
   }
 
   if (!mainWindow || mainWindow.isDestroyed()) {
-    return { code: 'no-primary', message: 'The primary Hermes window is unavailable.', ok: false, retryable: true }
+    return { code: 'no-primary', message: 'The primary Neovarch window is unavailable.', ok: false, retryable: true }
   }
 
   const target =
@@ -19153,7 +19153,7 @@ async function runDesktopUninstall(mode: string): Promise<DesktopUninstallResult
     return {
       ok: false,
       error: 'agent-missing',
-      message: `Can't run the uninstaller: no Hermes agent venv at ${VENV_ROOT}.`
+      message: `Can't run the uninstaller: no Neovarch agent venv at ${VENV_ROOT}.`
     }
   }
 
@@ -19460,7 +19460,7 @@ if (!isPrimaryInstance) {
       writeActiveDesktopProfile(name)
     })
   } catch (error) {
-    console.error('[hermes] failed to persist --profile launch override:', error)
+    console.error('[neovarch] failed to persist --profile launch override:', error)
   }
 
   app.on('second-instance', (_event, argv) => {
