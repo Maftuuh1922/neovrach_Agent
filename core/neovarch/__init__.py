@@ -7,5 +7,5 @@ format is compatible with what the Neovarch desktop and the Neovarch phone
 remote speak. Third-party attribution is in the repository NOTICE file.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.5"
 PRODUCT = "Neovarch Agent"

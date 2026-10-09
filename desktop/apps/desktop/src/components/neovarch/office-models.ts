@@ -15,6 +15,7 @@
 import { atom } from 'nanostores'
 
 import { hermesApi } from '@/api/client'
+import { createGatewayOfficeModelAdapter } from '@/store/router9'
 
 import type { OfficeAgent } from './office-store'
 
@@ -108,6 +109,30 @@ export function createGatewayModelAdapter(api: Api = hermesApi as Api): OfficeMo
   }
 }
 
+/** The Office adapter over the gateway RPCs (`models.list` / `agent.model.set`,
+ *  from store/router9.ts), remembering each model's provider for the set call. */
+export function createRpcOfficeModelAdapter(
+  rpc: ReturnType<typeof createGatewayOfficeModelAdapter> = createGatewayOfficeModelAdapter()
+): OfficeModelAdapter {
+  const providerOf = new Map<string, string>()
+
+  return {
+    available: rpc.available,
+    listModels: async () => {
+      const models = await rpc.listModels()
+
+      for (const m of models) {
+        if (m.provider) {
+          providerOf.set(m.id, m.provider)
+        }
+      }
+
+      return models
+    },
+    setAgentModel: (agent, model) => rpc.setAgentModel(agent, model, providerOf.get(model))
+  }
+}
+
 let probed = false
 
 /** Switch to the gateway adapter once the core answers `GET /api/models`
@@ -118,6 +143,19 @@ export async function probeOfficeModels(api: Api = hermesApi as Api): Promise<bo
   }
 
   probed = true
+
+  const rpc = createRpcOfficeModelAdapter()
+
+  if (rpc.available) {
+    try {
+      await rpc.listModels()
+      setOfficeModelAdapter(rpc)
+
+      return true
+    } catch {
+      // older core without the RPCs: fall back to the REST routes
+    }
+  }
 
   try {
     await api({ path: '/api/models' })

@@ -15,7 +15,7 @@ permissions:
 env:
   FLUTTER_VERSION: '3.47.6'
   # Fallback for workflow_dispatch; a v* tag push uses the tag's version.
-  APP_VERSION: '1.3.0'
+  APP_VERSION: '1.4.5'
 
 jobs:
   android:
@@ -44,6 +44,14 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
+      - name: Signing key in use
+        run: |
+          if [ -n "$NEOVARCH_KEYSTORE_BASE64" ] && [ -n "$NEOVARCH_KEYSTORE_PASSWORD" ] && [ -n "$NEOVARCH_KEY_ALIAS" ]; then
+            echo "Signing: fixed Neovarch key from repository secrets"
+          else
+            echo "::warning::Signing: NEOVARCH_KEYSTORE_* secrets missing, falling back to the debug key"
+          fi
+
       - run: flutter pub get
       - run: flutter build apk --release --split-per-abi
       - run: flutter build apk --release
@@ -53,6 +61,10 @@ jobs:
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk dist/neovarch-agent-android-universal.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/neovarch-agent-android-arm64.apk
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$apksigner" ]; then
+            for f in dist/*.apk; do echo "$f"; "$apksigner" verify --print-certs "$f" | grep -E 'SHA-256|DN' || true; done
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
