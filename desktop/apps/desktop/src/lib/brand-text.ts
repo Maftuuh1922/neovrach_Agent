@@ -13,6 +13,8 @@ const HERMES_AGENT = /\bHermes Agent\b/g
 const HERMES_WORD = /\bHermes\b(?![- ]Cloud\b)/g
 
 export function brandText(text: string): string
+export function brandText(text: string | undefined): string | undefined
+export function brandText(text: string | null): string | null
 export function brandText(text: string | null | undefined): string | null | undefined
 export function brandText(text: string | null | undefined): string | null | undefined {
   if (typeof text !== 'string' || !text.includes('Hermes')) {
