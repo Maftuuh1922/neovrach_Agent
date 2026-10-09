@@ -16,15 +16,41 @@ import { useLiveCompletionAdapter } from './use-live-completion-adapter'
 const KIND_RE = /^@(file|folder|url|image|tool|git):(.*)$/
 const REF_STARTERS = new Set(['file', 'folder', 'url', 'image', 'tool', 'git'])
 // These bare tokens are context actions, not profile handles.
-const SIMPLE_CONTEXT_REFS = new Set(['@diff', '@staged'])
+const SIMPLE_CONTEXT_REFS = new Set(['@diff', '@staged', '@kantor'])
+
+// `@kantor` attaches the live Kantor state: the core answers it with the
+// `office_status` snapshot (agents, status, tasks) for that turn.
+const KANTOR_ENTRY: CompletionEntry = {
+  text: '@kantor',
+  display: '@kantor',
+  meta: 'Kantor · status agen (office_status)'
+} as CompletionEntry
 
 const STARTER_META: Record<string, string> = {
-  file: 'Attach a file reference',
-  folder: 'Attach a folder reference',
-  url: 'Attach a URL reference',
-  image: 'Attach an image reference',
-  tool: 'Attach a tool reference',
-  git: 'Attach git context'
+  file: 'File · lampirkan referensi file',
+  folder: 'Folder · lampirkan referensi folder',
+  url: 'URL · lampirkan tautan',
+  image: 'Gambar · lampirkan gambar',
+  tool: 'Tool · rujuk sebuah tool',
+  git: 'Git · lampirkan konteks git'
+}
+
+/** Rows the popover can show: a non-empty `text` to insert and a label. A
+ *  nameless row (no text, or only "@") rendered as a blank line. */
+export function usableEntries(items: unknown): CompletionEntry[] {
+  if (!Array.isArray(items)) {
+    return []
+  }
+
+  return items.filter((entry): entry is CompletionEntry => {
+    if (!entry || typeof entry !== 'object') {
+      return false
+    }
+
+    const text = (entry as { text?: unknown }).text
+
+    return typeof text === 'string' && text.trim().length > 1
+  })
 }
 
 function starterEntries(query: string): CompletionEntry[] {
@@ -32,11 +58,13 @@ function starterEntries(query: string): CompletionEntry[] {
   const kinds = Array.from(REF_STARTERS)
   const filtered = q ? kinds.filter(kind => kind.startsWith(q)) : kinds
 
-  return filtered.map(kind => ({
+  const rows: CompletionEntry[] = filtered.map(kind => ({
     text: `@${kind}:`,
     display: `@${kind}:`,
     meta: STARTER_META[kind] || ''
   }))
+
+  return !q || 'kantor'.startsWith(q) ? [KANTOR_ENTRY, ...rows] : rows
 }
 
 function mergeCompletionEntries(
@@ -149,8 +177,10 @@ export function useAtCompletions(options: {
         }
 
         try {
-          for (const item of source.provide(query) || []) {
-            if (!item || typeof item.insert !== 'string' || !item.insert) {
+          const provided = source.provide(query)
+
+          for (const item of Array.isArray(provided) ? provided : []) {
+            if (!item || typeof item.insert !== 'string' || !item.insert.trim()) {
               continue
             }
 
@@ -228,8 +258,10 @@ export function useAtCompletions(options: {
           gateway.request<{ items?: CompletionEntry[] }>('complete.path', params)
         )
 
-        const items = result.items ?? []
-        const base = items.length > 0 ? items : starters
+        const items = usableEntries(result?.items)
+        const q = normalize(query)
+        const kantor = !q || 'kantor'.startsWith(q) ? [KANTOR_ENTRY] : []
+        const base = items.length > 0 ? [...kantor, ...items] : starters
 
         return { items: mergeCompletionEntries(extras, base, claimedHandles), query }
       } catch {

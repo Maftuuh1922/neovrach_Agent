@@ -171,6 +171,12 @@ class Agent:
             persona = persona_prompt(self.rec.get("id"), self.ctx.office() if self.ctx.office else None)
         except Exception:  # the Kantor must never break a turn
             persona = persona_prompt(self.rec.get("id"), None)
+        if "@kantor" in user_text.lower() and self.ctx.office is not None:
+            try:  # `@kantor` attaches the live Kantor state to this turn
+                from neovarch.tools import office_summary
+                persona += "\n\n# Kantor saat ini (diminta lewat @kantor)\n" + office_summary(self.ctx.office())
+            except Exception:
+                pass
         sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text, persona)
         try:
             for _ in range(max_turns):
