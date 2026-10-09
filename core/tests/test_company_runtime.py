@@ -13,7 +13,7 @@ from test_server import WS
 
 
 async def _gw(monkeypatch):
-    monkeypatch.setenv("HERMES_DASHBOARD_SESSION_TOKEN", "tok")
+    monkeypatch.setenv("NEOVARCH_SESSION_TOKEN", "tok")
     monkeypatch.setenv("NEOVARCH_COMPANY_TICK", "0.05")
     gw = Gateway(isolated=False)
     client = TestClient(TestServer(build_app(gw)))
