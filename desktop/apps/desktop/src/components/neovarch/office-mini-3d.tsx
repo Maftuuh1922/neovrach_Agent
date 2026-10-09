@@ -2,6 +2,8 @@
  * Mini Kantor at the bottom of the right sidebar: the same three.js room as
  * the full Kantor, rendered as a thumbnail (low pixel ratio, ~12 fps, no
  * shadows, no orbit). Agents sit and work live from the office snapshot.
+ * It is framed on the room + engawa (agents stepping out onto the veranda stay
+ * in view; the garden itself is left to the full Kantor).
  * Rendering pauses while the thumbnail is offscreen, the window is hidden or
  * the sidebar is closed (unmounted). Clicking opens the full Kantor.
  */
@@ -75,6 +77,8 @@ export function MiniOffice3D({ office }: { office: null | OfficeSnapshot }) {
 
         created = createOfficeScene({
           container,
+          // The thumbnail crops to the room + engawa; the garden is for the full Kantor.
+          framing: 'room',
           reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
           thumbnail: { fps: MINI_OFFICE_FPS, pixelRatio: MINI_OFFICE_PIXEL_RATIO }
         })

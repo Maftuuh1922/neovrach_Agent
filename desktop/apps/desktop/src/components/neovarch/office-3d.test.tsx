@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OfficeSnapshot } from './office-store'
 
 const scene = vi.hoisted(() => ({
-  created: [] as { options: { onSelect?: (id: null | string) => void } }[],
+  created: [] as { options: { framing?: string; onSelect?: (id: null | string) => void; reducedMotion?: boolean } }[],
   dispose: vi.fn(),
   fail: false,
   resetCamera: vi.fn(),
@@ -16,7 +16,7 @@ const scene = vi.hoisted(() => ({
 }))
 
 vi.mock('./office3d-scene', () => ({
-  createOfficeScene: (options: { onSelect?: (id: null | string) => void }) => {
+  createOfficeScene: (options: { framing?: string; onSelect?: (id: null | string) => void; reducedMotion?: boolean }) => {
     if (scene.fail) {
       throw new Error('WebGL context lost')
     }
@@ -151,6 +151,21 @@ describe('Kantor 3D scene wiring', () => {
 
     view.unmount()
     expect(scene.dispose).toHaveBeenCalled()
+  })
+
+  it('frames room + garden, re-frames on "Atur ulang kamera", and passes reduced motion (no strolls)', async () => {
+    webgl = true
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }))
+    act(() => $office.set(SNAP))
+    renderPage()
+
+    await waitFor(() => expect(scene.created).toHaveLength(1))
+    expect(scene.created[0]!.options.framing).toBe('all')
+    expect(scene.created[0]!.options.reducedMotion).toBe(true)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Atur ulang kamera' }))
+    expect(scene.resetCamera).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 
   it('opens the agent popover on pick and creates an assigned Kanban task', async () => {

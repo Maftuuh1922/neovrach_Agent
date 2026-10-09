@@ -61,6 +61,8 @@ export function Office3D({ fallback, office, onOpenSession }: Office3DProps) {
 
         created = createOfficeScene({
           container,
+          // Room, engawa and the garden beyond the sliding door.
+          framing: 'all',
           labelLayer: labelsRef.current,
           onSelect: id => setSelectedId(id),
           reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false

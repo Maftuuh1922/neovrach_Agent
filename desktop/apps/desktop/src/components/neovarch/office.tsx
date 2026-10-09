@@ -7,6 +7,7 @@ import { Brain, Users } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 import { OfficeAgentAvatar } from './agent-identity'
+import { KartuCardButton } from './kartu-card-dialog'
 import { Office3D } from './office-3d'
 import { MiniOffice3D } from './office-mini-3d'
 import { OfficeModelSelect } from './office-model-select'
@@ -164,6 +165,7 @@ export function NeovarchOfficePage() {
         </div>
         <div className="nv-office-header-tools">
           <ViewToggle onChange={setOfficeView} value={view} />
+          <KartuCardButton />
           <div className="nv-office-counters">
             <span>
               <StatusDot status="working" /> {office?.counts.working ?? 0} bekerja

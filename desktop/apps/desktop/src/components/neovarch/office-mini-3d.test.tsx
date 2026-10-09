@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OfficeSnapshot } from './office-store'
 
 const scene = vi.hoisted(() => ({
-  options: [] as { thumbnail?: { fps?: number; pixelRatio?: number } }[],
+  options: [] as { framing?: string; thumbnail?: { fps?: number; pixelRatio?: number } }[],
   dispose: vi.fn(),
   setAgents: vi.fn(),
   setPaused: vi.fn()
@@ -112,6 +112,8 @@ describe('mini Kantor 3D in the right sidebar', () => {
     expect(container.querySelector('[data-slot="nv-office-mini3d"]')).not.toBeNull()
     await waitFor(() => expect(scene.options.length).toBe(1))
     expect(scene.options[0]!.thumbnail).toEqual({ fps: MINI_OFFICE_FPS, pixelRatio: 0.75 })
+    // Cropped to the room + engawa: the garden is left to the full Kantor.
+    expect(scene.options[0]!.framing).toBe('room')
     await waitFor(() => expect(scene.setAgents).toHaveBeenCalled())
     expect(scene.setAgents.mock.lastCall![0]).toMatchObject([{ id: 'session:a', name: 'Sari' }])
   })
