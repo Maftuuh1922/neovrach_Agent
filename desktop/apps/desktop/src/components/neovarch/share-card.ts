@@ -282,7 +282,7 @@ export function layoutShareCard(data: ShareCardData, opts: ShareCardOptions): Dr
   }
 
   if (opts.style === 'gelap') {
-    for (let x = 0; x <= W; x += 72) {
+    for (let x = 0; x < W; x += 72) {
       ops.push({ fill: alpha('#2a2a30', 0.5), h: H, kind: 'rect', r: 0, w: 1.5, x, y: 0 })
     }
   }
