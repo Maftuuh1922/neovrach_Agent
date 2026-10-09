@@ -7,7 +7,8 @@ import type { ChatMessage } from '@/lib/chat-messages/types'
 import { Cpu, FileText, Wrench } from '@/lib/icons'
 import { displayModelName, providerDisplayName } from '@/lib/model-status-label'
 import { $reviewFiles } from '@/store/review'
-import { $activeSessionId, $currentModel, $currentProvider, $messages } from '@/store/session'
+import { PRIMARY_SESSION_VIEW } from '@/app/chat/session-view'
+import { $activeSessionId, $messages } from '@/store/session'
 
 import { agentForSession } from './agent-identity'
 import { NeovarchOfficeMini } from './office'
@@ -81,8 +82,12 @@ function baseName(path: string): string {
 export function NeovarchContextRail() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const model = useStore($currentModel)
-  const composerProvider = useStore($currentProvider)
+  // The same atoms the composer's model chip reads: the open chat's own
+  // model/provider/effort (session.info), or the new-chat pick.
+  const model = useStore(PRIMARY_SESSION_VIEW.$model)
+  const composerProvider = useStore(PRIMARY_SESSION_VIEW.$provider)
+  const effort = useStore(PRIMARY_SESSION_VIEW.$reasoningEffort)
+  const effortWire = useStore(PRIMARY_SESSION_VIEW.$reasoningEffortWire)
   const office = useStore($office)
   const activeSessionId = useStore($activeSessionId)
   // The composer atom is empty until a model is picked in this run; fall back
@@ -133,6 +138,12 @@ export function NeovarchContextRail() {
           <div>
             <dt>Penyedia</dt>
             <dd>{provider ? providerDisplayName(provider) : '—'}</dd>
+          </div>
+          <div>
+            <dt>Penalaran</dt>
+            <dd data-slot="nv-context-effort" title={effortWire ? `Dikirim ke penyedia: ${effortWire}` : undefined}>
+              {effort ? (effort === 'none' ? 'mati' : effort) : 'bawaan'}
+            </dd>
           </div>
           <div>
             <dt>Pesan Anda</dt>

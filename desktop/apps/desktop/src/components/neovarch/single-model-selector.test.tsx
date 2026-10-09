@@ -3,7 +3,9 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { $currentModel, $currentProvider } from '@/store/session'
+import type { ClientSessionState } from '@/app/types'
+import { $activeSessionId, $currentModel, $currentProvider } from '@/store/session'
+import { $sessionStates } from '@/store/session-states'
 
 import { NeovarchCommandBar } from './command-bar'
 import { NeovarchContextRail } from './context-rail'
@@ -16,6 +18,8 @@ afterEach(() => {
   registerModelSheetAccessory(null)
   $currentModel.set('')
   $currentProvider.set('')
+  $activeSessionId.set(null)
+  $sessionStates.set({})
 })
 
 const OFFICE: OfficeSnapshot = {
@@ -74,6 +78,32 @@ describe('single model selector', () => {
     expect(card.textContent).toContain('anthropic/claude-sonnet-4.5')
     expect(container.querySelector('.nv-context-model-name')?.textContent).not.toBe('anthropic/claude-sonnet-4.5')
     expect(screen.getByText('Ganti model lewat pemilih model di kolom chat.')).toBeTruthy()
+  })
+
+  it('in an open chat the right panel shows that chat own model, provider and effort (same atoms as the chip)', () => {
+    $currentModel.set('stale-composer-pick')
+    $currentProvider.set('openai')
+    $sessionStates.set({
+      rt1: {
+        model: 'deepseek-chat',
+        provider: 'custom:router',
+        reasoningEffort: 'ultra',
+        reasoningEffortWire: 'high'
+      } as unknown as ClientSessionState
+    })
+    $activeSessionId.set('rt1')
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <NeovarchContextRail />
+      </MemoryRouter>
+    )
+
+    expect(container.querySelector('[data-slot="nv-context-model"]')?.textContent).toContain('deepseek-chat')
+    expect(container.textContent).not.toContain('stale-composer-pick')
+    const effort = container.querySelector('[data-slot="nv-context-effort"]') as HTMLElement
+    expect(effort.textContent).toBe('ultra')
+    expect(effort.title).toContain('high')
   })
 
   it('sheet kicker names the default PC or the session agent', () => {
