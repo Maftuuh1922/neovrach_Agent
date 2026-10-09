@@ -22,7 +22,8 @@ import java.io.FileOutputStream
 /**
  * Renders the real widget RemoteViews (the providers' own build code on the
  * real layouts) to PNGs, day and night: the widget picker previewImage files
- * and the screenshots. Runs only with NVW_SHOTS_DIR set:
+ * and the screenshots (snapshot = a real Kantor 3D render, src/test/resources/nvw).
+ * Runs only with NVW_SHOTS_DIR set:
  *   NVW_SHOTS_DIR=/path ./gradlew :app:testDebugUnitTest --tests '*NvWidgetShotsTest*'
  */
 @RunWith(RobolectricTestRunner::class)
@@ -92,14 +93,14 @@ class NvWidgetShotsTest {
             val m = if (night) "dark" else "light"
             val s = sample()
             // a real Kantor 3D snapshot (taken with the page's widgetSnapshot) when given
-            val snap = System.getenv("NVW_SNAPSHOT_DIR")?.let { File(it, if (night) "kantor_true.jpg" else "kantor_false.jpg") }
+            val snap = File(System.getenv("NVW_SNAPSHOT_DIR") ?: "src/test/resources/nvw", if (night) "kantor_true.jpg" else "kantor_false.jpg")
             val file = NvWidgets.snapshotFile(ctx)
-            if (snap != null && snap.exists()) NvWidgets.saveSnapshot(ctx, snap.readBytes())
+            if (snap.exists()) NvWidgets.saveSnapshot(ctx, snap.readBytes())
             render(ctx, NvHomeWidget.build(ctx, s, 340, 176, now), 340, 176, "quick_$m")
             render(ctx, NvHomeWidget.build(ctx, s, 300, 120, now), 300, 120, "quick_compact_$m")
             file.delete() // no snapshot yet: the bundled art (empty room)
             render(ctx, NvHomeWidget.build(ctx, NvWidgetState.EMPTY, 340, 176, now), 340, 176, "quick_unpaired_$m")
-            if (snap != null && snap.exists()) NvWidgets.saveSnapshot(ctx, snap.readBytes())
+            if (snap.exists()) NvWidgets.saveSnapshot(ctx, snap.readBytes())
             render(ctx, NvHomeWidget.build(ctx, sample(connected = false), 340, 176, now), 340, 176, "quick_offline_$m")
             render(ctx, NvStatusWidget.build(ctx, s, 165, now), 165, 165, "status_$m")
             render(ctx, NvStatusWidget.build(ctx, sample(connected = false), 165, now), 165, 165, "status_offline_$m")
