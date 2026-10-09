@@ -22,6 +22,7 @@ import {
   relativeTime,
   setOfficeView
 } from './office-store'
+import { ShareCardButton } from './share-card-dialog'
 
 function useNow(intervalMs = 5000): number {
   const [now, setNow] = useState(() => Date.now() / 1000)
@@ -164,6 +165,7 @@ export function NeovarchOfficePage() {
         </div>
         <div className="nv-office-header-tools">
           <ViewToggle onChange={setOfficeView} value={view} />
+          <ShareCardButton />
           <div className="nv-office-counters">
             <span>
               <StatusDot status="working" /> {office?.counts.working ?? 0} bekerja
