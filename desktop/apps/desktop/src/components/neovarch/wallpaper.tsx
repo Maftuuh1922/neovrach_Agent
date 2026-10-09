@@ -1,13 +1,14 @@
-import { useStore } from '@nanostores/react'
-import type { CSSProperties } from 'react'
-
-import { $wallpaper, $wallpaperUrl } from '@/store/wallpaper'
 // Side effect: "Warna dari wallpaper" (accent follows the image's palette).
 import '@/store/wallpaper-accent'
 // Side effect: "Gaya kaca" (data-nv-glass-style on <html>).
 import '@/store/glass-style'
 // Side effect: per-panel fill floors that keep text >= 4.5:1 over the image.
 import '@/store/wallpaper-contrast'
+
+import { useStore } from '@nanostores/react'
+import type { CSSProperties } from 'react'
+
+import { $wallpaper, $wallpaperUrl } from '@/store/wallpaper'
 
 /**
  * The one fixed background layer behind the whole app shell. The image wears

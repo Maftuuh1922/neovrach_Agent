@@ -1941,7 +1941,8 @@
   flex-direction: column;
   border: 1px solid var(--nv-line, rgba(255, 255, 255, 0.08));
   border-radius: 14px;
-  background: var(--nv-bg, #0d0606);
+  background: var(--nv-ink);
+  color: var(--nv-text);
   overflow: hidden;
 }
 .nv-doc-preview-bar {
@@ -1959,7 +1960,7 @@
   white-space: nowrap;
 }
 .nv-doc-preview-meta {
-  color: var(--nv-text-3);
+  color: var(--nv-text-2);
   margin-right: auto;
 }
 .nv-doc-preview-open {
@@ -1972,7 +1973,7 @@
 .nv-doc-preview-close {
   border-radius: 999px;
   padding: 0.25rem;
-  color: var(--nv-text-3);
+  color: var(--nv-text-2);
 }
 .nv-doc-preview-body {
   flex: 1;
@@ -1982,7 +1983,9 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: #2a2525;
+  /* The gutter round the white pages follows the theme: a step off the
+     surface toward the text colour (dark grey in dark, warm grey in light). */
+  background: color-mix(in srgb, var(--nv-text) 14%, var(--nv-ink));
 }
 .nv-doc-page {
   border-radius: 4px;
@@ -2407,4 +2410,282 @@
   font-family: var(--nv-font-mono);
   font-size: 0.75rem;
   color: var(--nv-text-2);
+}
+
+/* ── Kantor 3D ──────────────────────────────────────────────────────────────
+   The canvas is transparent outside the room, so the panel's own glass (and
+   any wallpaper) shows round it. Labels and the popover carry their own
+   surface, so they read the same in both schemes. */
+.nv-office-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.nv-office-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--nv-line);
+  border-radius: 999px;
+  background: var(--nv-ink-2);
+}
+.nv-office-view-toggle button {
+  padding: 0.28rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  color: var(--nv-text-2);
+}
+.nv-office-view-toggle button[aria-pressed='true'] {
+  background: var(--nv-red);
+  color: #fff;
+}
+.nv-office3d {
+  position: relative;
+  min-height: 30rem;
+  height: max(30rem, calc(100vh - 15rem));
+  overflow: hidden;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: color-mix(in srgb, var(--nv-ink-2) 55%, transparent);
+  isolation: isolate;
+}
+.nv-office3d-stage {
+  position: absolute;
+  inset: 0;
+}
+.nv-office3d-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.nv-office3d-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 13rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 10px;
+  background: rgb(20 14 12 / 78%);
+  backdrop-filter: blur(8px);
+  color: #f6f1e8;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 22%);
+}
+.nv-office3d-label[data-selected] {
+  border-color: var(--nv-red);
+}
+.nv-office3d-label-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.nv-office3d-label i,
+.nv-office3d-legend i,
+.nv-office3d-popover header p i {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+.nv-office3d-label-task {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: #d9d0c4;
+}
+.nv-office3d-loading,
+.nv-office3d-empty {
+  position: absolute;
+  inset: auto 0 45% 0;
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--nv-text-2);
+}
+.nv-office3d-empty {
+  inset: 1rem auto auto 1rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 10px;
+  background: rgb(20 14 12 / 78%);
+  color: #f6f1e8;
+}
+.nv-office3d-legend {
+  position: absolute;
+  z-index: 1500;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(20 14 12 / 78%);
+  backdrop-filter: blur(8px);
+  font-size: 0.7rem;
+  color: #f6f1e8;
+}
+.nv-office3d-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.nv-office3d-reset {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  color: #f6f1e8;
+}
+.nv-office3d-popover {
+  position: absolute;
+  z-index: 2000;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(20rem, calc(100% - 1.5rem));
+  padding: 0.9rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-panel);
+  background: color-mix(in srgb, var(--nv-ink) 92%, transparent);
+  backdrop-filter: blur(14px);
+  color: var(--nv-text);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 28%);
+}
+.nv-office3d-popover header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.nv-office3d-popover h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.nv-office3d-popover header p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  color: var(--nv-text-2);
+}
+.nv-office3d-close {
+  padding: 0.25rem;
+  border-radius: 8px;
+  color: var(--nv-text-2);
+}
+.nv-office3d-close:hover {
+  background: var(--nv-ink-3);
+}
+.nv-office3d-popover-task {
+  margin: 0;
+  font-size: 0.8rem;
+}
+.nv-office3d-popover-approval {
+  margin: 0;
+  color: var(--nv-red-text);
+}
+.nv-office3d-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--nv-line);
+}
+.nv-office3d-assign label {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+.nv-office3d-assign > div {
+  display: flex;
+  gap: 0.4rem;
+}
+.nv-office3d-assign input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink-2);
+  color: var(--nv-text);
+  font-size: 0.78rem;
+}
+.nv-office3d-assign input::placeholder {
+  color: var(--nv-text-2);
+}
+.nv-office3d-assign button {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--nv-r-control);
+  background: var(--nv-red);
+  color: #fff;
+  font-size: 0.76rem;
+}
+.nv-office3d-assign button:disabled {
+  opacity: 0.55;
+}
+.nv-office3d-assign-state {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--nv-text-2);
+}
+.nv-office3d-assign-state[data-kind='error'] {
+  color: var(--nv-red-text);
+}
+.nv-office3d-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.nv-office3d-note {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--nv-line);
+  border-radius: var(--nv-r-control);
+  font-size: 0.78rem;
+  color: var(--nv-text-2);
+}
+.nv-office-model {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+.nv-office-model label {
+  color: var(--nv-text-2);
+}
+.nv-office-model select {
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control);
+  background: var(--nv-ink-2);
+  color: var(--nv-text);
+  font-family: var(--nv-font-mono);
+  font-size: 0.72rem;
+}
+.nv-office-model select:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.nv-office-model-error {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--nv-red-text);
 }
