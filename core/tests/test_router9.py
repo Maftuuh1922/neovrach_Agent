@@ -384,3 +384,32 @@ async def test_router_rpcs_for_the_phone_and_picker_order(router, monkeypatch):
         assert free == sorted(free, reverse=True), models
     finally:
         await c.close()
+
+
+async def test_fresh_9router_token_files_are_primed(home, tmp_path, monkeypatch):
+    """A fresh 9Router has no machine-id / cli-secret until it first checks a CLI token:
+    the core primes them with one request, derives the token and gets its key."""
+    d = tmp_path / "fresh-9r"
+    app = mock_9router.build_app(_token(), lazy_files=(d, MACHINE_ID, CLI_SECRET))
+    server = TestServer(app)
+    await server.start_server()
+    monkeypatch.setenv("NEOVARCH_9ROUTER_URL", str(server.make_url("/v1")))
+    monkeypatch.setenv("NEOVARCH_9ROUTER_DATA_DIR", str(d))
+    gw, c = await _client(monkeypatch)
+    try:
+        assert not (d / "machine-id").exists()
+        st = await (await c.get("/api/router/status", headers=H())).json()
+        assert st["has_api_key"] and st["setup"]["ready"], st
+        assert (d / "machine-id").exists() and app[mock_9router.STATE]["keys"][0]["name"] == "neovarch"
+    finally:
+        await c.close()
+        await server.close()
+
+
+def test_rate_limit_is_explained_in_indonesian():
+    from neovarch.agent import _explain
+    err = 'provider returned HTTP 429: {"error":{"message":"FreeUsageLimitError Rate limit exceeded"}}'
+    out = _explain(err, {"provider": "9router", "model": "oc/big-pickle"})
+    assert "OpenCode Free" in out and "oc/big-pickle" in out and "pilih model lain" in out
+    assert "HTTP 429" in _explain("provider returned HTTP 429: slow down", {"provider": "9router", "model": "kr/glm-5"})
+    assert _explain(err, {"provider": "openai", "model": "gpt"}) == err

@@ -170,6 +170,13 @@ def _explain(error: str, endpoint: dict) -> str:
     if "HTTP 401" in error:
         return (f"9Router meminta API key. Buka dashboard 9Router ({root}/dashboard) \u25b8 Endpoint, "
                 "buat API key, lalu tempel di Pengaturan \u25b8 Model.")
+    if "HTTP 429" in error:
+        model = endpoint.get("model") or "model ini"
+        if "FreeUsageLimit" in error or str(model).startswith("oc/"):
+            return (f"Batas pemakaian gratis OpenCode Free untuk {model} sedang habis. Coba lagi sebentar "
+                    "lagi, atau pilih model lain dari pemilih model di kolom chat.")
+        return (f"9Router sedang membatasi permintaan ke {model} (HTTP 429). Coba lagi sebentar lagi, "
+                "atau pilih model lain dari pemilih model di kolom chat.")
     return error
 
 

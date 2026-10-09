@@ -198,8 +198,8 @@ def data_dir() -> Path:
 def cli_token(ddir: Path | None = None) -> str | None:
     """9Router's local CLI token: sha256(machine_id + salt + cli_secret)[:16].
 
-    Both files are written by the 9Router server on its first start; without them
-    there is no token (we never create them ourselves)."""
+    Both files are written by the 9Router server the first time it checks a CLI token
+    (see ``_prime_cli_token``); we never create them ourselves."""
     d = ddir or data_dir()
     try:
         raw = (d / "machine-id").read_text(encoding="utf-8").strip()
@@ -466,6 +466,8 @@ class Router9:
                 self._provision_error = "API key 9Router di server lain harus ditempel manual."
             return bool(api_key())
         token = cli_token()
+        if not token and not api_key():
+            token = await _prime_cli_token(root)
         if not token:
             if not api_key():
                 self._provision_error = "Neovarch tidak bisa membaca token lokal 9Router."
@@ -523,6 +525,19 @@ class Router9:
                 self.on_models(ids)
             except Exception:  # noqa: BLE001
                 pass
+
+
+async def _prime_cli_token(root: str) -> str | None:
+    """A fresh 9Router writes machine-id and auth/cli-secret only the first time it checks a
+    CLI token. One request carrying a (wrong) token makes it create them; then we can derive
+    the real token. Verified against 9router 0.5.99."""
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as s:
+            async with s.get(root + "/api/keys", headers={CLI_TOKEN_HEADER: "0" * 16}) as r:
+                await r.read()
+    except Exception:  # noqa: BLE001 - provisioning reports the outcome
+        return None
+    return cli_token()
 
 
 async def _ensure_key(s: aiohttp.ClientSession, root: str, headers: dict) -> str | None:

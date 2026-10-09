@@ -24,7 +24,10 @@ FREE_IDS = ["big-pickle", "nemotron-3-ultra-free", "ling-3.1-flash-free"]
 STATIC = ["oc/muse-spark-1.3-contributor-free", "kr/claude-sonnet-4.5", "kr/glm-5"]
 
 
-def build_app(cli_token: str = "", *, free_ids: list[str] | None = None, require_key: bool = True) -> web.Application:
+def build_app(cli_token: str = "", *, free_ids: list[str] | None = None, require_key: bool = True,
+              lazy_files: tuple | None = None) -> web.Application:
+    """``lazy_files=(data_dir, machine_id, cli_secret)``: like the real 9Router, write
+    machine-id and auth/cli-secret only when a request first carries a CLI token."""
     app = web.Application()
     app[STATE] = {"keys": [], "custom": [], "chats": [], "cli_token": cli_token,
                   "free": list(FREE_IDS if free_ids is None else free_ids), "require_key": require_key}
@@ -33,6 +36,12 @@ def build_app(cli_token: str = "", *, free_ids: list[str] | None = None, require
         return r.app[STATE]
 
     def cli_ok(r: web.Request) -> bool:
+        if lazy_files and r.headers.get("x-9r-cli-token"):
+            d, mid, secret = lazy_files
+            (d / "auth").mkdir(parents=True, exist_ok=True)
+            if not (d / "machine-id").exists():
+                (d / "machine-id").write_text(mid)
+                (d / "auth" / "cli-secret").write_text(secret)
         return bool(st(r)["cli_token"]) and r.headers.get("x-9r-cli-token") == st(r)["cli_token"]
 
     def denied() -> web.Response:
