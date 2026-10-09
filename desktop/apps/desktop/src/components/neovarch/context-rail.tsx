@@ -1,15 +1,17 @@
 import { useStore } from '@nanostores/react'
 import { useMemo } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { appViewForPath } from '@/app/routes'
 import type { ChatMessage } from '@/lib/chat-messages/types'
 import { Cpu, FileText, Wrench } from '@/lib/icons'
 import { displayModelName, providerDisplayName } from '@/lib/model-status-label'
 import { $reviewFiles } from '@/store/review'
-import { $currentModel, $currentProvider, $messages } from '@/store/session'
+import { $activeSessionId, $currentModel, $currentProvider, $messages } from '@/store/session'
 
+import { agentForSession } from './agent-identity'
 import { NeovarchOfficeMini } from './office'
+import { $office } from './office-store'
 import { $reportPanelOpen, latestReportEdit } from './report-edit'
 import { ReportPanel, useRecentlyChanged, useReportPanelShortcut } from './report-panel'
 
@@ -78,8 +80,18 @@ function baseName(path: string): string {
  */
 export function NeovarchContextRail() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const model = useStore($currentModel)
-  const provider = useStore($currentProvider)
+  const composerProvider = useStore($currentProvider)
+  const office = useStore($office)
+  const activeSessionId = useStore($activeSessionId)
+  // The composer atom is empty until a model is picked in this run; fall back
+  // to what the core says this chat (or the default) really uses.
+  const provider =
+    composerProvider ||
+    agentForSession(office, activeSessionId)?.model_provider ||
+    office?.model?.provider ||
+    ''
   const messages = useStore($messages)
   const reviewFiles = useStore($reviewFiles)
 
@@ -127,7 +139,18 @@ export function NeovarchContextRail() {
             <dd>{turns}</dd>
           </div>
         </dl>
-        <p className="nv-context-hint">Ganti model lewat pemilih model di kolom chat.</p>
+        {model.trim() ? (
+          <p className="nv-context-hint">Ganti model lewat pemilih model di kolom chat.</p>
+        ) : (
+          <button
+            className="nv-context-pick-model"
+            data-slot="nv-context-pick-model"
+            onClick={() => navigate('/settings?tab=config:model')}
+            type="button"
+          >
+            Pilih model
+          </button>
+        )}
       </section>
 
       <section className="nv-context-card">

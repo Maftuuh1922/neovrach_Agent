@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router'
 import { sessionRoute } from '@/app/routes'
 import { Brain, Users } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { $activeSessionId, $busy } from '@/store/session'
 
 import { OfficeAgentAvatar } from './agent-identity'
 import { Office3D } from './office-3d'
@@ -17,6 +18,8 @@ import {
   OFFICE_ROUTE,
   OFFICE_STATUS_LABEL,
   type OfficeAgent,
+  officeWorkingCount,
+  refreshOffice,
   type OfficeFeedItem,
   type OfficeView,
   relativeTime,
@@ -139,14 +142,21 @@ export function NeovarchOfficePage() {
   const list = (
     <section aria-label="Meja agen" className="nv-office-grid">
       {office === null && !error && <p className="nv-office-empty">Memuat kantor…</p>}
-      {error && <p className="nv-office-empty">Kantor belum bisa dimuat: {error}</p>}
-      {office && office.agents.length === 0 && (
+      {error && (
+        <div className="nv-office-empty" role="alert">
+          <p>Kantor belum bisa dimuat: {error}</p>
+          <button className="nv-office-retry" onClick={() => void refreshOffice()} type="button">
+            Coba lagi
+          </button>
+        </div>
+      )}
+      {office && (!Array.isArray(office.agents) || office.agents.length === 0) && (
         <div className="nv-office-empty">
           <Users className="size-5" />
           <p>Belum ada pegawai. Mulai obrolan atau beri tugas di Kanban, agennya akan duduk di sini.</p>
         </div>
       )}
-      {office?.agents.map(agent => (
+      {(Array.isArray(office?.agents) ? office.agents : []).map(agent => (
         <Desk agent={agent} key={agent.id} now={now} />
       ))}
     </section>
@@ -166,7 +176,7 @@ export function NeovarchOfficePage() {
           <ViewToggle onChange={setOfficeView} value={view} />
           <div className="nv-office-counters">
             <span>
-              <StatusDot status="working" /> {office?.counts.working ?? 0} bekerja
+              <StatusDot status="working" /> {officeWorkingCount(office)} bekerja
             </span>
             <span>
               <StatusDot status="waiting-approval" /> {office?.counts['waiting-approval'] ?? 0} menunggu
@@ -237,8 +247,11 @@ export function NeovarchOfficePage() {
 /** Compact "Kantor" card for the context rail beside the conversation. */
 export function NeovarchOfficeMini() {
   const office = useStore($office)
+  const busy = useStore($busy)
+  const activeSessionId = useStore($activeSessionId)
   const navigate = useNavigate()
-  const agents = office?.agents.slice(0, 5) ?? []
+  const agents = Array.isArray(office?.agents) ? office.agents.slice(0, 5) : []
+  const working = officeWorkingCount(office, busy ? [activeSessionId] : [])
 
   return (
     <button
@@ -250,7 +263,7 @@ export function NeovarchOfficeMini() {
     >
       <span className="nv-context-label">
         <Users className="size-3.5" /> Kantor
-        <span className="nv-office-mini-count">{office ? `${office.counts.working} bekerja` : ''}</span>
+        <span className="nv-office-mini-count">{office || busy ? `${working} bekerja` : ''}</span>
       </span>
       <MiniOffice3D office={office} />
       {agents.length === 0 ? (

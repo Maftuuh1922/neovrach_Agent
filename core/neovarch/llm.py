@@ -104,7 +104,7 @@ def reasoning_fields(base_url: str, effort: str | None) -> dict[str, Any]:
 async def _stream_chat(base_url, api_key, model, messages, tools, on_text, on_reasoning, timeout_s,
                        session, extra_headers, verify_ssl, reasoning_effort) -> Completion:
     if not base_url:
-        raise LLMError("No model provider configured. Run `neovarch setup` (or set model.base_url in config.yaml).")
+        raise LLMError("Belum ada model. Pilih model di Pengaturan → Model (No model provider configured; run `neovarch setup` or set model.base_url in config.yaml).")
     url = base_url.rstrip("/") + "/chat/completions"
     body: dict[str, Any] = {"model": model or "default", "messages": messages, "stream": True,
                             "stream_options": {"include_usage": True}}

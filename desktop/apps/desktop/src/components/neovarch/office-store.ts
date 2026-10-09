@@ -61,8 +61,29 @@ export interface OfficeSnapshot {
   generated_at: number
   host: string
   kanban: Record<string, number>
+  /** The core's default model/provider (newer cores). */
+  model?: { model?: string; provider?: string }
   seq: number
   vault: OfficeVault
+}
+
+/** Agents really working right now: desks the core marks working, plus chats
+ *  the renderer knows are mid-turn whose desk has not caught up yet (an old
+ *  core or a dropped `office.update` left the Kantor saying "0 bekerja"). */
+export function officeWorkingCount(
+  office: null | OfficeSnapshot,
+  busySessionIds: readonly (null | string | undefined)[] = []
+): number {
+  const agents = Array.isArray(office?.agents) ? office.agents : []
+  const working = new Set(agents.filter(agent => agent?.status === 'working').map(agent => agent.id))
+
+  for (const sid of busySessionIds) {
+    if (sid) {
+      working.add(`session:${sid}`)
+    }
+  }
+
+  return working.size
 }
 
 export const OFFICE_ROUTE = '/office'
@@ -117,6 +138,41 @@ export const OFFICE_STATUS_LABEL: Record<OfficeAgent['status'], string> = {
 export const $office = atom<null | OfficeSnapshot>(null)
 export const $officeError = atom<null | string>(null)
 
+/** Fill the fields a renderer reads as arrays/objects so an old or partial
+ *  core answer can never crash a page (`agents.map is not a function`). */
+export function normalizeOfficeSnapshot(raw: unknown): OfficeSnapshot {
+  const snap = (raw && typeof raw === 'object' ? raw : {}) as Partial<OfficeSnapshot>
+  const agents = (Array.isArray(snap.agents) ? snap.agents : []).filter(
+    (agent): agent is OfficeAgent => Boolean(agent) && typeof agent === 'object' && typeof agent.id === 'string'
+  )
+  const counts = { idle: 0, total: agents.length, 'waiting-approval': 0, working: 0 }
+
+  for (const agent of agents) {
+    if (agent.status in counts) {
+      counts[agent.status] += 1
+    }
+  }
+
+  return {
+    ...snap,
+    agents,
+    counts,
+    feed: Array.isArray(snap.feed) ? snap.feed : [],
+    generated_at: Number(snap.generated_at) || 0,
+    host: String(snap.host ?? ''),
+    kanban: snap.kanban && typeof snap.kanban === 'object' ? snap.kanban : {},
+    seq: Number(snap.seq) || 0,
+    vault:
+      snap.vault && typeof snap.vault === 'object'
+        ? snap.vault
+        : { configured: false, connected: false, note_count: 0, path: '' }
+  }
+}
+
+export async function refreshOffice(): Promise<void> {
+  return refresh()
+}
+
 async function refresh(): Promise<void> {
   const gateway = $gateway.get()
 
@@ -125,7 +181,7 @@ async function refresh(): Promise<void> {
   }
 
   try {
-    $office.set(await gateway.request<OfficeSnapshot>('office.snapshot', {}))
+    $office.set(normalizeOfficeSnapshot(await gateway.request<OfficeSnapshot>('office.snapshot', {})))
     $officeError.set(null)
   } catch (error) {
     $officeError.set(error instanceof Error ? error.message : String(error))
@@ -140,7 +196,7 @@ onMount($office, () => {
     const payload = event.payload as OfficeSnapshot | undefined
 
     if (payload && Array.isArray(payload.agents)) {
-      $office.set(payload)
+      $office.set(normalizeOfficeSnapshot(payload))
     }
   })
   const offReady = onGatewayEvent('gateway.ready', () => void refresh())

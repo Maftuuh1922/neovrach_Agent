@@ -155,3 +155,25 @@ async def test_appearance_api_and_event(home, monkeypatch):
         assert (await c.put("/api/appearance?token=tok", json={"accent": "merah"})).status == 422
     finally:
         await c.close()
+
+
+def test_persona_prompt_uses_the_desk_of_this_session():
+    from neovarch.agent import persona_prompt, system_prompt
+    from neovarch import config as cfgmod
+    snap = {"agents": [
+        {"id": "session:s1", "session_id": "s1", "name": "Dimas", "role": "Agen utama · desktop",
+         "status": "working", "current_task": "rapikan README", "current_tool": "shell", "model": "m-1",
+         "title": "README"},
+        {"id": "kanban:Hana", "session_id": None, "name": "Hana", "status": "idle", "current_task": "deploy"},
+    ], "counts": {"working": 1, "waiting-approval": 0, "idle": 1}}
+    text = persona_prompt("s1", snap)
+    assert "**Dimas**" in text and "rapikan README" in text and "shell" in text
+    assert "rekan Hana" in text and "1 bekerja" in text
+    assert "Dimas" in system_prompt(cfgmod.load_config(), __import__("pathlib").Path("."), "lagi apa", text)
+
+
+def test_persona_prompt_without_office_falls_back_to_staff_name():
+    from neovarch.agent import persona_prompt
+    from neovarch.office import staff_name
+    assert f"**{staff_name('abc')}**" in persona_prompt("abc", None)
+    assert persona_prompt(None, None) == ""

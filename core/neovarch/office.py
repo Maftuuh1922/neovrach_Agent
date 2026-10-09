@@ -150,14 +150,15 @@ class Office:
     def invalidate_vault(self) -> None:
         self._vault_cache = None
 
-    def _desk_for_session(self, rec: dict, live) -> dict:
+    def _desk_for_session(self, rec: dict, live, cfg: dict | None = None) -> dict:
         sid = rec["id"]
         st = self.state.get(sid, {})
         msgs = rec.get("messages", [])
         status = "idle"
         if live is not None and live.approvals:
             status = "waiting-approval"
-        elif live is not None and live.status == "running":
+        elif live is not None and (live.status == "running" or
+                                   (getattr(live, "task", None) is not None and not live.task.done())):
             status = "working"
         pending = None
         if live is not None and live.approvals:
@@ -170,11 +171,19 @@ class Office:
         last_ts = max(float(st.get("last") or 0), float(rec.get("updated_at") or rec.get("created_at") or 0))
         last_feed = next((f for f in reversed(self.feed) if f.get("session_id") == sid), None)
         source = str(rec.get("source") or "cli")
+        model, provider = rec.get("model") or "", ""
+        if cfg is not None:
+            try:  # the model/provider this chat's next turn really uses
+                from neovarch import session_settings
+                ep = session_settings.effective_endpoint(cfg, rec)
+                model, provider = ep.get("model") or model, ep.get("provider") or ""
+            except Exception:
+                pass
         return {
             "id": f"session:{sid}", "kind": "session", "session_id": sid,
             "name": staff_name(sid), "role": ROLES.get(source, "Agen"), "source": source,
             "status": status, "current_task": task or None, "current_tool": st.get("tool") if status != "idle" else None,
-            "title": rec.get("title") or None, "model": rec.get("model") or "",
+            "title": rec.get("title") or None, "model": model, "model_provider": provider,
             "last_activity": last_ts, "last_activity_text": last_feed["text"] if last_feed else None,
             "message_count": sum(1 for m in msgs if m.get("role") in ("user", "assistant")),
             "pending_approval": pending,
@@ -206,8 +215,13 @@ class Office:
         now = time.time()
         desks: list[dict] = []
         seen: set[str] = set()
+        try:
+            from neovarch import config as cfgmod
+            cfg = cfgmod.load_config()
+        except Exception:
+            cfg = None
         for sid, live in list(gw.live.items()):
-            desks.append(self._desk_for_session(live.rec, live))
+            desks.append(self._desk_for_session(live.rec, live, cfg))
             seen.add(sid)
         try:
             recent = gw.store.list(limit=MAX_DESKS)
@@ -218,7 +232,7 @@ class Office:
                 continue
             rec = gw.store.load(summary["id"])
             if rec:
-                desks.append(self._desk_for_session(rec, None))
+                desks.append(self._desk_for_session(rec, None, cfg))
                 seen.add(rec["id"])
         try:
             tasks = gw.kanban.board().get("tasks", [])
@@ -231,6 +245,12 @@ class Office:
         counts = {"total": len(desks), "working": 0, "waiting-approval": 0, "idle": 0}
         for d in desks:
             counts[d["status"]] = counts.get(d["status"], 0) + 1
+        model = None
+        if hasattr(gw, "model_info"):
+            try:
+                model = gw.model_info()
+            except Exception:
+                model = None
         kanban = {s: sum(1 for t in tasks if t.get("status") == s) for s in ("todo", "ready", "running", "blocked", "done")}
         return {
             "version": 1, "product": "neovarch", "core_version": __version__,
@@ -238,4 +258,5 @@ class Office:
             "agents": desks, "counts": counts, "kanban": kanban,
             "feed": list(reversed(list(self.feed)[-60:])),
             "vault": self._vault(),
+            **({"model": model} if model else {}),
         }

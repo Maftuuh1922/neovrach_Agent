@@ -38,8 +38,54 @@ How to answer questions about the app:
   unless the task clearly needs more; prefer narrow commands with a short timeout over broad greps."""
 
 
-def system_prompt(cfg: dict, cwd: Path, query: str = "") -> str:
+def persona_prompt(session_id: str | None, office: dict | None) -> str:
+    """Who this chat is in the Kantor: the desk the session sits at.
+
+    Every chat is a pegawai in the Kantor (name derived from the session id).
+    Without this the agent answered "lagi apa kamu?" with a generic
+    "Saya Neovarch Agent... standby" instead of its own desk and task."""
+    if not session_id:
+        return ""
+    from neovarch.office import staff_name
+    agents = (office or {}).get("agents") or []
+    desk = next((a for a in agents if isinstance(a, dict) and
+                 (a.get("session_id") == session_id or a.get("id") == f"session:{session_id}")), None)
+    name = str((desk or {}).get("name") or staff_name(session_id))
+    role = str((desk or {}).get("role") or "Agen")
+    status_word = {"working": "sedang bekerja (giliran ini)", "waiting-approval": "menunggu persetujuan pengguna",
+                   "idle": "santai di meja"}.get(str((desk or {}).get("status") or "working"), "di meja")
+    lines = [f"# Identitasmu di Kantor\nKamu adalah **{name}**, pegawai Kantor Neovarch ({role}). "
+             f"Obrolan ini adalah mejamu; di Kantor kamu tampil sebagai {name}. Saat ditanya siapa kamu, sedang apa, "
+             f"atau \"lagi apa\", jawab sebagai {name} secara natural dan pakai data nyata di bawah ini "
+             "(jangan jawab generik seperti \"Saya Neovarch Agent, standby\")."]
+    if desk:
+        if desk.get("title"):
+            lines.append(f"- Judul obrolan: {desk['title']}")
+        lines.append(f"- Status: {status_word}")
+        if desk.get("current_task"):
+            lines.append(f"- Tugas saat ini: {desk['current_task']}")
+        if desk.get("current_tool"):
+            lines.append(f"- Tool yang sedang dipakai: {desk['current_tool']}")
+        if desk.get("model"):
+            lines.append(f"- Model: {desk['model']}")
+        if desk.get("last_activity_text"):
+            lines.append(f"- Aktivitas terakhir: {desk['last_activity_text']}")
+    counts = (office or {}).get("counts") or {}
+    others = [a for a in agents if isinstance(a, dict) and a is not desk][:6]
+    if counts or others:
+        lines.append(f"- Kantor sekarang: {counts.get('working', 0)} bekerja, "
+                     f"{counts.get('waiting-approval', 0)} menunggu, {counts.get('idle', 0)} santai")
+        for a in others:
+            task = f" — {a['current_task']}" if a.get("current_task") else ""
+            lines.append(f"  - rekan {a.get('name')}: {a.get('status')}{task}")
+    lines.append("Untuk detail terbaru panggil `office_status`.")
+    return "\n".join(lines)
+
+
+def system_prompt(cfg: dict, cwd: Path, query: str = "", persona: str = "") -> str:
     parts = [cfgmod.soul_text().strip(), APP_KNOWLEDGE]
+    if persona:
+        parts.append(persona)
     extra = str(cfgmod.get_path(cfg, "agent.system_prompt", "") or "").strip()
     if extra:
         parts.append(extra)
@@ -120,7 +166,12 @@ class Agent:
         final_text = ""
         usage: dict[str, Any] = {}
         error = None
-        sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text)
+        persona = ""
+        try:
+            persona = persona_prompt(self.rec.get("id"), self.ctx.office() if self.ctx.office else None)
+        except Exception:  # the Kantor must never break a turn
+            persona = persona_prompt(self.rec.get("id"), None)
+        sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text, persona)
         try:
             for _ in range(max_turns):
                 if self.interrupted:

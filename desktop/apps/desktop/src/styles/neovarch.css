@@ -3231,3 +3231,20 @@
     transition: none;
   }
 }
+
+/* "Pilih model" when the chat has no model yet (context rail). */
+.nv-context-pick-model,
+.nv-office-retry {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--nv-accent, currentColor);
+  background: transparent;
+  color: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.nv-context-pick-model:hover,
+.nv-office-retry:hover {
+  background: color-mix(in srgb, var(--nv-accent, currentColor) 14%, transparent);
+}
