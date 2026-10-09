@@ -60,6 +60,8 @@ export const OFFICE3D_PALETTE = {
   skin: '#e8c6a0',
   hair: '#1e1a18',
   laptop: '#2a2a2e',
+  coolerStand: '#d9cfbd',
+  coolerWater: '#8fbfd4',
   hemiSky: '#fff1dc',
   hemiGround: '#6b5a44',
   sun: '#ffe2b8'
@@ -91,6 +93,154 @@ export const OFFICE3D_CAMERA = {
   minAzimuthAngle: -0.3,
   maxAzimuthAngle: 1.75
 } as const
+
+/**
+ * Idle strolls: an idle or waiting agent now and then stands up, walks a short
+ * path (to the water cooler, to a neighbour's desk, or a few steps along the
+ * aisle) and comes back to sit. Working and error agents stay seated; an agent
+ * that gets work mid-stroll hurries straight back. Times in seconds, distances
+ * in scene units (m).
+ */
+export const OFFICE3D_STROLL = {
+  /** Walking speed, and the faster speed when work arrives mid-stroll. */
+  speed: 0.9,
+  hurrySpeed: 1.5,
+  /** Sit ↔ stand blend. */
+  standUp: 0.6,
+  /** Time spent at the destination. */
+  pauseMin: 2,
+  pauseMax: 4,
+  /** Gap before an agent's first stroll, and between strolls after that. */
+  firstMin: 3,
+  firstMax: 12,
+  gapMin: 10,
+  gapMax: 24,
+  /** Walk-cycle stride (one left + right step) and swing amplitudes (rad). */
+  stride: 1.1,
+  legSwing: 0.55,
+  armSwing: 0.45,
+  /** Standing body height (seated body sits at 0.12). */
+  standY: 0.34,
+  /** Seat point behind the desk, and the free aisle behind each seat (z offsets from the desk centre). */
+  seatZ: -0.22,
+  aisleZ: -1.2,
+  /** Chance of each destination (the rest are aisle stretches). */
+  coolerChance: 0.45,
+  neighbourChance: 0.35
+} as const
+
+export type StrollKind = 'cooler' | 'neighbour' | 'stretch'
+
+export interface StrollPlan {
+  kind: StrollKind
+  /** Polyline on the floor, from the seat to the destination. Walk it out, then back. */
+  points: { x: number; z: number }[]
+  /** Where the agent looks while paused at the destination. */
+  face: { x: number; z: number }
+}
+
+/** The water cooler: against the left shoji wall, near the front of the room. */
+export function waterCoolerSpot(room: RoomSize): { x: number; z: number } {
+  return { x: round2(-room.width / 2 + 0.45), z: round2(room.depth / 2 - 1.5) }
+}
+
+/**
+ * The path for one stroll. Paths only use free floor: the aisle behind the
+ * agent's own seat (no desk is within 0.7 m of it), and a corridor along the
+ * left wall (at least 3 m clear of the leftmost desks by `layoutDesks`).
+ * `pick` is a random number in [0, 1) that chooses the side / the spot.
+ * A `neighbour` stroll without a same-row neighbour becomes a `cooler` one.
+ */
+export function strollPlan(
+  agent: { x: number; z: number },
+  desks: { x: number; z: number }[],
+  room: RoomSize,
+  kind: StrollKind,
+  pick = 0.5
+): StrollPlan {
+  const S = OFFICE3D_STROLL
+  const seat = { x: agent.x, z: round2(agent.z + S.seatZ) }
+  const aisle = round2(agent.z + S.aisleZ)
+  const out = { x: agent.x, z: aisle }
+
+  if (kind === 'neighbour') {
+    const sameRow = desks
+      .filter(d => Math.abs(d.z - agent.z) < 0.01 && Math.abs(d.x - agent.x) > 0.01)
+      .sort((a, b) => Math.abs(a.x - agent.x) - Math.abs(b.x - agent.x))
+
+    const nearest = sameRow.filter(d => Math.abs(Math.abs(d.x - agent.x) - Math.abs(sameRow[0]!.x - agent.x)) < 0.01)
+    const target = nearest.length ? nearest[Math.min(nearest.length - 1, Math.floor(pick * nearest.length))]! : null
+
+    if (target) {
+      const dir = Math.sign(target.x - agent.x)
+
+      return {
+        kind,
+        points: [seat, out, { x: round2(target.x - dir * 0.6), z: aisle }],
+        face: { x: target.x, z: round2(target.z + S.seatZ) }
+      }
+    }
+
+    kind = 'cooler'
+  }
+
+  if (kind === 'stretch') {
+    // Toward the room's centre line, or either way at the centre.
+    const dir = Math.abs(agent.x) < 0.01 ? (pick < 0.5 ? -1 : 1) : -Math.sign(agent.x)
+    const end = { x: round2(agent.x + dir * 1.5), z: aisle }
+
+    return { kind, points: [seat, out, end], face: { x: end.x, z: round2(end.z + 2) } }
+  }
+
+  const cooler = waterCoolerSpot(room)
+  const corridor = round2(cooler.x + 0.6)
+  // Two agents at the cooler at once stand a little apart.
+  const spotZ = round2(cooler.z + (pick - 0.5) * 0.6)
+
+  return {
+    kind: 'cooler',
+    points: [seat, out, { x: corridor, z: aisle }, { x: corridor, z: spotZ }],
+    face: { x: cooler.x, z: spotZ }
+  }
+}
+
+/** Length of a stroll polyline. */
+export function pathLength(points: { x: number; z: number }[]): number {
+  let total = 0
+
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.z - points[i - 1]!.z)
+  }
+
+  return total
+}
+
+/** Point and heading (rotation.y; 0 faces +z) at distance `s` along a polyline. */
+export function pointAlong(points: { x: number; z: number }[], s: number): { heading: number; x: number; z: number } {
+  let left = Math.max(0, s)
+
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    const len = Math.hypot(b.x - a.x, b.z - a.z)
+
+    if (len === 0) {
+      continue
+    }
+
+    if (left <= len || i === points.length - 1) {
+      const k = Math.min(1, left / len)
+
+      return { heading: Math.atan2(b.x - a.x, b.z - a.z), x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k }
+    }
+
+    left -= len
+  }
+
+  const p = points[0] ?? { x: 0, z: 0 }
+
+  return { heading: 0, x: p.x, z: p.z }
+}
 
 export function deskColumns(n: number): number {
   if (n <= 2) {

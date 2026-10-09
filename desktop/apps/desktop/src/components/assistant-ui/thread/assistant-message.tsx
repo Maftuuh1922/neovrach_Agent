@@ -9,6 +9,7 @@ import {
   useThreadRuntime
 } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
+import { Timer } from 'lucide-react'
 import { type FC, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useInRouterContext, useNavigate } from 'react-router'
 
@@ -1038,11 +1039,13 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
     <div className="relative flex w-full shrink-0 items-center justify-end gap-1.5">
       {durationS !== undefined && (
         <span
-          className="mr-auto select-none px-0.5 text-[0.6875rem] leading-5 tabular-nums text-muted-foreground"
+          className="mr-auto inline-flex select-none items-center gap-1 px-0.5 text-[0.6875rem] leading-5 tabular-nums text-muted-foreground"
           data-slot="aui_turn-duration"
           title={t.assistant.thread.turnDuration(formatElapsed(durationS))}
         >
-          ⏱ {formatElapsed(durationS)}
+          {/* SVG icon, not the U+23F1 emoji: the emoji rendered as a tofu box where no emoji font is installed. */}
+          <Timer aria-hidden="true" className="size-3 shrink-0" data-slot="aui_turn-duration-icon" strokeWidth={1.75} />
+          {formatElapsed(durationS)}
         </span>
       )}
       <ActionBarPrimitive.Root

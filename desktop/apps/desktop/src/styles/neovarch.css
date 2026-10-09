@@ -3204,3 +3204,30 @@
 :root[data-nv-skin='neovarch'][data-nv-scheme='light'] {
   --ui-text-tertiary: color-mix(in srgb, var(--ui-base) 66%, transparent);
 }
+
+/* Conversation timeline (jump-to-turn ticks at the chat's right edge): one
+   tick per turn, the current one in the accent. With only a few turns it read
+   as a stray "=" floating mid-pane, so it rests at low contrast in plain grey
+   and comes forward (accent on the current turn, wider ticks) only while the
+   pointer or keyboard focus is on it. */
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline'] {
+  opacity: 0.35;
+  transition: opacity 160ms ease;
+}
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:hover,
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:focus-within {
+  opacity: 1;
+}
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:not(:hover, :focus-within)
+  .thread-timeline-tick[aria-current='location']
+  [data-slot='timeline-bar'] {
+  background: var(--ui-text-tertiary);
+}
+:root[data-nv-skin='neovarch'] [data-slot='thread-timeline']:hover [data-slot='timeline-bar'] {
+  width: 0.75rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-nv-skin='neovarch'] [data-slot='thread-timeline'] {
+    transition: none;
+  }
+}

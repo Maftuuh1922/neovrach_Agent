@@ -12,11 +12,28 @@
  *
  * Labels are the caller's DOM: every element in `labelLayer` with
  * `data-agent-label="<id>"` is moved over that agent's head each frame.
+ *
+ * Idle and waiting agents now and then stand up and stroll (water cooler, a
+ * neighbour's desk, a few steps along the aisle) with a walk cycle, then sit
+ * back down; see OFFICE3D_STROLL / strollPlan in the model.
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-import { layoutDesks, OFFICE3D_CAMERA, OFFICE3D_STATUS, OFFICE3D_PALETTE as P, type SceneAgent } from './office3d-model'
+import {
+  layoutDesks,
+  OFFICE3D_CAMERA,
+  OFFICE3D_STATUS,
+  OFFICE3D_STROLL as STROLL,
+  OFFICE3D_PALETTE as P,
+  pathLength,
+  pointAlong,
+  type SceneAgent,
+  type StrollKind,
+  type StrollPlan,
+  strollPlan,
+  waterCoolerSpot
+} from './office3d-model'
 
 export interface OfficeSceneOptions {
   container: HTMLElement
@@ -43,18 +60,62 @@ export interface OfficeScene {
 const LABEL_HEIGHT = 1.75
 const WALL_HEIGHT = 3.2
 
+interface Stroll {
+  /** Time in the current phase (s). */
+  elapsed: number
+  /** Work arrived: walk back at hurry speed. */
+  hurry: boolean
+  length: number
+  pause: number
+  phase: 'back' | 'out' | 'pause' | 'sit' | 'stand'
+  plan: StrollPlan
+  /** Distance walked along the path (m). */
+  s: number
+}
+
 interface Figure {
   agent: SceneAgent
   armL: THREE.Object3D
   armR: THREE.Object3D
   body: THREE.Object3D
+  coat: THREE.MeshStandardMaterial
+  /** Walk-cycle angle, advanced by the distance walked. */
+  gait: number
   group: THREE.Group
   head: THREE.Object3D
+  heading: number
+  legL: THREE.Object3D
+  legR: THREE.Object3D
   lidLight: THREE.MeshStandardMaterial
+  nextStroll: number
   phase: number
   ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>
-  coat: THREE.MeshStandardMaterial
+  /** Folded legs of the seated pose (hidden while standing). */
+  seatLegs: THREE.Object3D
+  /** Sit (0) ↔ stand (1). */
+  stand: number
+  stroll: null | Stroll
+  /** Walk-cycle amplitude, eased in and out so steps start and stop smoothly. */
+  swing: number
   torso: THREE.Object3D
+}
+
+const rand = (min: number, max: number) => min + Math.random() * (max - min)
+const lerp = (a: number, b: number, k: number) => a + (b - a) * k
+const smooth = (k: number) => k * k * (3 - 2 * k)
+
+function turnToward(from: number, to: number, k: number): number {
+  let d = to - from
+
+  while (d > Math.PI) {
+    d -= Math.PI * 2
+  }
+
+  while (d < -Math.PI) {
+    d += Math.PI * 2
+  }
+
+  return from + d * k
 }
 
 export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
@@ -137,7 +198,9 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     lanternCap: mat(P.lanternCap),
     leaf: mat(P.bonsaiLeaf, { flatShading: true }),
     trunk: mat(P.bonsaiTrunk),
-    pot: mat(P.pot, { roughness: 0.5 })
+    pot: mat(P.pot, { roughness: 0.5 }),
+    coolerStand: mat(P.coolerStand, { roughness: 0.7 }),
+    coolerWater: mat(P.coolerWater, { roughness: 0.15, transparent: true, opacity: 0.75 })
   }
 
   const G = {
@@ -281,6 +344,16 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     box(room, M.woodDark, [1.0, 0.05, 0.05], [hw - 1.6, 0.88, -hd + 0.1])
     box(room, M.woodLight, [1.6, 0.16, 0.8], [hw - 1.6, 0.08, -hd + 0.55])
     buildBonsai(room, [hw - 1.6, 0.16, -hd + 0.55])
+
+    // Water cooler against the left shoji, where strolling agents go.
+    const cooler = waterCoolerSpot({ width, depth })
+    box(room, M.coolerStand, [0.36, 0.86, 0.36], [cooler.x, 0.43, cooler.z])
+    box(room, M.woodDark, [0.38, 0.04, 0.38], [cooler.x, 0.88, cooler.z])
+    const bottle = new THREE.Mesh(G.cyl, M.coolerWater)
+    bottle.scale.set(0.26, 0.42, 0.26)
+    bottle.position.set(cooler.x, 1.11, cooler.z)
+    room.add(bottle)
+    box(room, M.laptop, [0.05, 0.05, 0.06], [cooler.x + 0.2, 0.7, cooler.z])
 
     // Paper lanterns (chōchin) hanging in a row; two carry real lights.
     const count = Math.max(2, Math.round(width / 5))
@@ -503,6 +576,25 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     legs.castShadow = true
     body.add(legs)
 
+    // Standing legs for strolls: pivots at the hips, hidden while seated.
+    const leg = (side: number) => {
+      const pivot = new THREE.Group()
+      pivot.position.set(side * 0.12, 0.16, 0)
+      pivot.visible = false
+      body.add(pivot)
+      const limb = new THREE.Mesh(G.cyl, coat)
+      limb.scale.set(0.15, 0.46, 0.15)
+      limb.position.y = -0.23
+      limb.castShadow = true
+      pivot.add(limb)
+      const foot = new THREE.Mesh(G.box, M.hair)
+      foot.scale.set(0.13, 0.06, 0.22)
+      foot.position.set(0, -0.46, 0.04)
+      pivot.add(foot)
+
+      return pivot
+    }
+
     const torso = new THREE.Group()
     torso.position.y = 0.16
     body.add(torso)
@@ -555,16 +647,32 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
       armR: arm(1),
       body,
       coat,
+      gait: 0,
       group,
       head,
+      heading: 0,
+      legL: leg(-1),
+      legR: leg(1),
       lidLight,
+      nextStroll: clock.getElapsedTime() + rand(STROLL.firstMin, STROLL.firstMax),
       phase: Math.random() * Math.PI * 2,
       ring,
+      seatLegs: legs,
+      stand: 0,
+      stroll: null,
+      swing: 0,
       torso
     }
   }
 
   function applyAgent(figure: Figure, agent: SceneAgent) {
+    if (figure.agent.x !== agent.x || figure.agent.z !== agent.z) {
+      // The desk moved (layout changed): drop any stroll, sit at the new desk.
+      figure.stroll = null
+      figure.stand = 0
+      figure.heading = 0
+    }
+
     figure.agent = agent
     figure.group.position.set(agent.x, 0, agent.z)
     figure.coat.color.set(agent.coat)
@@ -722,6 +830,7 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
   let disposed = false
   let paused = false
   let lastFrame = 0
+  let lastT = 0
 
   function animate(now = performance.now()) {
     if (disposed || paused) {
@@ -741,9 +850,13 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     lastFrame = now
 
     const t = clock.getElapsedTime()
+    // Clamped so a long pause (hidden tab, offscreen mini) never teleports a walker.
+    const dt = Math.min(0.1, Math.max(0, t - lastT))
+    lastT = t
     controls.update()
 
     for (const figure of figures.values()) {
+      updateStroll(figure, t, dt)
       animateFigure(figure, t)
     }
 
@@ -820,6 +933,197 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     if (isSelected) {
       ringMat.opacity = Math.max(ringMat.opacity, 0.95)
     }
+
+    poseStanding(f, p)
+  }
+
+  // ── strolls ───────────────────────────────────────────────────────────────
+  function startStroll(f: Figure) {
+    const r = Math.random()
+
+    const kind: StrollKind =
+      r < STROLL.coolerChance ? 'cooler' : r < STROLL.coolerChance + STROLL.neighbourChance ? 'neighbour' : 'stretch'
+
+    const desks = [...figures.values()].map(other => other.agent)
+    const [w, d] = roomKey ? roomKey.split('x').map(Number) : [12, 9]
+    const plan = strollPlan(f.agent, desks, { width: w!, depth: d! }, kind, Math.random())
+    f.stroll = {
+      elapsed: 0,
+      hurry: false,
+      length: pathLength(plan.points),
+      pause: rand(STROLL.pauseMin, STROLL.pauseMax),
+      phase: 'stand',
+      plan,
+      s: 0
+    }
+  }
+
+  /** Advance the stroll state machine: stand → out → pause → back → sit. */
+  function updateStroll(f: Figure, t: number, dt: number) {
+    const free = !options.reducedMotion && (f.agent.status === 'idle' || f.agent.status === 'waiting')
+
+    if (!f.stroll) {
+      if (!free) {
+        f.nextStroll = Math.max(f.nextStroll, t + STROLL.firstMin)
+      } else if (t >= f.nextStroll) {
+        startStroll(f)
+      }
+
+      if (!f.stroll) {
+        return
+      }
+    }
+
+    const st = f.stroll
+    st.elapsed += dt
+
+    if (!free && !st.hurry) {
+      // Work (or an error) arrived: turn round and head back now.
+      st.hurry = true
+
+      if (st.phase === 'stand') {
+        st.phase = 'sit'
+        st.elapsed = Math.max(0, STROLL.standUp - st.elapsed)
+      } else if (st.phase === 'out' || st.phase === 'pause') {
+        st.phase = 'back'
+        st.elapsed = 0
+      }
+    }
+
+    const speed = st.hurry ? STROLL.hurrySpeed : STROLL.speed
+    let moved = 0
+
+    switch (st.phase) {
+      case 'stand': {
+        f.stand = Math.min(1, st.elapsed / STROLL.standUp)
+
+        if (f.stand >= 1) {
+          st.phase = 'out'
+          st.elapsed = 0
+        }
+
+        break
+      }
+
+      case 'out': {
+        moved = Math.min(speed * dt, st.length - st.s)
+        st.s += moved
+
+        if (st.s >= st.length - 1e-6) {
+          st.phase = 'pause'
+          st.elapsed = 0
+        }
+
+        break
+      }
+
+      case 'pause': {
+        if (st.elapsed >= st.pause) {
+          st.phase = 'back'
+          st.elapsed = 0
+        }
+
+        break
+      }
+
+      case 'back': {
+        moved = Math.min(speed * dt, st.s)
+        st.s -= moved
+
+        if (st.s <= 1e-6) {
+          st.s = 0
+          st.phase = 'sit'
+          st.elapsed = 0
+        }
+
+        break
+      }
+
+      case 'sit': {
+        f.stand = Math.max(0, 1 - st.elapsed / STROLL.standUp)
+
+        if (f.stand <= 0) {
+          f.stroll = null
+          f.nextStroll = t + rand(STROLL.gapMin, STROLL.gapMax)
+        }
+
+        break
+      }
+    }
+
+    f.gait += (moved / STROLL.stride) * Math.PI * 2
+    f.swing = lerp(f.swing, moved > 0 ? 1 : 0, Math.min(1, dt * 7))
+
+    // Heading: along the path when walking, at the destination's focus when
+    // paused, back to facing the desk when sitting down.
+    let target = 0
+
+    if (f.stroll) {
+      const here = pointAlong(st.plan.points, st.s)
+
+      if (st.phase === 'out' || (st.phase === 'stand' && st.length > 0)) {
+        target = pointAlong(st.plan.points, Math.max(st.s, 0.01)).heading
+      } else if (st.phase === 'back') {
+        target = here.heading + Math.PI
+      } else if (st.phase === 'pause') {
+        target = Math.atan2(st.plan.face.x - here.x, st.plan.face.z - here.z)
+      }
+    }
+
+    const h = turnToward(f.heading, target, Math.min(1, dt * 7))
+    f.heading = Math.atan2(Math.sin(h), Math.cos(h))
+  }
+
+  /** Blend the seated pose (already set) toward standing / walking by `f.stand`. */
+  function poseStanding(f: Figure, p: number) {
+    const k = smooth(f.stand)
+    const st = f.stroll
+
+    if (!st && k === 0) {
+      f.body.position.set(0, 0.12, STROLL.seatZ)
+      f.body.rotation.y = 0
+      f.seatLegs.visible = true
+      f.legL.visible = false
+      f.legR.visible = false
+
+      return
+    }
+
+    const at = st ? pointAlong(st.plan.points, st.s) : { x: f.agent.x, z: f.agent.z + STROLL.seatZ }
+    const swing = Math.sin(f.gait) * f.swing
+    const bob = Math.abs(Math.sin(f.gait)) * 0.035 * f.swing
+    f.body.position.set(at.x - f.agent.x, lerp(0.12, STROLL.standY, k) + bob, at.z - f.agent.z)
+    f.body.rotation.y = f.heading
+    f.seatLegs.visible = false
+    f.legL.visible = true
+    f.legR.visible = true
+    // Legs unfold from pointing forward (seated) to hanging (standing), then swing.
+    f.legL.rotation.x = lerp(-Math.PI / 2, swing * STROLL.legSwing, k)
+    f.legR.rotation.x = lerp(-Math.PI / 2, -swing * STROLL.legSwing, k)
+
+    let armL = -swing * STROLL.armSwing
+    let armR = swing * STROLL.armSwing
+    let armRz = 0
+
+    if (st?.phase === 'pause') {
+      if (st.plan.kind === 'cooler') {
+        // A cup of water: right hand up to the mouth now and then.
+        armR = -1.9 + Math.max(0, Math.sin(p * 0.9)) * -0.5
+      } else if (st.plan.kind === 'neighbour') {
+        armR = -0.5 + Math.sin(p * 2.4) * 0.25
+      }
+
+      if (f.agent.status === 'waiting') {
+        armRz = 2.5 + Math.sin(p * 3) * 0.2
+        armR = 0
+      }
+    }
+
+    f.armL.rotation.set(lerp(f.armL.rotation.x, armL, k), 0, lerp(f.armL.rotation.z, 0.06, k))
+    f.armR.rotation.set(lerp(f.armR.rotation.x, armR, k), 0, lerp(f.armR.rotation.z, armRz || -0.06, k))
+    f.torso.rotation.x = lerp(f.torso.rotation.x, 0.04 * f.swing, k)
+    f.torso.scale.y = lerp(f.torso.scale.y, 1, k)
+    f.head.rotation.x = lerp(f.head.rotation.x, 0, k)
   }
 
   function placeLabels() {
@@ -839,7 +1143,14 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
         continue
       }
 
-      projected.set(figure.agent.x, LABEL_HEIGHT, figure.agent.z - 0.2).project(camera)
+      // Follows the figure on a stroll (standing adds ~0.22 m).
+      projected
+        .set(
+          figure.agent.x + figure.body.position.x,
+          LABEL_HEIGHT + smooth(figure.stand) * (STROLL.standY - 0.12),
+          figure.agent.z + figure.body.position.z + 0.02
+        )
+        .project(camera)
       const visible = projected.z < 1 && Math.abs(projected.x) < 1.1 && Math.abs(projected.y) < 1.1
       el.style.visibility = visible ? 'visible' : 'hidden'
       el.style.transform = `translate(-50%, -100%) translate(${((projected.x + 1) / 2) * width}px, ${((1 - projected.y) / 2) * height}px)`
