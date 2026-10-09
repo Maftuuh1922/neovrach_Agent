@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <!-- Device tools: requested from Pengaturan → Izin perangkat or at first use; each tool can be switched off in Pengaturan → Alat -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- "Hey Neo" wake word (opt-in): microphone foreground service, restart prompt after boot -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -169,6 +173,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/nv_home_widget_info" />
+        </receiver>
+        <!-- "Hey Neo" wake word (NvWakeService.kt), opt-in from Profil. -->
+        <service
+            android:name=".NvWakeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <receiver
+            android:name=".NvBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
         </receiver>
     </application>
     <!-- Required to query activities that can process text, see:

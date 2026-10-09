@@ -17,6 +17,8 @@ import 'glass_style_picker.dart';
 import 'model_picker.dart';
 import 'nv_widgets.dart';
 import 'profile_header_slot.dart';
+import 'wake_word_panel.dart';
+import '../wake_word.dart' show WakeWordController;
 import 'remote_social_screen.dart' show SocialSection;
 
 /// Floating nav bar height + gap (kept in sync with RemoteShell).
@@ -49,6 +51,14 @@ class RemoteProfileScreen extends StatelessWidget {
             subtitle: 'Model default agen di PC',
             children: [ModelSettingsPanel()],
           ),
+          if (WakeWordController.supported)
+            const ProfileGroup(
+              id: 'wake',
+              icon: CupertinoIcons.waveform,
+              title: 'Hey Neo',
+              subtitle: 'Panggil agen dengan suara (opsional)',
+              children: [WakeWordPanel()],
+            ),
           const ProfileGroup(
             id: 'appearance',
             icon: CupertinoIcons.paintbrush_fill,

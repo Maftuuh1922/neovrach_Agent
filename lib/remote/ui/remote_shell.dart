@@ -12,6 +12,7 @@ import '../../main.dart' show previewTab;
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/motion.dart';
 import '../home_widget.dart';
+import '../wake_word.dart' show wakeWordProvider;
 import '../remote_controller.dart';
 import '../remote_gateway.dart';
 import '../../data/device_tools.dart' show deviceCall;
@@ -91,6 +92,10 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
       case 'newtask':
         openTasks();
         remoteLaunchAction.value = 'newtask';
+      // "Hey Neo" after a reboot: restart the listener from the foreground
+      case 'wake':
+        setState(() => index = tabProfile);
+        ref.read(wakeWordProvider).resume();
       case 'profile':
         setState(() => index = tabProfile);
     }
