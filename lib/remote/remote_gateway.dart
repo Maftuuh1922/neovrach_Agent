@@ -824,8 +824,20 @@ extension RemoteGatewayExtras on RemoteGateway {
       } catch (_) {}
       throw RemoteRestError(res.statusCode, msg);
     }
+    // A PC core without the upload route answers through its quiet
+    // catch-all with a 200 `{available: false, name: "uploads"}` and no id
+    // (1.4.5 bug: an "uploads · 0 B" card and the agent never got the
+    // image). Only a stored upload (non-empty id) counts as success.
+    Object? body;
+    try {
+      body = jsonDecode(text);
+    } catch (_) {}
+    final att = body is Map ? RemoteAttachment.fromJson(Map<String, dynamic>.from(body)) : null;
+    if (att == null || att.id.isEmpty || (body as Map)['available'] == false) {
+      throw const RemoteRestError(404, 'PC belum mendukung lampiran — perbarui Neovarch di PC');
+    }
     onProgress?.call(1);
-    return RemoteAttachment.fromJson(Map<String, dynamic>.from(jsonDecode(text) as Map));
+    return att;
   }
 
   Future<void> deleteAttachment(String id) => _json('DELETE', '/api/uploads/${Uri.encodeComponent(id)}');

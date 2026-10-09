@@ -77,7 +77,7 @@ class _Recorder {
   final bodies = <String>[];
 }
 
-RemoteGateway _gateway(_Recorder rec, {int uploadStatus = 200}) => RemoteGateway(
+RemoteGateway _gateway(_Recorder rec, {int uploadStatus = 200, bool oldCore = false}) => RemoteGateway(
       baseUrl: 'http://192.168.1.20:9319',
       token: 'tok-123',
       autoReconnect: false,
@@ -90,7 +90,10 @@ RemoteGateway _gateway(_Recorder rec, {int uploadStatus = 200}) => RemoteGateway
         var status = 200;
         if (path == '/api/uploads' && req.method == 'POST') {
           status = uploadStatus;
-          out = uploadStatus == 200
+          out = oldCore
+              // the quiet compat catch-all of a core without the route
+              ? {'ok': false, 'available': false, 'message': 'Belum tersedia di Neovarch core.', 'detail': 'Belum tersedia di Neovarch core.', 'name': 'uploads', 'pid': 0}
+              : uploadStatus == 200
               ? {'id': 'abcdef123456', 'name': 'foto.png', 'mime': 'image/png', 'size': 67, 'kind': 'image', 'url': '/api/uploads/abcdef123456'}
               : {'detail': 'File terlalu besar (maks 25 MB).'};
         } else if (path == '/api/social/status') {
@@ -192,6 +195,15 @@ void main() {
       await g.close();
     });
 
+    test('a core without the upload route (fake 200 {name: uploads}) is an error, not a 0 B attachment', () async {
+      final g = _gateway(_Recorder(), oldCore: true);
+      await expectLater(
+        g.uploadAttachment(sessionId: 's', name: 'scaled_1000.jpg', mime: 'image/jpeg', bytes: Uint8List.fromList(_png)),
+        throwsA(isA<RemoteRestError>().having((e) => e.message, 'message', contains('PC belum mendukung lampiran'))),
+      );
+      await g.close();
+    });
+
     test('social routes through the PC', () async {
       final rec = _Recorder();
       final g = _gateway(rec);
@@ -230,6 +242,19 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(rec.requests.last.method, 'DELETE');
       expect(await r.addAttachment('besar.bin', Uint8List(kMaxAttachmentBytes + 1)), contains('25 MB'));
+    });
+
+    test('old core: the photo is marked failed and nothing "uploads · 0 B" is sent', () async {
+      final rec = _Recorder();
+      final r = RemoteController(SavedDesktops(prefs)..load())
+        ..gateway = _gateway(rec, oldCore: true)
+        ..status = RemoteStatus.connected
+        ..runtimeId = 'rt-1';
+      final err = await r.addAttachment('scaled_1000.jpg', Uint8List.fromList(_png), mime: 'image/jpeg');
+      expect(err, contains('PC belum mendukung lampiran'));
+      final p = r.pendingAttachments.single;
+      expect(p.state, AttachState.failed);
+      expect(p.remote, isNull);
     });
 
     test('refreshSocial fills profile + friends; social.changed refreshes', () async {

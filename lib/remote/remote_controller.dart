@@ -600,7 +600,7 @@ class RemoteController extends ChangeNotifier {
   Future<String?> send(String text) async {
     final t = text.trim();
     final g = gateway;
-    final ready = pendingAttachments.where((a) => a.state == AttachState.done && a.remote != null).toList();
+    final ready = pendingAttachments.where((a) => a.state == AttachState.done && (a.remote?.id ?? '').isNotEmpty).toList();
     if ((t.isEmpty && ready.isEmpty) || g == null) return null;
     if (!connected) return 'Belum terhubung ke PC.';
     if (pendingAttachments.any((a) => a.state == AttachState.uploading)) return 'Tunggu lampiran selesai diunggah.';
