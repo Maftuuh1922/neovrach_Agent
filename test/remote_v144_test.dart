@@ -73,7 +73,10 @@ void main() {
     previewOfficeList = false;
   });
 
-  tearDown(() => debugOfficeSceneBuilder = null);
+  tearDown(() {
+    debugOfficeSceneBuilder = null;
+    debugOfficeActiveChanged = null;
+  });
 
   SpyController controller() {
     final desktops = SavedDesktops(prefs)..load();
@@ -182,6 +185,42 @@ void main() {
       expect(find.byKey(const ValueKey('office-3d-fallback')), findsOneWidget);
       expect(find.byType(AgentDesk), findsWidgets);
       expect(find.byKey(const ValueKey('office-scene-panel')), findsNothing);
+    });
+
+    testWidgets('render loop pauses when the Kantor tab is hidden or the app is paused', (tester) async {
+      fakeScene();
+      final sent = <bool>[];
+      debugOfficeActiveChanged = sent.add;
+      final tab = ValueNotifier<int>(0);
+      addTearDown(tab.dispose);
+      await pump(tester, controller(),
+          home: Scaffold(
+            body: ValueListenableBuilder<int>(
+              valueListenable: tab,
+              builder: (_, i, _) => IndexedStack(index: i, children: [
+                RemoteOfficeScreen(onOpenChat: () {}, onOpenApprovals: () {}),
+                const Text('chat'),
+              ]),
+            ),
+          ));
+      expect(sent, [true]);
+      tab.value = 1; // another tab: offstage, tickers muted
+      await tester.pump();
+      expect(sent, [true, false]);
+      tab.value = 0;
+      await tester.pump();
+      expect(sent, [true, false, true]);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(sent.last, false);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(sent.last, true);
+      expect(sent.where((v) => v).length, 3);
     });
 
     testWidgets('a gateway office.update event updates the scene without a refresh', (tester) async {

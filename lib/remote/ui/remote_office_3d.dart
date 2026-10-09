@@ -23,6 +23,11 @@ import '../office_scene_state.dart';
 @visibleForTesting
 Widget Function(Map<String, Object?> state, ValueChanged<String> onTap)? debugOfficeSceneBuilder;
 
+/// Tests: called with every render on/off decision the scene receives
+/// (`nvOffice.setActive`). Null in the app.
+@visibleForTesting
+ValueChanged<bool>? debugOfficeActiveChanged;
+
 class RemoteOffice3D extends StatefulWidget {
   const RemoteOffice3D({super.key, required this.state, required this.onAgentTap, required this.onUnavailable});
   final Map<String, Object?> state;
@@ -40,10 +45,48 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
   bool _ready = false;
   String? _pushed;
   Timer? _watchdog;
+  // Render loop on/off: off while the Kantor tab is offstage (IndexedStack
+  // reports it through Visibility.of; muted tickers count too) or the app is not resumed, so the GPU idles.
+  ValueListenable<TickerModeData>? _tickerMode;
+  AppLifecycleListener? _life;
+  bool _resumed = true;
+  bool _visible = true; // IndexedStack / Visibility ancestors
+  bool? _activeSent;
+
+  bool get _wantActive => _resumed && _visible && (_tickerMode?.value.enabled ?? true);
+
+  void _syncActive() {
+    if (!mounted) return;
+    final on = _wantActive;
+    if (on == _activeSent) return;
+    final c = _c;
+    if (debugOfficeSceneBuilder == null && (c == null || !_ready)) return; // sent on 'ready'
+    _activeSent = on;
+    debugOfficeActiveChanged?.call(on);
+    if (c != null) unawaited(c.runJavaScript('window.nvOffice&&window.nvOffice.setActive(${on ? 'true' : 'false'})').catchError((Object _) {}));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _visible = Visibility.of(context);
+    final tm = TickerMode.getValuesNotifier(context);
+    if (tm != _tickerMode) {
+      _tickerMode?.removeListener(_syncActive);
+      _tickerMode = tm..addListener(_syncActive);
+    }
+    _syncActive();
+  }
 
   @override
   void initState() {
     super.initState();
+    final st = WidgetsBinding.instance.lifecycleState;
+    _resumed = st == null || st == AppLifecycleState.resumed;
+    _life = AppLifecycleListener(onStateChange: (s) {
+      _resumed = s == AppLifecycleState.resumed;
+      _syncActive();
+    });
     if (debugOfficeSceneBuilder != null) return;
     if (WebViewPlatform.instance == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => widget.onUnavailable('webview'));
@@ -90,6 +133,8 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
         _watchdog?.cancel();
         _pushed = null;
         _push();
+        _activeSent = null;
+        _syncActive();
       case 'tap':
         final id = m['id'];
         if (id is String) widget.onAgentTap(id);
@@ -116,6 +161,8 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
   @override
   void dispose() {
     _watchdog?.cancel();
+    _tickerMode?.removeListener(_syncActive);
+    _life?.dispose();
     super.dispose();
   }
 
