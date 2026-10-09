@@ -210,6 +210,9 @@ class LiveSession:
                 # default) — never a stale name stored when the session began.
                 "model": ep["model"], "provider": ep["provider"],
                 "reasoning_effort": session_settings.effective_effort(cfg, self.rec),
+                # What the provider request really carries ('' = omitted).
+                "reasoning_effort_wire": session_settings.wire_effort(
+                    session_settings.effective_effort(cfg, self.rec)) or "",
                 "cwd": str(self.ctx.cwd), "status": self.status,
                 # Version of the desktop session protocol this core speaks; the
                 # desktop warns "backend out of date" below its required level.
@@ -327,6 +330,27 @@ class Gateway:
         return {"model": ep["model"], "provider": ep["provider"], "base_url": ep["base_url"],
                 "context_length": cfgmod.get_path(cfg, "model.context_length", 128000),
                 "configured": bool(ep["base_url"])}
+
+    async def model_options(self, p: dict) -> dict:
+        """Picker catalog; ``session_id`` makes the current row that session's
+        own pick, ``refresh`` re-probes custom endpoints and prunes dead ids."""
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        if p.get("refresh") in (True, "1", "true"):
+            try:
+                pruned = await providers.refresh_models(cfg)
+            except Exception:  # an unreachable endpoint must not break the picker
+                pruned = {}
+            if pruned:
+                cfgmod.save_config(cfg)
+        sid = str(p.get("session_id") or "")
+        rec = self.live[sid].rec if sid in self.live else (self.store.find(sid) if sid else None)
+        ep = session_settings.effective_endpoint(cfg, rec) if rec else None
+        res = providers.model_options(cfg, bool(p.get("include_unconfigured")), ep)
+        if rec is not None:
+            res["reasoning_effort"] = session_settings.effective_effort(cfg, rec)
+            res["scope"] = "session" if rec.get("model_override") else "default"
+        return res
 
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
@@ -453,8 +477,7 @@ class Gateway:
                     "source": "config", "free_tier_route": False, "profile": "default",
                     "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
         if method == "model.options":
-            from neovarch import providers
-            return providers.model_options(cfgmod.load_config(), bool(p.get("include_unconfigured")))
+            return await self.model_options(p)
         if method in ("model.set", "model.switch"):
             from neovarch import providers
             cfg = cfgmod.load_config()
@@ -504,6 +527,16 @@ class Gateway:
             if not model and not provider:
                 raise RpcError(-32602, "model is required")
             cfg = cfgmod.load_config()
+            explicit_global = any(str(x).strip() in ("--global", "-g") for x in str(value or "").split())
+            if live is not None and not session_only and not explicit_global:
+                # The composer's pick for an open chat belongs to that chat (the
+                # desktop's documented contract); Settings → Model is the door
+                # for the default. Persist only when asked to or when there is
+                # no working default yet (the first-ever pick).
+                persist = bool(cfgmod.get_path(cfg, "model.persist_switch_by_default", False))
+                session_only = not persist and bool(cfgmod.resolve_endpoint(cfg)["base_url"])
+            if not provider and live is not None:
+                provider = session_settings.effective_endpoint(cfg, live.rec)["provider"]
             if session_only and live is not None:
                 live.rec["model_override"] = {"model": model, "provider": provider}
                 ep = session_settings.effective_endpoint(cfg, live.rec)
@@ -521,7 +554,8 @@ class Gateway:
                 live.rec["model"] = ep["model"]
                 self.store.save(live.rec)
                 self.broadcast_event("session.info", live.id, live.info())
-            self.broadcast_event("model.changed", None, {"provider": ep["provider"], "model": ep["model"]})
+            if not (session_only and live is not None):  # the default moved
+                self.broadcast_event("model.changed", None, {"provider": ep["provider"], "model": ep["model"]})
             return {"ok": True, "value": ep["model"], "model": ep["model"], "provider": ep["provider"],
                     "deferred": False, "scope": "session" if session_only and live is not None else "global"}
         if key == "reasoning":
@@ -841,9 +875,10 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response(gw.model_info())
 
     async def model_options(request):
-        from neovarch import providers
-        inc = request.query.get("include_unconfigured") in ("1", "true")
-        return web.json_response(providers.model_options(cfgmod.load_config(), inc))
+        q = request.query
+        return web.json_response(await gw.model_options({
+            "include_unconfigured": q.get("include_unconfigured") in ("1", "true"),
+            "refresh": q.get("refresh") in ("1", "true"), "session_id": q.get("session_id") or ""}))
 
     async def model_set(request):
         from neovarch import providers
@@ -906,7 +941,12 @@ def build_app(gw: Gateway) -> web.Application:
             headers = providers.parse_headers(headers_raw)
         except providers.EndpointError as exc:
             return web.json_response({"ok": False, "reachable": False, "message": str(exc), "models": []})
-        return web.json_response(await providers.probe(str(body.get("base_url") or ""), key, headers, insecure))
+        res = await providers.probe(str(body.get("base_url") or ""), key, headers, insecure)
+        if existing is not None and res.get("ok") and res.get("models") and existing.get("discover_models", True):
+            # A successful probe of a saved endpoint prunes ids it no longer serves.
+            res["pruned"] = providers.apply_discovered(existing, res["models"])
+            cfgmod.save_config(cfg)
+        return web.json_response(res)
 
     async def custom_endpoint_delete(request):
         from neovarch import providers

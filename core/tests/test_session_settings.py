@@ -122,13 +122,29 @@ async def test_composer_model_and_reasoning_picks(mock_provider, monkeypatch):
         assert info["model"] == "other" and info["provider"] == "custom:router"
         raw = yaml.safe_load(cfgmod.config_path().read_text(encoding="utf-8"))
         assert isinstance(raw["model"], dict) and raw["model"]["default"] == "mock-model"
-        # Global pick rewrites only the model mapping and keeps every other key.
+        # The picker's catalog for this chat names the chat's own pick.
+        opts = (await ws.call("model.options", {"session_id": sid}))["result"]
+        assert opts["model"] == "other" and opts["provider"] == "custom:router" and opts["scope"] == "session"
+        assert (await ws.call("model.options", {}))["result"]["model"] == "mock-model"
+        # A plain composer pick in an open chat stays in that chat (config untouched).
+        res = (await ws.call("config.set", {"session_id": sid, "key": "model",
+                                            "value": "mock-model --provider custom:router"}))["result"]
+        assert res["scope"] == "session" and res["model"] == "mock-model"
+        res = (await ws.call("config.set", {"session_id": sid, "key": "model",
+                                            "value": "other --provider custom:router"}))["result"]
+        assert res["scope"] == "session"
+        raw = yaml.safe_load(cfgmod.config_path().read_text(encoding="utf-8"))
+        assert raw["model"]["default"] == "mock-model"
+        # --global rewrites only the model mapping and keeps every other key.
         raw.setdefault("agent", {})["max_turns"] = 17
         cfgmod.config_path().write_text(yaml.safe_dump(raw), encoding="utf-8")
         res = (await ws.call("config.set", {"session_id": sid, "key": "model",
-                                            "value": "other --provider custom:router"}))["result"]
+                                            "value": "other --provider custom:router --global"}))["result"]
         raw = yaml.safe_load(cfgmod.config_path().read_text(encoding="utf-8"))
         assert raw["model"]["default"] == "other" and raw["agent"]["max_turns"] == 17
+        assert res["scope"] == "global"
+        info = (await ws.call("session.status", {"session_id": sid}))["result"]
+        assert info["model"] == "other"
         # Reasoning: per session, validated, never a top-level key; reaches the request.
         assert (await ws.call("config.set", {"session_id": sid, "key": "reasoning", "value": "ultra"}))["result"]["value"] == "ultra"
         bad = await ws.call("config.set", {"session_id": sid, "key": "reasoning", "value": "turbo"})
@@ -140,5 +156,27 @@ async def test_composer_model_and_reasoning_picks(mock_provider, monkeypatch):
         assert not done["payload"].get("error"), done["payload"]
         body = mock_provider.app[mock_llm.REQUESTS][-1]
         assert body["reasoning_effort"] == "high" and body["model"] == "other"
+        info = (await ws.call("session.status", {"session_id": sid}))["result"]
+        assert info["reasoning_effort"] == "ultra" and info["reasoning_effort_wire"] == "high"
     finally:
         await c.close()
+
+
+def test_dead_models_are_pruned():
+    from neovarch import providers
+    cfg = {"model": {"default": "depsek", "provider": "custom:r", "base_url": ""},
+           "custom_providers": [{"id": "r", "name": "R", "base_url": "http://127.0.0.1:9/v1", "model": "depsek",
+                                 "models": ["deepseek-chat", "depsek", " ", "deepseek-chat", "old-model"]}]}
+    spec = cfg["custom_providers"][0]
+    rep = providers.apply_discovered(spec, ["deepseek-chat", "deepseek-reasoner"])
+    assert set(rep["removed"]) == {"depsek", "old-model"} and rep["model_unknown"]
+    opts = providers.model_options(cfg)
+    row = next(p for p in opts["providers"] if p["slug"] == "custom:r")
+    # Only the live pick survives (so the chip still names it), flagged unknown.
+    assert row["models"] == ["depsek", "deepseek-chat", "deepseek-reasoner"]
+    assert row["unknown_models"] == ["depsek"] and opts["model_unknown"]
+    # Switching away drops the dead id from the picker entirely.
+    providers.set_model(cfg, {"provider": "custom:r", "model": "deepseek-chat"})
+    row = next(p for p in providers.model_options(cfg)["providers"] if p["slug"] == "custom:r")
+    assert row["models"] == ["deepseek-chat", "deepseek-reasoner"] and "unknown_models" not in row
+    assert providers.clean_models(["a", "", None, "a", " b "]) == ["a", "b"]
