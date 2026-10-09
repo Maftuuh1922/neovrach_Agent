@@ -222,8 +222,8 @@ export const OFFICE3D_GARDEN = {
   /** Gravel sits one step below the floor; the step is eased over this run. */
   groundY: -0.24,
   stepRun: 0.45,
-  /** The door slides open when a walker is this close to its centre, at this rate (1/s). */
-  doorRadius: 1.6,
+  /** The door slides open when a walker headed outside is this close to its centre, at this rate (1/s). */
+  doorRadius: 1.3,
   doorRate: 2.2,
   /** Bench seat height above the gravel, and the seated body height above the gravel. */
   benchSeat: 0.36,

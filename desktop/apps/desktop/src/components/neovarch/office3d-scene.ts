@@ -27,6 +27,7 @@ import {
   doorTarget,
   gardenLayout,
   groundHeight,
+  isOutdoorStroll,
   layoutDesks,
   newStroll,
   OFFICE3D_CAMERA,
@@ -1196,7 +1197,8 @@ export function createOfficeScene(options: OfficeSceneOptions): OfficeScene {
     const walkers: { x: number; z: number }[] = []
 
     for (const f of figures.values()) {
-      if (f.stroll) {
+      // Only walkers headed outside: someone at the water cooler leaves it shut.
+      if (f.stroll && isOutdoorStroll(f.stroll.plan.kind)) {
         walkers.push({ x: f.agent.x + f.body.position.x, z: f.agent.z + f.body.position.z })
       }
     }
