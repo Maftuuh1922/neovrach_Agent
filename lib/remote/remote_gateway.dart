@@ -30,6 +30,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../data/gateway_client.dart';
 import '../models/models.dart';
 import 'attachments.dart';
+import 'company_models.dart';
 import 'composer.dart';
 import 'models_api.dart';
 import 'office_models.dart';
@@ -143,7 +144,7 @@ class ActiveSession {
   const ActiveSession({required this.id, required this.title, required this.status, required this.model, required this.preview});
 }
 
-class RemoteGateway implements VaultApi, ModelsApi {
+class RemoteGateway implements VaultApi, ModelsApi, CompanyApi {
   RemoteGateway({
     required this.baseUrl,
     required this.token,
@@ -598,6 +599,11 @@ class RemoteGateway implements VaultApi, ModelsApi {
         // catalog listed, so an older PC never sees them.
         ...extra,
       });
+
+  /// Perusahaan: `company.<method>` on the PC core (org chart, tickets, approvals, costs).
+  @override
+  Future<dynamic> companyCall(String method, [Map<String, dynamic> params = const {}]) =>
+      client.call('company.$method', {..._p, ...params}, const Duration(seconds: 30));
 
   Future<void> interrupt(String runtimeId) => client.call('session.interrupt', {..._p, 'session_id': runtimeId});
 

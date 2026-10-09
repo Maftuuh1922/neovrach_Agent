@@ -12,6 +12,7 @@ import '../data/device_tools.dart';
 import '../data/gateway_client.dart';
 import '../models/models.dart';
 import 'attachments.dart';
+import 'company_models.dart';
 import 'models_api.dart';
 import 'office_models.dart';
 import 'pairing.dart';
@@ -46,6 +47,13 @@ class RemoteController extends ChangeNotifier {
 
   /// Bumped on `vault.changed` so an open vault screen re-reads its note.
   int vaultRevision = 0;
+
+  /// Bumped on `company.changed` so the Perusahaan screen re-reads.
+  int companyRevision = 0;
+
+  /// Widget-test harness only: Perusahaan data without a gateway.
+  CompanyApi? debugCompanyApi;
+  CompanyApi? get companyApi => debugCompanyApi ?? gateway;
 
   // social: GitHub friends & profile, read through the PC (no phone login)
   SocialProfile? socialProfile;
@@ -299,6 +307,9 @@ class RemoteController extends ChangeNotifier {
         unawaited(refreshBoard());
       case 'vault.changed':
         vaultRevision++;
+        notifyListeners();
+      case 'company.changed':
+        companyRevision++;
         notifyListeners();
       case 'social.changed':
         if (socialProfile != null || socialFriends != null || socialError != null) unawaited(refreshSocial());
