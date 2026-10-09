@@ -46,6 +46,7 @@ from neovarch.store import Kanban, SessionStore, summarize
 from neovarch.office import Office
 from neovarch.company import CompanyError
 from neovarch.company_runtime import CompanyRuntime
+from neovarch import uploads as upmod
 from neovarch import cron as cronmod
 from neovarch import netinfo
 from neovarch.realtime import EventBus
@@ -189,14 +190,14 @@ class LiveSession:
                 return True
         return False
 
-    def submit(self, text: str) -> None:
+    def submit(self, text: str, attachments: list[dict] | None = None) -> None:
         async def run():
             self.status = "running"
             self.gw.broadcast_event("session.status", self.id, {"status": "running"})
             from neovarch.logs import log
             log.info("turn start session=%s model=%s", self.id, self.info().get("model"))
             try:
-                await self.agent.run_turn(text)
+                await self.agent.run_turn(text, attachments or None)
                 log.info("turn done session=%s", self.id)
             except Exception as exc:  # report, keep the gateway alive
                 log.exception("turn failed session=%s", self.id)
@@ -248,6 +249,8 @@ def to_ui_messages(rec: dict) -> list[dict]:
             item["name"] = m.get("name")
         if m.get("reasoning"):
             item["reasoning"] = m["reasoning"]
+        if role == "user" and m.get("attachments"):
+            item["attachments"] = [upmod.public(a) for a in m["attachments"] if isinstance(a, dict) and a.get("id")]
         out.append(item)
     return out
 
@@ -255,6 +258,7 @@ def to_ui_messages(rec: dict) -> list[dict]:
 class Gateway:
     def __init__(self, isolated: bool):
         self.store = SessionStore()
+        self.uploads = upmod.UploadStore()
         self.kanban = Kanban()
         self.auth = Auth(isolated)
         self.conns: set[Conn] = set()
@@ -451,13 +455,22 @@ class Gateway:
         if method == "prompt.submit":
             live = self._live(p)
             text = str(p.get("text") or "")
-            if not text.strip():
+            # Phone uploads (POST /api/uploads) are referenced by id.
+            atts = self._resolve_attachments(p.get("attachments"))
+            if not text.strip() and not atts:
                 raise RpcError(-32602, "text is required")
             if live.status == "running":
                 raise RpcError(-32010, "a turn is already running in this session")
             conn.attached.add(live.id)
-            live.submit(text)
-            return {"ok": True, "session_id": live.id, "status": "running"}
+            live.submit(text, atts)
+            res: dict[str, Any] = {"ok": True, "session_id": live.id, "status": "running"}
+            if atts:
+                res["attachments"] = [upmod.public(a) for a in atts]
+                cfg = cfgmod.load_config()
+                ep = session_settings.effective_endpoint(cfg, live.rec)
+                if any(a["kind"] == "image" for a in atts) and not upmod.supports_vision(cfg, ep):
+                    res["notice"] = upmod.VISION_NOTICE
+            return res
         if method == "approval.pending":
             live = self._live(p)
             return {"pending": [a["params"] for a in live.approvals.values()]}
@@ -621,6 +634,18 @@ class Gateway:
         if not key or key.startswith("appearance"):
             self.broadcast_event("appearance.changed", None, appearance_of(cfgmod.load_config()))
 
+    def _resolve_attachments(self, raw: Any) -> list[dict]:
+        """``prompt.submit {attachments: [id | {id}]}`` -> stored upload metadata."""
+        out: list[dict] = []
+        for item in raw if isinstance(raw, list) else []:
+            uid = item.get("id") if isinstance(item, dict) else item
+            meta = self.uploads.get(str(uid or ""))
+            if not meta:
+                raise RpcError(-32602, f"lampiran tidak ditemukan: {uid}")
+            if meta["id"] not in {m["id"] for m in out}:
+                out.append(meta)
+        return out
+
     def _live(self, p: dict) -> LiveSession:
         sid = str(p.get("session_id") or "")
         if sid in self.live:
@@ -649,6 +674,84 @@ class RpcError(Exception):
 
 
 # ------------------------------------------------------------------ HTTP -----
+
+def _install_upload_routes(r: web.UrlDispatcher, gw: Gateway) -> None:
+    """Chat attachments from the phone: ``POST /api/uploads`` (multipart field
+    ``file`` + optional ``session_id``, or a raw body with ``?filename=``), max
+    25 MB, then ``GET/DELETE /api/uploads/{id}``. Registered before the quiet
+    compat fallback, which would otherwise answer the POST with a fake 200."""
+
+    async def upload_post(request):
+        sid = request.query.get("session_id") or ""
+        try:
+            if request.content_type.startswith("multipart/"):
+                reader = await request.multipart()
+                meta = None
+                while True:
+                    part = await reader.next()
+                    if part is None:
+                        break
+                    if part.name == "session_id" and not part.filename:
+                        sid = (await part.text()).strip()
+                        continue
+                    if part.filename is None:
+                        await part.release()
+                        continue
+                    w = gw.uploads.writer(sid, part.filename, part.headers.get("Content-Type"))
+                    head = b""
+                    while True:
+                        chunk = await part.read_chunk(256 * 1024)
+                        if not chunk:
+                            break
+                        head = head or chunk[:16]
+                        w.write(chunk)
+                    meta = w.finish(head=head)
+                    break
+                if meta is None:
+                    return web.json_response({"detail": "field `file` wajib ada"}, status=400)
+            else:
+                if request.content_length and request.content_length > upmod.MAX_BYTES:
+                    return web.json_response({"detail": "File terlalu besar (maks 25 MB)."}, status=413)
+                w = gw.uploads.writer(sid, request.query.get("filename") or "file", request.content_type)
+                head = b""
+                async for chunk in request.content.iter_chunked(256 * 1024):
+                    head = head or chunk[:16]
+                    w.write(chunk)
+                meta = w.finish(head=head)
+        except upmod.UploadError as exc:
+            return web.json_response({"detail": str(exc)}, status=exc.status)
+        gw.broadcast_event("attachment.uploaded", sid or None, upmod.public(meta))
+        return web.json_response(upmod.public(meta))
+
+    async def upload_get(request):
+        meta = gw.uploads.get(request.match_info["uid"])
+        if not meta:
+            return web.json_response({"detail": "lampiran tidak ditemukan"}, status=404)
+        disp = "attachment" if request.query.get("download") in ("1", "true") else "inline"
+        return web.FileResponse(Path(meta["path"]), headers={
+            "Content-Type": meta.get("mime") or "application/octet-stream",
+            "Content-Disposition": f'{disp}; filename="{meta["name"].replace(chr(34), "")}"',
+            "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
+
+    async def upload_meta(request):
+        meta = gw.uploads.get(request.match_info["uid"])
+        if not meta:
+            return web.json_response({"detail": "lampiran tidak ditemukan"}, status=404)
+        return web.json_response(upmod.public(meta))
+
+    async def upload_delete(request):
+        return web.json_response({"ok": gw.uploads.delete(request.match_info["uid"])})
+
+    async def uploads_list(request):
+        sid = request.query.get("session_id") or ""
+        return web.json_response({"attachments": [upmod.public(m) for m in gw.uploads.list(sid)]})
+
+    r.add_post("/api/uploads", upload_post)
+    r.add_get("/api/uploads", uploads_list)
+    r.add_get("/api/uploads/{uid}", upload_get)
+    r.add_get("/api/uploads/{uid}/meta", upload_meta)
+    r.add_delete("/api/uploads/{uid}", upload_delete)
+
 
 def build_app(gw: Gateway) -> web.Application:
     @web.middleware
@@ -1593,6 +1696,7 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/fs/default", fs_default)
     r.add_get("/api/fs/default-cwd", fs_default)
     # Last: quiet answers for every other route the desktop calls (never 404/500).
+    _install_upload_routes(r, gw)
     from neovarch import compat
     compat.install(r, _log_unhandled)
     return app

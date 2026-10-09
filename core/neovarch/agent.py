@@ -145,7 +145,8 @@ class Agent:
     def interrupt(self) -> None:
         self.interrupted = True
 
-    async def run_turn(self, user_text: str) -> str:
+    async def run_turn(self, user_text: str, attachments: list[dict] | None = None) -> str:
+        from neovarch import uploads
         cfg = cfgmod.load_config()
         endpoint = session_settings.effective_endpoint(cfg, self.rec)
         effort = session_settings.wire_effort(session_settings.effective_effort(cfg, self.rec))
@@ -154,9 +155,18 @@ class Agent:
         max_turns = int(cfgmod.get_path(cfg, "agent.max_turns", 30) or 30)
         self.interrupted = False
         messages = self.rec["messages"]
-        messages.append({"role": "user", "content": user_text, "ts": time.time()})
+        vision = uploads.supports_vision(cfg, endpoint)
+        user_msg: dict[str, Any] = {"role": "user", "content": user_text, "ts": time.time()}
+        if attachments:
+            user_msg["attachments"] = [dict(a) for a in attachments]
+            if not vision and any(a.get("kind") == "image" for a in attachments):
+                self.emit("attachment.notice", {"level": "warning", "message": uploads.VISION_NOTICE})
+        messages.append(user_msg)
         if not self.rec.get("title"):
-            self.rec["title"] = user_text.strip().splitlines()[0][:60] if user_text.strip() else ""
+            first = user_text.strip().splitlines()[0][:60] if user_text.strip() else ""
+            if not first and attachments:
+                first = ("Lampiran: " + ", ".join(a.get("name", "") for a in attachments))[:60]
+            self.rec["title"] = first
             if self.rec["title"]:
                 self.emit("session.title", {"title": self.rec["title"]})
         self.rec["model"] = endpoint["model"]
@@ -191,7 +201,7 @@ class Agent:
                 if self.interrupted:
                     error = "interrupted"
                     break
-                wire = [{"role": "system", "content": sys_prompt}] + [_wire(m) for m in messages]
+                wire = [{"role": "system", "content": sys_prompt}] + wire_messages(messages, vision)
                 comp: Completion = await stream_chat(
                     base_url=endpoint["base_url"], api_key=endpoint["api_key"], model=endpoint["model"],
                     messages=wire, tools=tool_schemas(self.ctx),
@@ -253,6 +263,18 @@ class Agent:
             **({"status": "interrupted"} if error == "interrupted" else {}),
         })
         return final_text
+
+
+def wire_messages(messages: list[dict], vision: bool) -> list[dict]:
+    """Stored transcript -> provider wire. User turns with attachments become
+    content parts: images as data URLs (last few image turns) when the model
+    sees images, otherwise a notice plus the file path; files add their text."""
+    from neovarch import uploads
+    image_turns = [i for i, m in enumerate(messages) if m.get("role") == "user"
+                   and any(isinstance(a, dict) and a.get("kind") == "image" for a in m.get("attachments") or [])]
+    recent = set(image_turns[-uploads.IMAGE_HISTORY:])
+    return [uploads.user_wire(m, vision, i in recent) if m.get("role") == "user" and m.get("attachments")
+            else _wire(m) for i, m in enumerate(messages)]
 
 
 def _wire(m: dict) -> dict:
