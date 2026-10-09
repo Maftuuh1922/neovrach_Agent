@@ -534,6 +534,27 @@
   resize();
   drawBoard();
   requestAnimationFrame(frame);
+  // Home-screen widget snapshot: renders one frame and posts it, centre-
+  // cropped to w x h on a flat backdrop (the canvas itself is transparent),
+  // as {type:'snapshot', data:'data:image/jpeg;base64,…'}.
+  window.nvOffice.widgetSnapshot = function (w, h) {
+    try {
+      w = Math.max(64, Math.min(720, w | 0 || 480));
+      h = Math.max(64, Math.min(720, h | 0 || 480));
+      renderer.render(scene, camera); // same task as drawImage: no preserveDrawingBuffer needed
+      var out = document.createElement('canvas');
+      out.width = w; out.height = h;
+      var g = out.getContext('2d');
+      g.fillStyle = dark ? '#16110e' : '#efe6d6';
+      g.fillRect(0, 0, w, h);
+      var sw = canvas.width, sh = canvas.height;
+      if (!sw || !sh) return;
+      var s = Math.max(w / sw, h / sh) * 1.2; // a little zoom: the room fills the tile
+      var dw = sw * s, dh = sh * s;
+      g.drawImage(canvas, (w - dw) / 2, (h - dh) / 2 - h * 0.07, dw, dh);
+      post({ type: 'snapshot', data: out.toDataURL('image/jpeg', 0.84) });
+    } catch (e) { post({ type: 'snapshot-error', reason: '' + e.message }); }
+  };
   if (/[?&]demo\b/.test(location.search)) {
     window.nvOffice.setState({
       accent: '#ee1c1c', dark: true, motion: false,

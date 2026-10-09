@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="nvw_bg">#F20D0A0A</color>
-    <color name="nvw_line">#26F2EDE4</color>
-    <color name="nvw_chip">#1FF2EDE4</color>
-    <color name="nvw_text">#FFF2EDE4</color>
+    <color name="nvw_bg">#E6141011</color>
+    <color name="nvw_line">#24F4F2ED</color>
+    <color name="nvw_tile">#14F4F2ED</color>
+    <color name="nvw_tile_line">#0FF4F2ED</color>
+    <color name="nvw_text">#FFF4F2ED</color>
     <color name="nvw_muted">#FFA79E99</color>
-    <color name="nvw_accent">#FFE0222C</color>
+    <color name="nvw_accent">#FFEE1C1C</color>
     <color name="nvw_on_accent">#FFFFFFFF</color>
-    <color name="nvw_ok">#FF4ADE80</color>
+    <color name="nvw_ok">#FF6FCF8A</color>
+    <color name="nvw_warn">#FFF2B544</color>
+    <color name="nvw_idle">#FF9C9488</color>
+    <color name="nvw_ring">#FF141011</color>
+    <color name="nvw_scrim">#A60D0A09</color>
+    <color name="nvw_on_scrim">#FFFFFFFF</color>
+    <color name="nvw_on_scrim_muted">#D9FFFFFF</color>
+    <color name="nvw_panel">#FF16110E</color>
 </resources>

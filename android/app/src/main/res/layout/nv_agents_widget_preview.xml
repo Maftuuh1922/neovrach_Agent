@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Neovarch · Agen" 4x4. Generated layout; NvAgentsWidget.kt fills it (this copy is the picker preview: sample rows shown):
+     the ListView (RemoteViews collection) on every API; nva_preview holds
+     static sample rows shown only by the picker preview (previewLayout). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/nvw_bg"
+    android:clipToOutline="true"
+    android:padding="@dimen/nvw_pad">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView android:layout_width="20dp" android:layout_height="20dp" android:contentDescription="@null" android:src="@mipmap/ic_launcher" />
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:includeFontPadding="false" android:text="Agen" android:textColor="@color/nvw_text" android:textSize="15sp" android:textStyle="bold" />
+                <TextView android:id="@+id/nva_sub" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:ellipsize="end" android:maxLines="1" android:text="PC Kantor · 2 bekerja" android:textColor="@color/nvw_muted" android:textSize="11sp" />
+            </LinearLayout>
+            <FrameLayout
+                android:id="@+id/nva_assign"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp">
+                <ImageView android:id="@+id/nva_assign_bg" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/nvw_pill" android:tint="@color/nvw_accent" />
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal" android:paddingStart="10dp" android:paddingEnd="13dp">
+                    <ImageView android:layout_width="15dp" android:layout_height="15dp" android:contentDescription="@null" android:src="@drawable/nvw_ic_plus" android:tint="@color/nvw_on_accent" />
+                    <TextView android:id="@+id/nva_assign_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="5dp" android:maxLines="1" android:text="Kasih tugas" android:textColor="@color/nvw_on_accent" android:textSize="12.5sp" android:textStyle="bold" />
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="10dp"
+            android:layout_weight="1">
+            <ListView
+                android:id="@+id/nva_list"
+                android:visibility="gone"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="6dp"
+                android:scrollbars="none" />
+            <LinearLayout
+                android:id="@+id/nva_preview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+<LinearLayout 
+    android:id="@+id/nvap1_row"
+    android:layout_width="match_parent"
+    android:layout_height="58dp"
+    android:background="@drawable/nvw_tile"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp">
+    <FrameLayout
+        android:layout_width="38dp"
+        android:layout_height="38dp">
+        <ImageView android:id="@+id/nvap1_av" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="#3A4A6E" />
+        <TextView android:id="@+id/nvap1_init" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:includeFontPadding="false" android:text="R" android:textColor="#FFFFFFFF" android:textSize="16sp" android:textStyle="bold" />
+        <FrameLayout android:id="@+id/nvap1_dotbox" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="bottom|end">
+            <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_ring" />
+            <ImageView android:id="@+id/nvap1_dot" android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_ok" />
+        </FrameLayout>
+    </FrameLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="11dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView android:id="@+id/nvap1_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Raka" android:textColor="@color/nvw_text" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/nvap1_task" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:ellipsize="end" android:maxLines="1" android:text="Rapikan folder Unduhan" android:textColor="@color/nvw_muted" android:textSize="12sp" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/nvap1_status"
+        android:layout_width="wrap_content"
+        android:layout_height="22dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/nvw_chip"
+        android:gravity="center"
+        android:maxLines="1"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:text="bekerja"
+        android:textColor="@color/nvw_ok"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+</LinearLayout>
+<LinearLayout 
+    android:id="@+id/nvap2_row"
+    android:layout_width="match_parent"
+    android:layout_height="58dp"
+    android:layout_marginTop="6dp"
+    android:background="@drawable/nvw_tile"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp">
+    <FrameLayout
+        android:layout_width="38dp"
+        android:layout_height="38dp">
+        <ImageView android:id="@+id/nvap2_av" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="#7A2E2E" />
+        <TextView android:id="@+id/nvap2_init" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:includeFontPadding="false" android:text="A" android:textColor="#FFFFFFFF" android:textSize="16sp" android:textStyle="bold" />
+        <FrameLayout android:id="@+id/nvap2_dotbox" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="bottom|end">
+            <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_ring" />
+            <ImageView android:id="@+id/nvap2_dot" android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_warn" />
+        </FrameLayout>
+    </FrameLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="11dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView android:id="@+id/nvap2_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Ayu" android:textColor="@color/nvw_text" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/nvap2_task" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:ellipsize="end" android:maxLines="1" android:text="Hapus cache lama" android:textColor="@color/nvw_muted" android:textSize="12sp" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/nvap2_status"
+        android:layout_width="wrap_content"
+        android:layout_height="22dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/nvw_chip"
+        android:gravity="center"
+        android:maxLines="1"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:text="menunggu"
+        android:textColor="@color/nvw_warn"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+</LinearLayout>
+<LinearLayout 
+    android:id="@+id/nvap3_row"
+    android:layout_width="match_parent"
+    android:layout_height="58dp"
+    android:layout_marginTop="6dp"
+    android:background="@drawable/nvw_tile"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp">
+    <FrameLayout
+        android:layout_width="38dp"
+        android:layout_height="38dp">
+        <ImageView android:id="@+id/nvap3_av" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="#8A6A3A" />
+        <TextView android:id="@+id/nvap3_init" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:includeFontPadding="false" android:text="W" android:textColor="#FFFFFFFF" android:textSize="16sp" android:textStyle="bold" />
+        <FrameLayout android:id="@+id/nvap3_dotbox" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="bottom|end">
+            <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_ring" />
+            <ImageView android:id="@+id/nvap3_dot" android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_ok" />
+        </FrameLayout>
+    </FrameLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="11dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView android:id="@+id/nvap3_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="writer" android:textColor="@color/nvw_text" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/nvap3_task" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:ellipsize="end" android:maxLines="1" android:text="Draf laporan mingguan" android:textColor="@color/nvw_muted" android:textSize="12sp" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/nvap3_status"
+        android:layout_width="wrap_content"
+        android:layout_height="22dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/nvw_chip"
+        android:gravity="center"
+        android:maxLines="1"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:text="bekerja"
+        android:textColor="@color/nvw_ok"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+</LinearLayout>
+<LinearLayout 
+    android:id="@+id/nvap4_row"
+    android:layout_width="match_parent"
+    android:layout_height="58dp"
+    android:layout_marginTop="6dp"
+    android:background="@drawable/nvw_tile"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp">
+    <FrameLayout
+        android:layout_width="38dp"
+        android:layout_height="38dp">
+        <ImageView android:id="@+id/nvap4_av" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="#3E5A4A" />
+        <TextView android:id="@+id/nvap4_init" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:includeFontPadding="false" android:text="C" android:textColor="#FFFFFFFF" android:textSize="16sp" android:textStyle="bold" />
+        <FrameLayout android:id="@+id/nvap4_dotbox" android:layout_width="15dp" android:layout_height="15dp" android:layout_gravity="bottom|end">
+            <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_ring" />
+            <ImageView android:id="@+id/nvap4_dot" android:layout_width="9dp" android:layout_height="9dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_idle" />
+        </FrameLayout>
+    </FrameLayout>
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="11dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView android:id="@+id/nvap4_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Citra" android:textColor="@color/nvw_text" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/nvap4_task" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:ellipsize="end" android:maxLines="1" android:text="santai" android:textColor="@color/nvw_muted" android:textSize="12sp" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/nvap4_status"
+        android:layout_width="wrap_content"
+        android:layout_height="22dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/nvw_chip"
+        android:gravity="center"
+        android:maxLines="1"
+        android:paddingStart="9dp"
+        android:paddingEnd="9dp"
+        android:text="santai"
+        android:textColor="@color/nvw_idle"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+</LinearLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/nva_empty"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone">
+                <FrameLayout android:layout_width="44dp" android:layout_height="44dp">
+                    <ImageView android:id="@+id/nva_empty_wash" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0.16" android:contentDescription="@null" android:src="@drawable/nvw_circle" android:tint="@color/nvw_accent" />
+                    <ImageView android:id="@+id/nva_empty_ic" android:layout_width="22dp" android:layout_height="22dp" android:layout_gravity="center" android:contentDescription="@null" android:src="@drawable/nvw_ic_agents" android:tint="@color/nvw_accent" />
+                </FrameLayout>
+                <TextView android:id="@+id/nva_empty_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Belum ada agen" android:textColor="@color/nvw_text" android:textSize="14sp" android:textStyle="bold" />
+                <TextView android:id="@+id/nva_empty_sub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:gravity="center" android:text="Kasih tugas, agen akan muncul di sini" android:textColor="@color/nvw_muted" android:textSize="12sp" />
+            </LinearLayout>
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -374,15 +374,15 @@ void main() {
 
     test('summary: PC, connection, working / waiting / open tasks, current task', () {
       final r = controller();
-      expect(homeWidgetPayload(r), {
-        'pc': 'PC Kantor',
-        'connected': true,
-        'status': 'terhubung',
-        'working': 1,
-        'waiting': 0,
-        'tasks': 3, // office kanban: todo 2 + running 1
-        'task': 'Raka: Rapikan folder Unduhan',
-      });
+      expect(homeWidgetPayload(r), containsPair('pc', 'PC Kantor'));
+      expect(homeWidgetPayload(r), allOf([
+        containsPair('connected', true),
+        containsPair('status', 'terhubung'),
+        containsPair('working', 1),
+        containsPair('waiting', 0),
+        containsPair('tasks', 3), // office kanban: todo 2 + running 1
+        containsPair('task', 'Raka: Rapikan folder Unduhan'),
+      ]));
       r.board = const KanbanSnapshot([
         KanbanLane('ready', [KanbanCard(id: 't1', title: 'A', status: 'ready')]),
         KanbanLane('done', [KanbanCard(id: 't2', title: 'B', status: 'done')]),
@@ -396,7 +396,7 @@ void main() {
 
     test('sync sends only when the summary changed', () {
       final sent = <Map<String, Object?>>[];
-      final sync = HomeWidgetSync(send: (p) async => sent.add(p));
+      final sync = HomeWidgetSync(send: (p) async => sent.add(p), minInterval: Duration.zero);
       final r = controller();
       sync.update(r);
       sync.update(r);

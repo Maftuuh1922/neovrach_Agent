@@ -54,6 +54,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _widget.dispose();
     super.dispose();
   }
 
@@ -92,6 +93,20 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
       case 'newtask':
         openTasks();
         remoteLaunchAction.value = 'newtask';
+      case 'kantor':
+        setState(() {
+          index = tabKantor;
+          kantorSegment = kantorSegOffice;
+        });
+      // widget without a paired / reachable PC: the PC tab has pairing
+      case 'connect':
+        setState(() => index = tabPc);
+      case final String a when a.startsWith('agent:') && a.length > 6:
+        setState(() {
+          index = tabKantor;
+          kantorSegment = kantorSegOffice;
+        });
+        remoteLaunchAction.value = a;
       // "Hey Neo" after a reboot: restart the listener from the foreground
       case 'wake':
         setState(() => index = tabProfile);

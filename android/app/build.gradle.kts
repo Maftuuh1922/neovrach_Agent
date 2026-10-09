@@ -99,6 +99,13 @@ android {
     }
 }
 
+android {
+    // Home-screen widget tests: JVM logic + Robolectric renders of the real layouts.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
@@ -116,4 +123,7 @@ dependencies {
         exclude(group = "net.java.dev.jna")
     }
     implementation("net.java.dev.jna:jna:5.13.0@aar")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
 }

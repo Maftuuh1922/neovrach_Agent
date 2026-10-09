@@ -16,6 +16,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../home_widget.dart' show KantorSnapshotThrottle, decodeSnapshotDataUrl, kantorWidgetPlaced, saveKantorSnapshot;
 import '../office_scene_state.dart';
 
 /// Tests / screenshots: replaces the WebView with any widget, given the
@@ -52,6 +53,10 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
   bool _resumed = true;
   bool _visible = true; // IndexedStack / Visibility ancestors
   bool? _activeSent;
+  // Home-screen widget: a Kantor snapshot now and then while the scene is on screen.
+  final _snap = KantorSnapshotThrottle();
+  Timer? _snapTimer;
+  bool _snapBusy = false;
 
   bool get _wantActive => _resumed && _visible && (_tickerMode?.value.enabled ?? true);
 
@@ -135,6 +140,12 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
         _push();
         _activeSent = null;
         _syncActive();
+        _snap.sceneReady(DateTime.now());
+        _snapTimer?.cancel();
+        _snapTimer = Timer.periodic(const Duration(seconds: 5), (_) => _maybeSnapshot());
+      case 'snapshot':
+        final bytes = decodeSnapshotDataUrl(m['data'] as String?);
+        if (bytes != null) unawaited(saveKantorSnapshot(bytes));
       case 'tap':
         final id = m['id'];
         if (id is String) widget.onAgentTap(id);
@@ -149,7 +160,25 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
     final js = officeSceneScript(widget.state);
     if (js == _pushed) return;
     _pushed = js;
+    _snap.sceneChanged();
     unawaited(c.runJavaScript(js).catchError((Object _) {}));
+  }
+
+  Future<void> _maybeSnapshot() async {
+    final c = _c;
+    if (c == null || !_ready || _snapBusy || !mounted) return;
+    final now = DateTime.now();
+    if (!_snap.shouldCapture(now, visible: _wantActive)) return;
+    _snapBusy = true;
+    try {
+      _snap.captured(now); // also when no widget is placed: ask again later, not every tick
+      if (!await kantorWidgetPlaced()) return;
+      await c.runJavaScript('window.nvOffice&&window.nvOffice.widgetSnapshot&&window.nvOffice.widgetSnapshot(480,500)');
+    } catch (_) {
+      // scene busy / gone: next interval
+    } finally {
+      _snapBusy = false;
+    }
   }
 
   @override
@@ -163,6 +192,7 @@ class _RemoteOffice3DState extends State<RemoteOffice3D> {
     _watchdog?.cancel();
     _tickerMode?.removeListener(_syncActive);
     _life?.dispose();
+    _snapTimer?.cancel();
     super.dispose();
   }
 
