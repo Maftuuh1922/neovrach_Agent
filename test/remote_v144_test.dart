@@ -17,7 +17,9 @@ import 'package:neovarch_agent/remote/office_scene_state.dart';
 import 'package:neovarch_agent/remote/remote_controller.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart' show RemoteStatus;
 import 'package:neovarch_agent/remote/saved_desktops.dart';
+import 'package:neovarch_agent/remote/ui/remote_chat_screen.dart';
 import 'package:neovarch_agent/remote/ui/remote_office_3d.dart';
+import 'package:neovarch_agent/state/voice_service.dart';
 import 'package:neovarch_agent/remote/ui/remote_app.dart' show themeFor;
 import 'package:neovarch_agent/remote/ui/remote_office_screen.dart';
 import 'package:neovarch_agent/state/app_controller.dart' show settingsProvider;
@@ -39,6 +41,12 @@ Map<String, dynamic> officeJson({String rakaStatus = 'working', String rakaTask 
 class SpyController extends RemoteController {
   SpyController(super.desktops);
   final created = <Map<String, String?>>[];
+  final sent = <String>[];
+  @override
+  Future<String?> send(String text) async {
+    sent.add(text);
+    return null;
+  }
   @override
   Future<String?> createTask({required String title, String? body, String? assignee}) async {
     created.add({'title': title, 'body': body, 'assignee': assignee});
@@ -75,7 +83,7 @@ void main() {
       ..office = OfficeSnapshot.fromJson(officeJson());
   }
 
-  Future<void> pump(WidgetTester tester, RemoteController r, {double width = 390}) async {
+  Future<void> pump(WidgetTester tester, RemoteController r, {double width = 390, Widget? home}) async {
     tester.view.physicalSize = Size(width * 3, 844 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -88,7 +96,7 @@ void main() {
       ],
       child: MaterialApp(
         theme: themeFor(look),
-        home: RemoteOfficeScreen(onOpenChat: () {}, onOpenApprovals: () {}),
+        home: home ?? RemoteOfficeScreen(onOpenChat: () {}, onOpenApprovals: () {}),
       ),
     ));
     await tester.pump(const Duration(milliseconds: 50));
@@ -316,10 +324,94 @@ void main() {
       NV.palette = NvPalette.red;
     });
   });
+
+  group('Voice (composer mic)', () {
+    late FakeEngine engine;
+    setUp(() {
+      engine = FakeEngine();
+      VoiceService.debugEngine = engine;
+      VoiceService.debugMicPermission = () async => true;
+      VoiceService.instance.debugReset();
+    });
+    tearDown(() {
+      VoiceService.debugEngine = null;
+      VoiceService.debugMicPermission = null;
+      VoiceService.instance.debugReset();
+    });
+
+    test('locale resolution', () {
+      expect(resolveSttLocale(['en-US', 'id-ID'], 'id_ID'), 'id-ID');
+      expect(resolveSttLocale(['en_GB', 'in_ID'], 'en_US'), 'en_GB');
+      expect(resolveSttLocale(['fr_FR'], 'id_ID'), isNull);
+      expect(sttErrorText('error_permission'), contains('Izin mikrofon'));
+    });
+
+    testWidgets('mic: partial words fill the field, the final result is sent to the agent', (tester) async {
+      final r = controller();
+      await pump(tester, r, home: RemoteChatScreen(onOpenApprovals: () {}));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('composer-mic-lang')), findsOneWidget);
+      await tester.tap(find.byTooltip('Dikte perintah (tekan lama: ganti bahasa)'));
+      await tester.pump();
+      expect(engine.listening, isTrue);
+      expect(engine.localeId, 'id-ID'); // settings id_ID -> recogniser's id-ID
+      engine.emit('rapikan folder', false);
+      await tester.pump();
+      expect(find.text('rapikan folder'), findsOneWidget);
+      expect(r.sent, isEmpty);
+      engine.emit('rapikan folder unduhan', true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(r.sent, ['rapikan folder unduhan']);
+    });
+
+    testWidgets('long-press switches to English; a denied mic permission explains how to allow it', (tester) async {
+      final r = controller();
+      await pump(tester, r, home: RemoteChatScreen(onOpenApprovals: () {}));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.longPress(find.byKey(const ValueKey('composer-mic')));
+      await tester.pump();
+      expect(settings.sttLocale, 'en_US');
+      expect(find.text('EN'), findsOneWidget);
+      settings.update((x) => x.sttLocale = 'id_ID');
+      VoiceService.debugMicPermission = () async => false;
+      ScaffoldMessenger.of(tester.element(find.byType(RemoteChatScreen))).removeCurrentSnackBar();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.byTooltip('Dikte perintah (tekan lama: ganti bahasa)'));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(engine.listening, isFalse);
+      expect(VoiceService.instance.error, contains('Izin mikrofon'));
+      expect(find.textContaining('Izin mikrofon ditolak'), findsOneWidget);
+    });
+  });
 }
 
 class SocketExceptionLike implements Exception {
   const SocketExceptionLike();
   @override
   String toString() => 'SocketException: offline';
+}
+
+class FakeEngine implements SpeechEngine {
+  bool listening = false;
+  String? localeId;
+  void Function(String, bool)? _on;
+  @override
+  Future<bool> initialize({required void Function(String error) onError, required void Function(String status) onStatus}) async => true;
+  @override
+  Future<List<String>> localeIds() async => ['en-US', 'id-ID'];
+  @override
+  Future<void> listen({required String localeId, required void Function(String words, bool isFinal) onResult}) async {
+    listening = true;
+    this.localeId = localeId;
+    _on = onResult;
+  }
+  void emit(String w, bool fin) {
+    _on?.call(w, fin);
+    if (fin) listening = false;
+  }
+  @override
+  Future<void> stop() async => listening = false;
 }

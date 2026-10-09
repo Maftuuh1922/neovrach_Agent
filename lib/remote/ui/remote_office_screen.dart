@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/common.dart' show CenterLoader, toast;
 import '../../ui/widgets/motion.dart' show reduceMotion;
+import '../agent_identity.dart';
 import '../office_models.dart';
 import '../office_scene_state.dart';
 import '../remote_controller.dart';
@@ -274,7 +275,7 @@ class AgentRosterRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(children: [
-          AgentStatusDot(agent: a),
+          NvAgentAvatar.of(a, size: 32),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -287,22 +288,6 @@ class AgentRosterRow extends StatelessWidget {
           NvPill(a.statusLabel, color: a.working ? NV.red : (a.waiting ? NV.text : NV.muted), filled: a.working),
         ]),
       ),
-    );
-  }
-}
-
-/// Status colours shared with the 3D room (and the desktop office).
-class AgentStatusDot extends StatelessWidget {
-  const AgentStatusDot({super.key, required this.agent});
-  final OfficeAgent agent;
-  static const working = Color(0xFF6FCF8A), waiting = Color(0xFFF2B544), idle = Color(0xFF9C9488);
-  @override
-  Widget build(BuildContext context) {
-    final c = agent.working ? working : (agent.waiting ? waiting : idle);
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: NV.text.withValues(alpha: 0.25))),
     );
   }
 }
@@ -359,7 +344,12 @@ class _AgentSheetState extends ConsumerState<AgentSheet> {
       key: const ValueKey('agent-sheet'),
       padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-        NvSheetTitle(kicker: a.role, title: a.name, trailing: NvPill(a.statusLabel, color: a.working ? NV.red : (a.waiting ? NV.text : NV.muted), filled: a.working)),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          NvAgentAvatar.of(a, size: 44),
+          const SizedBox(width: 12),
+          Expanded(child: NvSheetTitle(kicker: a.role, title: a.name)),
+          NvPill(a.statusLabel, color: a.working ? NV.red : (a.waiting ? NV.text : NV.muted), filled: a.working),
+        ]),
         const SizedBox(height: 14),
         Text('TUGAS SEKARANG', style: NV.monoLabel(size: 9)),
         const SizedBox(height: 4),
@@ -465,18 +455,7 @@ class AgentDesk extends StatelessWidget {
       onTap: onTap,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: a.working ? NV.redWash : NV.raised,
-              shape: BoxShape.circle,
-              border: Border.all(color: a.working ? NV.darkRed : NV.border),
-            ),
-            child: Text(a.name.isEmpty ? '?' : a.name.characters.first.toUpperCase(),
-                style: TextStyle(fontFamily: NV.serif, fontSize: 22, color: a.working ? NV.redInk : NV.text)),
-          ),
+          NvAgentAvatar.of(a, size: 40),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

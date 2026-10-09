@@ -71,9 +71,10 @@ class NvHeader extends StatelessWidget {
 
 /// Square-ish 40px icon button on a bordered rounded tile.
 class NvIconButton extends StatelessWidget {
-  const NvIconButton({super.key, required this.icon, required this.onPressed, this.tooltip, this.accent = false, this.size = 40});
+  const NvIconButton({super.key, required this.icon, required this.onPressed, this.tooltip, this.accent = false, this.size = 40, this.onLongPress});
   final IconData icon;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
   final String? tooltip;
   final bool accent;
   final double size;
@@ -89,6 +90,7 @@ class NvIconButton extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onPressed,
+        onLongPress: onLongPress,
         child: SizedBox(
           width: size,
           height: size,
