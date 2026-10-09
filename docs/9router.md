@@ -126,6 +126,21 @@ Errors: `400 {error}` invalid body, `404 {error}` unknown route; messages are In
 The existing `model.options` / `model.set` RPCs keep working; `model.options` now lists the
 `9router` provider (with its live models) first.
 
+## Desktop composer picker (existing wire, now 9Router-aware)
+
+The desktop has ONE model selector: the composer picker. It keeps using its existing wire:
+
+* `model.options {session_id?, refresh?}` — providers list with **`9router` first**
+  (`models` = live 9Router ids, plus `free_models: string[]` and `status: RouterStatus`
+  on that row). With `session_id`, `model`/`provider`/`is_current` reflect that session's
+  effective model. `refresh: true` re-fetches 9Router's list (and starts 9Router if allowed).
+* `config.set {session_id, key:"model", value:"<model> --provider <p> [--session]"}` — sets
+  THAT session's agent model (per-agent override); answers `{ok, scope:"session", model, provider}`
+  and emits `session.info` (with `model` + `provider`), `agent.model.changed`, `office.update`.
+  `--global` (or no `session_id`) changes the global default instead.
+* `session.create {model?, provider?}` — the new chat's agent gets that model as its own.
+* `session.info` payloads now always carry `provider` next to `model`.
+
 ## Events (all `session_id: null`)
 
 | type | payload | when |

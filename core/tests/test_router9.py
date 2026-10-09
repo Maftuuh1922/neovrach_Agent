@@ -320,3 +320,43 @@ def test_cli_router_status_and_setup_9router(tmp_path):
     import yaml
     cfg = yaml.safe_load((tmp_path / ".nv" / "config.yaml").read_text())
     assert cfg["model"]["provider"] == "9router" and cfg["model"]["default"] == "oc/big-pickle"
+
+
+async def test_composer_picker_paths(router, monkeypatch):
+    """The desktop composer: model.options lists 9Router first; a pick in a live chat
+    (config.set model "<m> --provider <p> --session") is that agent's own model;
+    session.create with a model starts the chat on it; --global changes the default."""
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        opts = (await ws.call("model.options", {"refresh": True}))["result"]
+        r9 = opts["providers"][0]
+        assert r9["slug"] == "9router" and r9["is_current"] and "oc/big-pickle" in r9["models"]
+        assert "oc/big-pickle" in r9["free_models"] and "kr/glm-5" not in r9["free_models"]
+        assert r9["status"]["running"] and opts["model"] == "oc/big-pickle"
+
+        sid = (await ws.call("session.create", {"model": "kr/glm-5", "provider": "9router"}))["result"]["session_id"]
+        assert "(kr/glm-5)" in (await _chat(ws, sid))["text"]
+        ws.events.clear()
+        res = (await ws.call("config.set", {"session_id": sid, "key": "model",
+                                            "value": "kr/claude-sonnet-4.5 --provider 9router --session"}))["result"]
+        assert res["scope"] == "session" and res["model"] == "kr/claude-sonnet-4.5"
+        info = await ws.until("session.info")
+        assert info["session_id"] == sid and info["payload"]["model"] == "kr/claude-sonnet-4.5"
+        assert info["payload"]["provider"] == "9router"
+        assert "(kr/claude-sonnet-4.5)" in (await _chat(ws, sid))["text"]
+        o2 = (await ws.call("model.options", {"session_id": sid}))["result"]
+        assert o2["model"] == "kr/claude-sonnet-4.5"
+        # the global default is untouched by a session pick
+        assert (await ws.call("models.default.get", {}))["result"]["model"] == "oc/big-pickle"
+        cfg = cfgmod.load_config()
+        assert cfg["model"].get("default", "") in ("", None) or cfg["model"]["default"] == "oc/big-pickle"
+        res = (await ws.call("config.set", {"key": "model", "value": "kr/glm-5 --provider 9router --global"}))["result"]
+        assert res["scope"] == "global"
+        assert (await ws.call("models.default.get", {}))["result"] == {"model": "kr/glm-5", "provider": "9router",
+                                                                         "source": "config"}
+        # other config keys still work as before
+        assert (await ws.call("config.set", {"key": "agent.max_turns", "value": 7}))["result"]["ok"]
+        assert cfgmod.load_config()["agent"]["max_turns"] == 7
+    finally:
+        await c.close()

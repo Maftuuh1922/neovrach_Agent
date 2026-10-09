@@ -202,7 +202,8 @@ class LiveSession:
 
     def info(self) -> dict:
         return {"title": self.rec.get("title") or "", "running": self.status == "running",
-                "model": modelsmod.agent_model(cfgmod.load_config(), "session:" + self.id)["model"],
+                **{k: v for k, v in modelsmod.agent_model(cfgmod.load_config(), "session:" + self.id).items()
+                   if k in ("model", "provider")},
                 "cwd": str(self.ctx.cwd), "status": self.status,
                 # Version of the desktop session protocol this core speaks; the
                 # desktop warns "backend out of date" below its required level.
@@ -356,22 +357,94 @@ class Gateway:
                 "router": self.router.status(cfg), "fetched_at": self.catalog.fetched_at,
                 "error": self.catalog.error if not st["running"] or self.catalog.error else None}
 
+    def _default_changed(self, res: dict) -> None:
+        ref = {"model": res.get("model"), "provider": res.get("provider")}
+        self.broadcast_event("model.default.changed", None, ref)
+        self.broadcast_event("model.changed", None, ref)
+        self.office.schedule()
+        for live in list(self.live.values()):   # sessions following the default see the new one
+            self.broadcast_event("session.info", live.id, live.info())
+
     def set_default_model(self, model: str, provider: str | None) -> dict:
         cfg = cfgmod.load_config()
         res = modelsmod.set_default(cfg, model, provider, self.catalog.ids())
         cfgmod.save_config(cfg)
-        self.broadcast_event("model.default.changed", None, res)
-        self.broadcast_event("model.changed", None, res)
-        self.office.schedule()
+        self._default_changed(res)
         return {**res, "ok": True}
 
-    def set_agent_model(self, agent_id: str, model: str | None, provider: str | None) -> dict:
+    def set_agent_model(self, agent_id: str, model: str | None, provider: str | None, *, quiet: bool = False) -> dict:
         cfg = cfgmod.load_config()
         res = modelsmod.set_agent_model(cfg, agent_id, model, provider, self.catalog.ids())
         cfgmod.save_config(cfg)
         self.broadcast_event("agent.model.changed", None, res)
+        sid = res["agent_id"].split(":", 1)[1] if res["agent_id"].startswith("session:") else ""
+        if not quiet and sid in self.live:
+            self.broadcast_event("session.info", sid, self.live[sid].info())
         self.office.schedule()
         return {**res, "ok": True}
+
+    def switch_model_command(self, value: str, session_id: str) -> dict:
+        """The composer's `config.set model "<model> --provider <p> [--session|--global]"`.
+
+        With a session it sets THAT agent's model (per-agent override); ``--global``
+        (or no session) changes the global default instead."""
+        import shlex
+        try:
+            parts = shlex.split(value)
+        except ValueError:
+            parts = value.split()
+        model, provider, scope = "", None, ""
+        i = 0
+        while i < len(parts):
+            tok = parts[i]
+            if tok == "--provider" and i + 1 < len(parts):
+                provider = parts[i + 1]
+                i += 2
+                continue
+            if tok in ("--session", "--global"):
+                scope = tok
+            elif not tok.startswith("--") and not model:
+                model = tok
+            i += 1
+        if not model:
+            raise RpcError(-32602, "model wajib diisi")
+        try:
+            if session_id and scope != "--global":
+                res = self.set_agent_model(session_id, model, provider)
+                return {"ok": True, "value": model, "model": res["model"], "provider": res["provider"],
+                        "scope": "session", "deferred": False}
+            res = self.set_default_model(model, provider)
+            return {"ok": True, "value": model, "model": res["model"], "provider": res["provider"], "scope": "global"}
+        except modelsmod.ModelError as exc:
+            raise RpcError(-32602, str(exc)) from None
+
+    async def model_options(self, session_id: str = "", include_unconfigured: bool = False,
+                            refresh: bool = False) -> dict:
+        """`model.options` for the composer picker: 9Router's live list first."""
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        try:
+            await router9.ensure_ready(self.router, cfg) if refresh else None
+            if await self.catalog.fetch(cfg, force=refresh):
+                self.broadcast_event("models.changed", None, {"count": len(self.catalog.rows),
+                                                              "fetched_at": self.catalog.fetched_at})
+        except Exception:  # noqa: BLE001 - an offline router still lists the default
+            pass
+        cfg = cfgmod.load_config()
+        out = providers.model_options(cfg, include_unconfigured)
+        if session_id:
+            am = modelsmod.agent_model(cfg, session_id)
+            out["model"], out["provider"] = am["model"], am["provider"]
+            for prov in out["providers"]:
+                prov["is_current"] = prov["slug"] == am["provider"]
+                if prov["is_current"] and am["model"] not in prov["models"]:
+                    prov["models"] = [am["model"], *prov["models"]]
+                    prov["total_models"] = len(prov["models"])
+        r9 = next((pv for pv in out["providers"] if pv["slug"] == router9.PROVIDER), None)
+        if r9 is not None:
+            r9["free_models"] = [m for m in r9["models"] if m.split("/", 1)[0] in router9.FREE_ALIASES]
+            r9["status"] = self.router.status(cfg)
+        return out
 
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
@@ -401,6 +474,10 @@ class Gateway:
             cwd = p.get("cwd") or str(default_cwd())
             rec = self.store.create(source=str(p.get("source") or "desktop"), cwd=cwd,
                                     model=self.model_info()["model"])
+            if str(p.get("model") or "").strip():
+                # The composer's pick for a new chat = that agent's own model.
+                self.set_agent_model(rec["id"], str(p["model"]), p.get("provider") or None, quiet=True)
+                rec["model"] = str(p["model"]).strip()
             live = self.open(rec)
             conn.attached.add(live.id)
             self.broadcast_event("sessions.changed", None, {})
@@ -457,6 +534,8 @@ class Gateway:
             cfg = cfgmod.load_config()
             key = p.get("key")
             return {"value": cfgmod.get_path(cfg, key) if key else cfg, "config": cfg}
+        if method == "config.set" and str(p.get("key") or "") == "model" and isinstance(p.get("value"), str):
+            return self.switch_model_command(str(p["value"]), str(p.get("session_id") or ""))
         if method == "config.set":
             cfg = cfgmod.load_config()
             cfgmod.set_path(cfg, str(p["key"]), p.get("value"))
@@ -511,13 +590,14 @@ class Gateway:
                     "source": "config", "free_tier_route": False, "profile": "default",
                     "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
         if method == "model.options":
-            from neovarch import providers
-            return providers.model_options(cfgmod.load_config(), bool(p.get("include_unconfigured")))
+            return await self.model_options(str(p.get("session_id") or ""), bool(p.get("include_unconfigured")),
+                                            bool(p.get("refresh")))
         if method in ("model.set", "model.switch"):
             from neovarch import providers
             cfg = cfgmod.load_config()
             res = providers.set_model(cfg, {"scope": "main", **p})
             cfgmod.save_config(cfg)
+            self._default_changed(res)
             return res
         # ---- features the Neovarch core does not have (yet): answer "off", never an error
         if method == "pet.info":
@@ -836,9 +916,9 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response(gw.model_info())
 
     async def model_options(request):
-        from neovarch import providers
         inc = request.query.get("include_unconfigured") in ("1", "true")
-        return web.json_response(providers.model_options(cfgmod.load_config(), inc))
+        return web.json_response(await gw.model_options(request.query.get("session_id") or "", inc,
+                                                        request.query.get("refresh") in ("1", "true")))
 
     async def model_set(request):
         from neovarch import providers
@@ -849,7 +929,7 @@ def build_app(gw: Gateway) -> web.Application:
         except providers.EndpointError as exc:
             return web.json_response({"ok": False, "detail": str(exc), "message": str(exc)}, status=422)
         cfgmod.save_config(cfg)
-        gw.broadcast_event("model.changed", None, {"provider": res.get("provider"), "model": res.get("model")})
+        gw._default_changed(res)
         return web.json_response(res)
 
     async def model_recommended(request):
