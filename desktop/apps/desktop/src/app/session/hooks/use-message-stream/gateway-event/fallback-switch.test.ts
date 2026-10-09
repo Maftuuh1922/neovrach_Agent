@@ -58,6 +58,15 @@ describe('desktop fallback switch', () => {
     expect(systemText(updateSessionState)).toMatch(/fallback/i)
   })
 
+  it('shows the Neovarch core notice when a rate-limited 9Router free model falls back', () => {
+    const notice = '⚠️ Model oc/big-pickle sedang dibatasi, pakai oc/nemotron-3-ultra-free sementara.'
+    const { ctx, updateSessionState } = statusContext(notice, 'fallback')
+
+    expect(handleStatusEvent(ctx)).toBe(true)
+    expect(updateSessionState).toHaveBeenCalledTimes(1)
+    expect(systemText(updateSessionState)).toBe(notice)
+  })
+
   it('does not turn unrelated lifecycle status into a transcript line', () => {
     const { ctx, updateSessionState } = statusContext('⚠️ Rate limited — retrying')
 
