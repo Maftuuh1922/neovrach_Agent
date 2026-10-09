@@ -360,3 +360,27 @@ async def test_composer_picker_paths(router, monkeypatch):
         assert cfgmod.load_config()["agent"]["max_turns"] == 7
     finally:
         await c.close()
+
+
+async def test_router_rpcs_for_the_phone_and_picker_order(router, monkeypatch):
+    """router.stop / router.config / router.provision over JSON-RPC, and the composer
+    picker lists the default first, then the OpenCode Free models, then the rest."""
+    gw, c = await _client(monkeypatch)
+    try:
+        ws = await _ws(c)
+        st = (await ws.call("router.provision", {}))["result"]
+        assert st["running"] and st["has_api_key"] and st["setup"]["ready"]
+        err = (await ws.call("router.stop", {}))["error"]
+        assert err["code"] == -32010 and "tidak dijalankan oleh Neovarch" in err["message"]
+        assert (await ws.call("router.config", {"base_url": "not a url ::"})).get("error", {}).get("code") == -32602
+        st = (await ws.call("router.config", {"autostart": False}))["result"]
+        assert st["autostart"] is False and cfgmod.load_config()["router9"]["autostart"] is False
+        st = (await ws.call("router.config", {"api_key": ""}))["result"]
+        assert "running" in st
+        opts = (await ws.call("model.options", {"refresh": True}))["result"]
+        models = opts["providers"][0]["models"]
+        assert models[0] == "oc/big-pickle"
+        free = [m.startswith("oc/") for m in models]
+        assert free == sorted(free, reverse=True), models
+    finally:
+        await c.close()

@@ -335,6 +335,30 @@ class Gateway:
         except Exception:  # noqa: BLE001 - the turn reports the real error
             pass
 
+    async def router_config(self, body: dict) -> dict:
+        """Change the 9Router URL, autostart, or paste its API key ("" clears it)."""
+        cfg = cfgmod.load_config()
+        r9 = cfg.setdefault("router9", {})
+        if "base_url" in body:
+            url = str(body.get("base_url") or "").strip()
+            if url:
+                from neovarch import providers
+                try:
+                    url = providers.normalize_base_url(url)
+                except providers.EndpointError as exc:
+                    raise ValueError(str(exc)) from None
+            r9["base_url"] = url
+            self.catalog.fetched_at = 0.0
+        if "autostart" in body:
+            r9["autostart"] = bool(body["autostart"])
+        cfgmod.save_config(cfg)
+        if "api_key" in body:
+            cfgmod.write_env_value(router9.KEY_ENV, str(body.get("api_key") or "").strip())
+            self.catalog.fetched_at = 0.0
+        await self.router.refresh()
+        self.router._last_sig = None
+        return self.router._publish()
+
     async def router_status(self, refresh: bool = True) -> dict:
         if refresh:
             return await self.router.refresh()
@@ -548,6 +572,19 @@ class Gateway:
             return await self.router_status()
         if method == "router.start":
             return await self.router.start()
+        if method == "router.stop":
+            if not self.router.status()["managed"]:
+                raise RpcError(-32010, "9Router ini tidak dijalankan oleh Neovarch, jadi tidak dihentikan.")
+            return await self.router.stop()
+        if method == "router.provision":
+            await self.router.provision()
+            self.router._last_sig = None
+            return await self.router_status()
+        if method == "router.config":
+            try:
+                return await self.router_config(p)
+            except ValueError as exc:
+                raise RpcError(-32602, str(exc)) from None
         if method == "models.list":
             return await self.models_payload(bool(p.get("refresh")))
         if method == "models.default.get":
@@ -1326,28 +1363,10 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response(await gw.router.stop())
 
     async def router_config_h(request):
-        body = await _json(request)
-        cfg = cfgmod.load_config()
-        r9 = cfg.setdefault("router9", {})
-        if "base_url" in body:
-            url = str(body.get("base_url") or "").strip()
-            if url:
-                from neovarch import providers
-                try:
-                    url = providers.normalize_base_url(url)
-                except providers.EndpointError as exc:
-                    return _bad(exc)
-            r9["base_url"] = url
-            gw.catalog.fetched_at = 0.0
-        if "autostart" in body:
-            r9["autostart"] = bool(body["autostart"])
-        cfgmod.save_config(cfg)
-        if "api_key" in body:
-            cfgmod.write_env_value(router9.KEY_ENV, str(body.get("api_key") or "").strip())
-        st = await gw.router_status()
-        gw.router._last_sig = None
-        gw.router._publish()
-        return web.json_response(st)
+        try:
+            return web.json_response(await gw.router_config(await _json(request)))
+        except ValueError as exc:
+            return _bad(exc)
 
     async def router_provision_h(_):
         await gw.router.provision()

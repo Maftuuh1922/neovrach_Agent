@@ -298,6 +298,8 @@ def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, An
     r9_default = ep["model"] if current == router9.PROVIDER else router9.default_model_id(cfg)
     if r9_default and r9_default not in r9_models:
         r9_models.insert(0, r9_default)
+    # The picker shows the first few per provider: default, then free (OpenCode Free), then the rest.
+    r9_models.sort(key=lambda m: (m != r9_default, m.split("/", 1)[0] not in router9.FREE_ALIASES))
     providers.append({"slug": router9.PROVIDER, "name": router9.LABEL, "models": r9_models,
                       "total_models": len(r9_models), "is_current": current == router9.PROVIDER,
                       "is_user_defined": False, "api_url": router9.base_url(cfg),

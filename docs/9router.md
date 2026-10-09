@@ -117,6 +117,9 @@ Errors: `400 {error}` invalid body, `404 {error}` unknown route; messages are In
 |---|---|---|
 | `router.status` | `{}` | `RouterStatus` |
 | `router.start` | `{}` | `RouterStatus` |
+| `router.stop` | `{}` | `RouterStatus` (error -32010 when not started by Neovarch) |
+| `router.config` | `{base_url?, api_key?, autostart?}` | `RouterStatus` |
+| `router.provision` | `{}` | `RouterStatus` |
 | `models.list` | `{refresh?: boolean}` | same as `GET /api/models` |
 | `models.default.get` | `{}` | `ModelRef & {source}` |
 | `models.default.set` | `{model, provider?}` | `ModelRef & {ok}` |
