@@ -557,7 +557,7 @@ import {
 import { enableRendererAccessibility } from './renderer-accessibility'
 import { missingRendererAssets, presentRendererIndexes } from './renderer-bundle'
 import { planLaunchSwitches, readDesktopLaunchConfig } from './renderer-heap-flags'
-import { loadRendererLoadErrorPage } from './renderer-load-error-page'
+import { loadRendererLoadErrorPage, neovarchRepairCommand } from './renderer-load-error-page'
 import { attachRendererConsoleCapture, formatRendererBoundaryReport } from './renderer-log'
 import { fetchRosterSourceData } from './roster-source-fetch'
 import { rosterSourceStatus } from './roster-source-status'
@@ -5133,7 +5133,7 @@ function resolveRendererIndexWithMissing(): { index: string; missing: string[] }
     rememberLog(
       `[renderer] every renderer bundle is incomplete (${present.join(', ')}). ` +
         `The last update replaced the app while its files were locked. ` +
-        `Repair with: hermes desktop --force-build`
+        `Repair with: ${neovarchRepairCommand()}`
     )
 
     // present[0]'s own list, captured on the first loop iteration — never the
@@ -5147,7 +5147,7 @@ function resolveRendererIndexWithMissing(): { index: string; missing: string[] }
   rememberLog(
     `[renderer] index.html not found — the desktop app was packaged without a ` +
       `renderer bundle. Tried: ${candidates.join(', ')}. ` +
-      `Rebuild with: hermes desktop --force-build`
+      `Reinstall with: ${neovarchRepairCommand()}`
   )
 
   return { index: candidates[0], missing: [] }
@@ -15509,7 +15509,7 @@ function createWindow() {
             errorCode: details?.exitCode,
             errorDescription:
               'The desktop renderer crashed repeatedly (Windows STATUS_STACK_BUFFER_OVERRUN / 0xC0000409). GPU fallback could not recover the window.',
-            repairHint: 'hermes desktop --force-build',
+            repairHint: neovarchRepairCommand(),
             reloadUrl: DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString()
           })
 
@@ -15566,7 +15566,7 @@ function createWindow() {
           errorCode: details?.errorCode,
           url: details?.url,
           errorDescription: 'The desktop renderer failed to load repeatedly after the update.',
-          repairHint: 'hermes desktop --force-build',
+          repairHint: neovarchRepairCommand(),
           reloadUrl: DEV_SERVER || pathToFileURL(resolveRendererIndex()).toString()
         })
       },
@@ -15627,7 +15627,7 @@ function createWindow() {
       errorCode: 'ERR_FILE_NOT_FOUND',
       errorDescription: `The desktop renderer bundle is incomplete after the last update (${tornAssets.length} missing file(s)).`,
       missingAssets: tornAssets,
-      repairHint: 'hermes desktop --force-build',
+      repairHint: neovarchRepairCommand(),
       reloadUrl: pathToFileURL(rendererIndex).toString()
     })
   } else {

@@ -33,7 +33,7 @@ export interface RendererLoadErrorDetails {
   url?: string
   /** Module files index.html declares but that are missing on disk. */
   missingAssets?: string[]
-  /** Repair command hint, e.g. `hermes desktop --force-build`. */
+  /** Repair command hint, e.g. NEOVARCH_REPAIR_COMMAND. */
   repairHint?: string
   /**
    * URL to navigate to when the user clicks Reload. On a data: page
@@ -100,6 +100,13 @@ function missingAssetsList(missingAssets?: string[]): string {
  * stylesheets, no images, no fetch — a data: URL must render from a blank
  * origin with zero network access.
  */
+/** Reinstalls the Neovarch desktop app and core (the repair for a damaged build). */
+export function neovarchRepairCommand(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32'
+    ? 'irm https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.ps1 | iex'
+    : 'curl -fsSL https://raw.githubusercontent.com/Maftuuh1922/neovrach_Agent/main/scripts/install.sh | sh'
+}
+
 export function buildRendererLoadErrorPage(details: RendererLoadErrorDetails = {}): string {
   const code =
     details.errorCode === undefined || details.errorCode === null ? '' : ` (${escapeHtml(details.errorCode)})`
@@ -107,7 +114,7 @@ export function buildRendererLoadErrorPage(details: RendererLoadErrorDetails = {
   const title = escapeHtml(details.title || 'Neovarch couldn\u2019t start the desktop UI')
   const description = escapeHtml(details.errorDescription || 'The desktop renderer failed to load.')
   const url = details.url ? `<p><code>${escapeHtml(details.url)}</code></p>` : ''
-  const repair = details.repairHint ? `<p>Repair with: <code>hermes desktop --force-build</code></p>` : ''
+  const repair = details.repairHint ? `<p>Repair with: <code>${escapeHtml(details.repairHint)}</code></p>` : ''
 
   return `<!doctype html>
 <html lang="en">
@@ -166,7 +173,7 @@ export function buildRendererLoadErrorPage(details: RendererLoadErrorDetails = {
   ${missingAssetsList(details.missingAssets)}
   ${repair}
   <p>If this keeps happening, check <code>logs/desktop.log</code> and try
-  <code>hermes desktop --force-build</code>, then restart the app.</p>
+  <code>${escapeHtml(details.repairHint || neovarchRepairCommand())}</code>, then restart the app.</p>
   ${reloadButtonJs(details)}
 </main>
 </body>
