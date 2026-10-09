@@ -239,8 +239,14 @@ class Office:
         except Exception:
             tasks = []
         desks += self._desks_for_kanban(tasks)
+        company = getattr(gw, "company", None)
+        if company is not None:
+            try:
+                desks = company.merge_office(desks)
+            except Exception:  # the Kantor must render even if the company data is broken
+                pass
         order = {"working": 0, "waiting-approval": 1, "idle": 2}
-        desks.sort(key=lambda d: (order.get(d["status"], 3), -float(d["last_activity"] or 0)))
+        desks.sort(key=lambda d: (d.get("kind") != "company", order.get(d["status"], 3), -float(d["last_activity"] or 0)))
         desks = desks[:MAX_DESKS]
         counts = {"total": len(desks), "working": 0, "waiting-approval": 0, "idle": 0}
         for d in desks:

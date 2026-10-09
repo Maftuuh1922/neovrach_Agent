@@ -35,6 +35,9 @@ class ToolContext:
     session_allow: set[str] = field(default_factory=set)
     # Live Kantor snapshot (set by the gateway; the terminal CLI has none).
     office: Callable[[], dict] | None = None
+    # Set when this session belongs to a Kantor company agent (neovarch.company_runtime.CompanyBinding).
+    company: Any = None
+    persona: Callable[[], str] | None = None
 
 
 DANGEROUS = [
@@ -404,6 +407,16 @@ def office_summary(snap: dict) -> str:
         for item in feed[:8]:
             if isinstance(item, dict):
                 lines.append(f"  · {item.get('text') or item.get('kind')}")
+    company = snap.get("company")
+    if isinstance(company, dict):
+        tc = company.get("ticket_counts") or {}
+        lines.append(f"Perusahaan: {company.get('name')} — misi: {company.get('mission') or '-'}; "
+                     f"jalan otomatis {'aktif' if company.get('autorun') else 'mati'}; "
+                     f"{company.get('pending_approvals', 0)} persetujuan menunggu.")
+        lines.append("Tiket: " + ", ".join(f"{k} {v}" for k, v in tc.items() if v))
+        for a in (company.get("agents") or [])[:20]:
+            lines.append(f"  · {a.get('name')} ({a.get('title') or '-'}): {a.get('status')}"
+                         + (f" — {a.get('ticket')}" if a.get("ticket") else ""))
     vault = snap.get("vault") or {}
     if isinstance(vault, dict) and vault.get("configured") is not None:
         lines.append(f"Vault Obsidian: {'terpasang' if vault.get('configured') else 'belum diatur'}")
@@ -497,8 +510,11 @@ TOOLS: dict[str, tuple[Callable[[dict, ToolContext], Awaitable[str]], dict]] = {
 }
 
 
-def tool_schemas() -> list[dict[str, Any]]:
-    return [{"type": "function", "function": {"name": n, **spec}} for n, (_, spec) in TOOLS.items()]
+def tool_schemas(ctx: "ToolContext | None" = None) -> list[dict[str, Any]]:
+    out = [{"type": "function", "function": {"name": n, **spec}} for n, (_, spec) in TOOLS.items()]
+    if ctx is not None and getattr(ctx, "company", None) is not None:
+        out += ctx.company.tool_schemas()
+    return out
 
 
 def _vault_error():
@@ -508,6 +524,9 @@ def _vault_error():
 
 async def run_tool(name: str, args: dict, ctx: ToolContext) -> str:
     entry = TOOLS.get(name)
+    company = getattr(ctx, "company", None)
+    if not entry and company is not None and name in company.tool_names():
+        return await company.run_tool(name, args)
     if not entry:
         return f"error: unknown tool {name}"
     try:

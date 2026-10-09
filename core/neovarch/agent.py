@@ -168,10 +168,17 @@ class Agent:
         usage: dict[str, Any] = {}
         error = None
         persona = ""
-        try:
-            persona = persona_prompt(self.rec.get("id"), self.ctx.office() if self.ctx.office else None)
-        except Exception:  # the Kantor must never break a turn
-            persona = persona_prompt(self.rec.get("id"), None)
+        company_persona = getattr(self.ctx, "persona", None)
+        if company_persona is not None:  # a Perusahaan agent: name, title, ticket, goal ancestry
+            try:
+                persona = company_persona()
+            except Exception:  # a persona glitch must never break a turn
+                persona = ""
+        if not persona:
+            try:
+                persona = persona_prompt(self.rec.get("id"), self.ctx.office() if self.ctx.office else None)
+            except Exception:  # the Kantor must never break a turn
+                persona = persona_prompt(self.rec.get("id"), None)
         if "@kantor" in user_text.lower() and self.ctx.office is not None:
             try:  # `@kantor` attaches the live Kantor state to this turn
                 from neovarch.tools import office_summary
@@ -187,7 +194,7 @@ class Agent:
                 wire = [{"role": "system", "content": sys_prompt}] + [_wire(m) for m in messages]
                 comp: Completion = await stream_chat(
                     base_url=endpoint["base_url"], api_key=endpoint["api_key"], model=endpoint["model"],
-                    messages=wire, tools=tool_schemas(),
+                    messages=wire, tools=tool_schemas(self.ctx),
                     on_text=lambda t: self.emit("message.delta", {"text": t}),
                     on_reasoning=lambda t: self.emit("reasoning.delta", {"text": t}),
                     extra_headers=endpoint.get("headers") or None,

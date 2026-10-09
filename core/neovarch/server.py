@@ -44,12 +44,16 @@ from neovarch.agent import Agent, default_cwd
 from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
 from neovarch.office import Office
+from neovarch.company import CompanyError
+from neovarch.company_runtime import CompanyRuntime
 from neovarch import cron as cronmod
 from neovarch import netinfo
 from neovarch.realtime import EventBus
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
+COMPANY_RPC_CODES = {"invalid": -32602, "not_found": -32004, "conflict": -32009}
+COMPANY_HTTP = {"invalid": 400, "not_found": 404, "conflict": 409}
 
 
 def _log_unhandled(kind: str, what: str) -> None:
@@ -260,6 +264,7 @@ class Gateway:
         self.bus = EventBus()
         self.kanban.on_event = lambda ev: self.broadcast_event("kanban.changed", None, ev)
         self.office = Office(self)
+        self.company = CompanyRuntime(self)
         self.cron = cronmod.CronStore()
         self.scheduler = cronmod.Scheduler(
             self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
@@ -294,6 +299,10 @@ class Gateway:
     def broadcast_event(self, kind: str, sid: str | None, payload: dict) -> None:
         if kind != "office.update":
             self.office.observe(kind, sid, payload)
+            try:
+                self.company.observe(kind, sid, payload)
+            except Exception:  # cost capture must never break event delivery
+                traceback.print_exc()
         if (kind == "tool.complete" and isinstance(payload, dict)
                 and str(payload.get("name") or "").startswith("obsidian_write")):
             self.broadcast_event("vault.changed", None, {"tool": payload.get("name")})
@@ -328,11 +337,16 @@ class Gateway:
         if not live:
             live = LiveSession(self, rec)
             self.live[rec["id"]] = live
+            self.company.bind_session(live)
         return live
 
     def office_status(self) -> dict:
         """Kantor snapshot plus the active model (the agent's office_status tool)."""
-        return {**self.office.snapshot(), "model": self.model_info()}
+        try:
+            company = self.company.summary()
+        except Exception:
+            company = None
+        return {**self.office.snapshot(), "model": self.model_info(), "company": company}
 
     def model_info(self) -> dict:
         cfg = cfgmod.load_config()
@@ -458,6 +472,11 @@ class Gateway:
             return self._config_set(p)
         if method == "office.snapshot":
             return self.office.snapshot()
+        if method.startswith("company."):
+            try:
+                return await self.company.call(method, p)
+            except CompanyError as exc:
+                raise RpcError(COMPANY_RPC_CODES.get(exc.code, -32602), str(exc)) from None
         if method == "commands.catalog":
             return {"commands": [{"name": "new", "description": "Start a new chat"},
                                  {"name": "model", "description": "Show the configured model"}], "skills": list_skills()}
@@ -665,9 +684,11 @@ def build_app(gw: Gateway) -> web.Application:
 
     async def _start_cron(_app):
         gw.scheduler.start()
+        gw.company.start()
 
     async def _stop_cron(_app):
         await gw.scheduler.stop()
+        await gw.company.stop()
     app.on_startup.append(_start_cron)
     app.on_cleanup.append(_stop_cron)
 
@@ -1318,6 +1339,24 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response(new)
 
     r.add_get("/api/office", office_get)
+
+    async def company_get(_):
+        return web.json_response(await gw.company.call("company.snapshot", {}))
+
+    async def company_post(request):
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return web.json_response({"error": "invalid JSON"}, status=400)
+        try:
+            return web.json_response(await gw.company.call("company." + request.match_info["method"],
+                                                           body if isinstance(body, dict) else {}))
+        except CompanyError as exc:
+            return web.json_response({"error": str(exc), "code": exc.code, **exc.data},
+                                     status=COMPANY_HTTP.get(exc.code, 400))
+
+    r.add_get("/api/company", company_get)
+    r.add_post("/api/company/{method:[a-z_.]+}", company_post)
     r.add_get("/api/office/events", office_events)
     r.add_get("/api/events", events_sse)
     r.add_get("/api/events/replay", events_replay)
