@@ -82,12 +82,14 @@ import type { AppearanceSubpageId } from './appearance-subpages'
 import { ChatFontSetting } from './chat-font-setting'
 import { MODE_OPTIONS } from './constants'
 import { setNested } from './helpers'
+import { GlassStyleSetting } from './glass-style-setting'
 import { MinimizeToTraySetting } from './minimize-to-tray-setting'
 import { PetSettings } from './pet-settings'
 import { ListRow, RowFootnoteAction, SectionHeading, SettingsContent, ToggleRow } from './primitives'
 import { SETTING_IDS, settingElementId } from './settings-manifest'
 import { TerminalFontSetting } from './terminal-font-setting'
 import { useSettingDeepLink } from './use-setting-deep-link'
+import { WallpaperSetting } from './wallpaper-setting'
 
 // display.resume_last_session lives in the backend config record (shared with
 // config.yaml and the cold-start restore in use-desktop-integrations), not a
@@ -566,6 +568,16 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             <div className="mb-4" data-nv-settings-accent="">
               <p className="mb-2 text-sm font-medium">Warna Neovarch</p>
               <NeovarchThemePicker compact />
+            </div>
+          )}
+          {show('theme') && (
+            <div className="mb-4">
+              <WallpaperSetting />
+            </div>
+          )}
+          {show('theme') && (
+            <div className="mb-4">
+              <GlassStyleSetting />
             </div>
           )}
           {show('general') && (

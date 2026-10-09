@@ -2000,3 +2000,411 @@
   padding: 0.75rem 1rem;
   color: var(--nv-red-text);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CUSTOM WALLPAPER (Settings ▸ Tampilan ▸ Latar belakang) + liquid-glass
+   panels. store/wallpaper.ts sets `data-nv-wallpaper` on <html> (only while
+   an image is actually shown) and the --nv-wall-* variables; NeovarchWallpaper
+   is the single fixed layer. Every shell rule below is gated on that
+   attribute, so without a wallpaper the app paints exactly as before.
+
+   Colour rules: every glass colour comes from the theme palette and the
+   accent (which follows the wallpaper palette by default) — no off-palette
+   surfaces. Flat fills only: backdrop blur + a flat tint + a hairline
+   rim/specular, no gradients. Text contrast: store/wallpaper-contrast.ts
+   measures the wallpaper under each panel and publishes the minimum fill
+   opacity that keeps secondary text >= 4.5:1 (--nv-floor-*); each panel uses
+   max(its glass style's opacity, that floor).
+
+   ONE PAINTER per region (as with window glass): the shell's opaque
+   full-window fills and the field tokens go transparent; the frame ground,
+   the stage and the side panels each paint one translucent fill.
+   ═════════════════════════════════════════════════════════════════════════ */
+.nv-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+.nv-wallpaper-image {
+  position: absolute;
+  /* Bleed past the edges so blur never pulls in a transparent rim. */
+  inset: calc(var(--nv-wall-blur, 0px) * -2);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+.nv-wallpaper-tint,
+.nv-wallpaper-dim {
+  position: absolute;
+  inset: 0;
+}
+.nv-wallpaper-tint {
+  background: var(--nv-red);
+}
+.nv-wallpaper-dim {
+  background: var(--ui-bg-chrome, var(--nv-ink));
+}
+
+/* Glass paint variables, aligned with the Liquid Glass spec
+   (/workspace/work/liquid-glass-spec.md §5.2, "large" elements: panels,
+   sidebar, cards). Defaults = "Reguler"; every [data-nv-glass-style] (on
+   <html>, and on each "Gaya kaca" preview tile) overrides a few. Rims are
+   flat inset lines (top specular + bottom rim + hairline), never gradients;
+   their colour is the palette's paper white, shadows are the wallpaper's own
+   average colour darkened (published by store/wallpaper-contrast.ts).
+   --nv-wall-* come from store/wallpaper.ts; fallbacks serve the tiles. */
+:root,
+[data-nv-glass-style] {
+  --nv-glass-base: var(--nv-ink);
+  --nv-glass-base-2: var(--nv-ink-2);
+  --nv-glass-keep: var(--nv-wall-keep, 68%);
+  --nv-glass-blur: var(--nv-wall-glass, 22px);
+  /* Spec Regular · Dark: saturate 1.5, brightness −8%. */
+  --nv-glass-saturate: 1.5;
+  --nv-glass-brightness: 0.92;
+  --nv-glass-filter: blur(var(--nv-glass-blur)) saturate(var(--nv-glass-saturate)) brightness(var(--nv-glass-brightness));
+  --nv-glass-tint: var(--nv-wall-accent-tint, 0%);
+  --nv-glass-rim: color-mix(in srgb, var(--nv-paper) 10%, transparent);
+  --nv-glass-rim-top: 28%;
+  --nv-glass-rim-bottom: 6%;
+  --nv-glass-specular:
+    inset 0 1px 0 color-mix(in srgb, var(--nv-paper) var(--nv-glass-rim-top), transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--nv-paper) var(--nv-glass-rim-bottom), transparent);
+  /* Large element shadow 0 12px 40px; colour/alpha adaptive per panel. */
+  --nv-glass-shadow: 0 12px 40px var(--nv-panel-shadow, transparent);
+}
+/* Spec Regular · Light: saturate 1.6, brightness +6%, rim .65 → .15. */
+:root[data-nv-scheme='light'],
+:root[data-nv-scheme='light'] [data-nv-glass-style] {
+  --nv-glass-saturate: 1.6;
+  --nv-glass-brightness: 1.06;
+  --nv-glass-rim-top: 65%;
+  --nv-glass-rim-bottom: 15%;
+}
+/* Bening = spec Clear: blur 4 (large), saturate 1.2–1.25, no brightness
+   shift, brighter rim. The fill is as thin as the contrast floor allows (the
+   floor plays the spec's dimming layer). */
+[data-nv-glass-style='bening'],
+:root[data-nv-scheme='light'] [data-nv-glass-style='bening'],
+:root[data-nv-scheme='light'][data-nv-glass-style='bening'] {
+  --nv-glass-keep: max(calc(var(--nv-wall-keep, 68%) - 40%), 6%);
+  --nv-glass-blur: calc(var(--nv-wall-glass, 22px) * 0.2);
+  --nv-glass-saturate: 1.2;
+  --nv-glass-brightness: 1;
+  --nv-glass-rim: color-mix(in srgb, var(--nv-paper) 30%, transparent);
+  --nv-glass-rim-top: 40%;
+  --nv-glass-rim-bottom: 8%;
+}
+/* Gelap = spec "Tinted" (system) · Dark: denser smoked glass, blur ×1.3,
+   saturate 1.2, brightness −12%, rim .22 → .05. In light mode the smoke is
+   the theme ink pulled toward the theme text (palette only; dark text stays
+   readable). */
+[data-nv-glass-style='gelap'],
+:root[data-nv-scheme='light'] [data-nv-glass-style='gelap'],
+:root[data-nv-scheme='light'][data-nv-glass-style='gelap'] {
+  --nv-glass-keep: max(var(--nv-wall-keep, 68%), 68%);
+  --nv-glass-blur: calc(var(--nv-wall-glass, 22px) * 1.3);
+  --nv-glass-saturate: 1.2;
+  --nv-glass-brightness: 0.88;
+  --nv-glass-rim-top: 22%;
+  --nv-glass-rim-bottom: 5%;
+}
+:root[data-nv-scheme='light'][data-nv-glass-style='gelap'],
+:root[data-nv-scheme='light'] [data-nv-glass-style='gelap'] {
+  --nv-glass-base: color-mix(in srgb, var(--nv-ink) 75%, var(--nv-text));
+  --nv-glass-base-2: color-mix(in srgb, var(--nv-ink-2) 75%, var(--nv-text));
+}
+/* Warna = spec .tint(colour): stained glass in the accent (which follows the
+   wallpaper palette), rim in the accent too. */
+[data-nv-glass-style='warna'] {
+  --nv-glass-tint: 22%;
+  --nv-glass-rim: color-mix(in srgb, var(--nv-red) 34%, transparent);
+}
+/* Tanpa efek (Aksesibilitas): opaque solid surfaces, no backdrop-filter. */
+[data-nv-glass-style='tanpa'],
+:root[data-nv-scheme='light'] [data-nv-glass-style='tanpa'],
+:root[data-nv-scheme='light'][data-nv-glass-style='tanpa'] {
+  --nv-glass-keep: 100%;
+  --nv-glass-filter: none;
+  --nv-glass-tint: 0%;
+  --nv-glass-rim: var(--nv-line);
+  --nv-glass-specular: inset 0 0 transparent;
+  --nv-glass-shadow: 0 0 transparent;
+}
+/* Spec §4 Increase Contrast: a contrasting 1.5px border on every panel. */
+@media (prefers-contrast: more) {
+  :root[data-nv-wallpaper] {
+    --nv-glass-rim: color-mix(in srgb, var(--nv-text) 90%, transparent);
+  }
+  :root[data-nv-wallpaper] .nv-stage,
+  :root[data-nv-wallpaper] .nv-sessions,
+  :root[data-nv-wallpaper] .nv-context-card {
+    border-width: 1.5px;
+  }
+}
+
+:root[data-nv-wallpaper] {
+  --ui-chat-surface-background: transparent;
+  --ui-sidebar-surface-background: transparent;
+  --ui-editor-surface-background: transparent;
+  --ui-terminal-surface-background: var(--ui-bg-chrome);
+}
+:root[data-nv-wallpaper] [data-slot='sidebar-wrapper'],
+:root[data-nv-wallpaper] [data-contrib-shell] {
+  background-color: transparent !important;
+}
+:root[data-nv-wallpaper] .nv-frame {
+  position: relative;
+  z-index: 1;
+  /* The ground around the panels (command bar + rail): a lighter sheet. */
+  background: color-mix(
+    in srgb,
+    var(--nv-ink) max(calc(var(--nv-glass-keep) - 20%), var(--nv-floor-frame, 0%)),
+    transparent
+  );
+}
+:root[data-nv-wallpaper] .nv-command-bar,
+:root[data-nv-wallpaper] .nv-rail {
+  background: transparent;
+}
+:root[data-nv-wallpaper] .nv-stage {
+  --nv-panel-surface: var(--nv-glass-base);
+  --nv-panel-floor: var(--nv-floor-stage, 0%);
+  --nv-panel-shadow: var(--nv-shadow-stage, transparent);
+}
+:root[data-nv-wallpaper] .nv-sessions {
+  --nv-panel-surface: var(--nv-glass-base-2);
+  --nv-panel-floor: var(--nv-floor-sessions, 0%);
+  --nv-panel-shadow: var(--nv-shadow-sessions, transparent);
+}
+:root[data-nv-wallpaper] .nv-context-card {
+  --nv-panel-surface: var(--nv-glass-base-2);
+  --nv-panel-floor: var(--nv-floor-context, 0%);
+  --nv-panel-shadow: var(--nv-shadow-context, transparent);
+}
+.nv-glass-tile-panel {
+  --nv-panel-surface: var(--nv-glass-base);
+  --nv-panel-floor: 0%;
+}
+:root[data-nv-wallpaper] .nv-stage,
+:root[data-nv-wallpaper] .nv-sessions,
+:root[data-nv-wallpaper] .nv-context-card,
+.nv-glass-tile-panel {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--nv-panel-surface), var(--nv-red) var(--nv-glass-tint))
+      max(var(--nv-glass-keep), var(--nv-panel-floor)),
+    transparent
+  );
+  border-color: var(--nv-glass-rim);
+  box-shadow: var(--nv-glass-specular), var(--nv-glass-shadow);
+  backdrop-filter: var(--nv-glass-filter);
+}
+/* Content ON the stage glass. The spec forbids glass-on-glass (§3.1: "use
+   fills, transparency, vibrancy" on top of glass), so the composer and the
+   chat bubbles are liquid-glass *surfaces* — translucent palette fill, flat
+   rim + specular — without a second backdrop-filter. The composer stays
+   near-solid (it is where you type). */
+:root[data-nv-wallpaper] [data-slot='composer-surface'] {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--nv-glass-base-2), var(--nv-red) var(--nv-glass-tint)) max(88%, var(--nv-glass-keep)),
+    transparent
+  );
+  border-color: var(--nv-glass-rim) !important;
+  box-shadow: var(--nv-glass-specular) !important;
+}
+/* Chat bubbles (user + assistant): liquid glass surfaces with their own
+   contrast floor. */
+:root[data-nv-wallpaper] .composer-human-message,
+:root[data-nv-wallpaper] [data-slot='aui_assistant-message-root'] {
+  border: 1px solid var(--nv-glass-rim);
+  border-left: 2px solid var(--nv-red);
+  border-radius: 14px;
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--nv-glass-base-2), var(--nv-red) calc(var(--nv-glass-tint) + var(--nv-bubble-extra-tint, 0%)))
+      max(var(--nv-glass-keep), var(--nv-floor-bubble, 0%)),
+    transparent
+  );
+  box-shadow: var(--nv-glass-specular);
+}
+:root[data-nv-wallpaper] .composer-human-message {
+  /* The user's own turn is accent-tinted glass (phone: GlassRole.accent). */
+  --nv-bubble-extra-tint: 10%;
+  padding: 0.5rem 2.25rem 0.55rem 0.9rem;
+}
+:root[data-nv-wallpaper] [data-slot='aui_assistant-message-root'] {
+  padding: 0.35rem 0.9rem 0.6rem;
+}
+:root[data-nv-wallpaper] .composer-human-message:hover {
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--nv-glass-base-2), var(--nv-red) calc(var(--nv-glass-tint) + var(--nv-bubble-extra-tint, 0%) + 6%))
+      max(var(--nv-glass-keep), var(--nv-floor-bubble, 0%)),
+    transparent
+  );
+}
+:root[data-nv-wallpaper] [data-glass-raised] {
+  --ui-chat-surface-background: color-mix(in srgb, var(--ui-bg-chrome) max(94%, var(--nv-glass-keep)), transparent);
+  --ui-sidebar-surface-background: color-mix(in srgb, var(--ui-bg-sidebar) max(94%, var(--nv-glass-keep)), transparent);
+  --ui-editor-surface-background: var(--ui-bg-chrome);
+}
+:root[data-nv-wallpaper] [data-glass-opaque] {
+  --ui-chat-surface-background: var(--ui-bg-chrome);
+  --ui-editor-surface-background: var(--ui-bg-chrome);
+  --ui-sidebar-surface-background: var(--ui-bg-sidebar);
+}
+:root[data-nv-wallpaper] .nv-home-action,
+:root[data-nv-wallpaper] .nv-context-model,
+:root[data-nv-wallpaper] .nv-context-list li {
+  background: color-mix(in srgb, var(--nv-glass-base) max(80%, var(--nv-glass-keep)), transparent);
+}
+:root[data-nv-wallpaper] .nv-home-action:hover {
+  background: var(--nv-red-wash);
+}
+
+/* "Gaya kaca" live preview tiles */
+.nv-glass-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.nv-glass-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--nv-text-2);
+}
+.nv-glass-tile-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 7.5rem;
+  height: 5rem;
+  overflow: hidden;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control, 10px);
+  background-color: var(--nv-ink-3);
+  background-position: center;
+  background-size: cover;
+}
+.nv-glass-tile-panel {
+  display: grid;
+  gap: 0.25rem;
+  width: 72%;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.6875rem;
+  line-height: 1.1;
+  color: var(--nv-text);
+}
+.nv-glass-tile-panel i {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--nv-red);
+  width: 60%;
+}
+.nv-glass-tile[aria-pressed='true'] {
+  color: var(--nv-text);
+}
+.nv-glass-tile[aria-pressed='true'] .nv-glass-tile-stage {
+  border: 2px solid var(--nv-red);
+}
+.nv-glass-tile:focus-visible {
+  outline: none;
+}
+.nv-glass-tile:focus-visible .nv-glass-tile-stage {
+  outline: 2px solid var(--nv-red);
+  outline-offset: 2px;
+}
+.nv-wall-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.nv-wall-swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  border: 2px solid var(--nv-line);
+}
+.nv-wall-swatch[aria-pressed='true'] {
+  border-color: var(--nv-text);
+}
+
+/* Settings ▸ Tampilan ▸ Latar belakang */
+.nv-wall-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.nv-wall-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--nv-text-2);
+}
+.nv-wall-thumb {
+  display: grid;
+  place-items: center;
+  width: 6.5rem;
+  height: 4.25rem;
+  overflow: hidden;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-control, 10px);
+  background: var(--nv-ink-2);
+  background-position: center;
+  background-size: cover;
+  color: var(--nv-text-3);
+}
+.nv-wall-choice[aria-pressed='true'] {
+  color: var(--nv-text);
+}
+.nv-wall-choice[aria-pressed='true'] .nv-wall-thumb {
+  border: 2px solid var(--nv-red);
+}
+.nv-wall-choice:focus-visible {
+  outline: none;
+}
+.nv-wall-choice:focus-visible .nv-wall-thumb {
+  outline: 2px solid var(--nv-red);
+  outline-offset: 2px;
+}
+.nv-wall-drop {
+  border: 1px dashed transparent;
+  border-radius: var(--nv-r-panel, 14px);
+  padding: 0.75rem;
+  margin: 0 -0.75rem;
+}
+.nv-wall-drop[data-dragging] {
+  border-color: var(--nv-red);
+  background: var(--nv-red-wash);
+}
+.nv-wall-slider {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr 3.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2rem;
+  font-size: 0.8125rem;
+}
+.nv-wall-slider[data-disabled] {
+  opacity: 0.5;
+}
+.nv-wall-value {
+  text-align: right;
+  font-family: var(--nv-font-mono);
+  font-size: 0.75rem;
+  color: var(--nv-text-2);
+}

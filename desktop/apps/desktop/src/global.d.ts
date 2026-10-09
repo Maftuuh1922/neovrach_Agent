@@ -51,7 +51,23 @@ declare global {
     logTail: string
   }
 
+  interface NeovarchWallpaperImport {
+    ok: boolean
+    canceled?: boolean
+    error?: string
+    name?: string
+  }
+
   interface Window {
+    /** Settings ▸ Tampilan ▸ Latar belakang: copies images into userData. Absent outside Electron. */
+    neovarchWallpaper?: {
+      pick: () => Promise<NeovarchWallpaperImport>
+      importFile: (filePath: string) => Promise<NeovarchWallpaperImport>
+      importBytes: (data: ArrayBuffer | Uint8Array) => Promise<NeovarchWallpaperImport>
+      read: (name: string) => Promise<{ dataUrl: string; mime: string } | null>
+      clear: () => Promise<boolean>
+      pathForFile: (file: File) => string
+    }
     hermesDesktop: {
       // Resolve a backend connection. Omit `profile` (or pass the primary) for
       // the window's backend; pass a named profile to lazily spawn/reuse that

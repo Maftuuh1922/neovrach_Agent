@@ -18,6 +18,7 @@ import { NeovarchRail } from '@/components/neovarch/rail'
 import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
 import { NeovarchUpdateBanner } from '@/components/neovarch/update-banner'
 import { NeovarchVaultPage, VAULT_ROUTE } from '@/components/neovarch/vault'
+import { NeovarchWallpaper } from '@/components/neovarch/wallpaper'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
@@ -843,6 +844,9 @@ export function ContribController() {
           stage. The stage is a containing block (transform) so the shell's
           `fixed` titlebar clusters and overlays position against it, not the
           window — they sit beside the rail and under the command bar. */}
+      {/* Custom wallpaper (Settings ▸ Tampilan ▸ Latar belakang): one fixed
+          layer under the frame; renders nothing when none is chosen. */}
+      <NeovarchWallpaper />
       <div className="nv-frame" data-slot="nv-frame">
         <NeovarchCommandBar />
         <div className="nv-frame-body">

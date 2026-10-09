@@ -6,6 +6,7 @@ import { hermesApi } from '@/api/client'
 import { onGatewayEvent } from '@/contrib/events'
 import { cn } from '@/lib/utils'
 import { $gateway } from '@/store/gateway'
+import { noteManualAccent } from '@/store/wallpaper'
 import { setAccentOverride } from '@/themes/accent-override'
 import { useTheme } from '@/themes/context'
 
@@ -135,6 +136,11 @@ export function NeovarchThemePicker({ compact = false }: { compact?: boolean }) 
 
   const pick = async (accent: string, base = appearance.base) => {
     setError(null)
+
+    // A hand-picked accent takes over from "Warna dari wallpaper".
+    if (accent.toUpperCase() !== appearance.accent.toUpperCase()) {
+      noteManualAccent()
+    }
 
     try {
       await saveAppearance({ accent, base })

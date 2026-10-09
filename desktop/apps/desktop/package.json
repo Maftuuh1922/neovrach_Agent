@@ -94,6 +94,7 @@
     "@hermes/shared": "file:../shared",
     "@icons-pack/react-simple-icons": "13.11.1",
     "@lezer/highlight": "1.2.3",
+    "@material/material-color-utilities": "0.3.0",
     "@nanostores/react": "1.1.0",
     "@nous-research/ui": "0.18.2",
     "@novnc/novnc": "1.7.0",
