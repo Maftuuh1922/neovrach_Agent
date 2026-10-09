@@ -47,7 +47,7 @@
 
 /* Brand surface tokens for the Neovarch skin: flat chrome, red accents, no
    blue, red-tinted selection. */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --ui-blue: var(--nv-red-deep);
   --ui-selection-background: color-mix(in srgb, var(--nv-red) 34%, transparent);
   --ui-bg-chrome: var(--nv-ink);
@@ -256,7 +256,7 @@
 }
 
 /* ── Panes: tab strips + sessions panel ─────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] {
   font-family: var(--nv-font-mono);
   font-size: 0.64rem;
   letter-spacing: 0.14em;
@@ -469,7 +469,7 @@
 }
 
 /* ── Conversation: no boxed user bubbles ────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   border: 0;
   border-left: 2px solid var(--nv-red);
   border-radius: 0;
@@ -478,7 +478,7 @@
   padding: 0.15rem 2.25rem 0.15rem 0.9rem;
   backdrop-filter: none;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message::before {
+:root[data-nv-skin='neovarch'] .composer-human-message::before {
   content: 'ANDA';
   display: block;
   margin-bottom: 0.15rem;
@@ -488,16 +488,16 @@
   letter-spacing: 0.28em;
   color: var(--nv-red-text);
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+:root[data-nv-skin='neovarch'] .composer-human-message:hover {
   background: color-mix(in srgb, var(--nv-red) 5%, transparent);
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-content'] {
   position: relative;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root'] {
   position: relative;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root']::before {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root']::before {
   content: 'NEOVARCH';
   display: block;
   margin: 0.25rem 0 0.35rem;
@@ -509,23 +509,23 @@
 }
 
 /* ── Composer ───────────────────────────────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface'] {
   border-radius: 0 !important;
   border-color: var(--nv-line) !important;
   border-top: 2px solid var(--nv-red) !important;
   background: var(--nv-ink-2);
   box-shadow: none !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface']:focus-within {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface']:focus-within {
   border-color: var(--nv-text-3) !important;
   border-top-color: var(--nv-red) !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-root'] {
   border-radius: 0;
 }
 
 /* ── Overlay / Settings navigation ──────────────────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-glass-raised] {
   border-radius: 0;
   box-shadow: none;
   border-color: var(--nv-line);
@@ -647,7 +647,7 @@
    Tailwind composes box-shadow from ring + shadow vars; zeroing only the
    shadow vars keeps focus rings (a 1px ring is a flat line) but drops every
    elevation shadow. Theme `--shadow-*` tokens used by raw CSS go flat too. */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --shadow-xs: 0 0 #0000;
   --shadow-sm: 0 0 #0000;
   --shadow-md: 0 0 #0000;
@@ -655,9 +655,9 @@
   --shadow-xl: 0 0 #0000;
   --shadow-2xl: 0 0 #0000;
 }
-:root[data-hermes-theme='neovarch'] *,
-:root[data-hermes-theme='neovarch'] *::before,
-:root[data-hermes-theme='neovarch'] *::after {
+:root[data-nv-skin='neovarch'] *,
+:root[data-nv-skin='neovarch'] *::before,
+:root[data-nv-skin='neovarch'] *::after {
   --tw-shadow: 0 0 #0000 !important;
   --tw-inset-shadow: 0 0 #0000 !important;
   --tw-drop-shadow: drop-shadow(0 0 #0000) !important;
@@ -692,7 +692,7 @@
    Radii: panels/cards 14px · buttons/inputs/menus/popovers/chips 10px ·
    rail active item 12px · composer 16px. Flat colours, no shadows/gradients.
    ═════════════════════════════════════════════════════════════════════════ */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --nv-r-panel: 14px;
   --nv-r-control: 10px;
   --nv-r-rail: 12px;
@@ -984,17 +984,17 @@
 }
 
 /* ── Conversation: left-aligned reading column ──────────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-slot='aui_thread-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] {
   margin-left: 0;
   margin-right: auto;
   padding-left: 2rem;
   padding-right: 1.5rem;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-dock'].absolute {
+:root[data-nv-skin='neovarch'] [data-slot='composer-dock'].absolute {
   left: calc(2rem - 5px);
   translate: none;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_intro'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_intro'] {
   align-items: flex-start;
   text-align: left;
 }
@@ -1004,32 +1004,32 @@
 }
 
 /* User turns: a rounded card instead of a ruled bubble */
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   border: 1px solid var(--nv-line);
   border-radius: var(--nv-r-panel);
   background: var(--nv-ink-2);
   padding: 0.55rem 2.25rem 0.6rem 0.9rem;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+:root[data-nv-skin='neovarch'] .composer-human-message:hover {
   background: var(--nv-ink-3);
 }
 
 /* Composer: one rounded surface, 1px line, red on focus */
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface'] {
   border-radius: var(--nv-r-composer) !important;
   border: 1px solid var(--nv-line) !important;
   border-top: 1px solid var(--nv-line) !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface']:focus-within {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface']:focus-within {
   border-color: var(--nv-red) !important;
   border-top-color: var(--nv-red) !important;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-root'] {
   border-radius: var(--nv-r-composer);
 }
 
 /* Pane tabs */
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] {
   border-radius: var(--nv-r-control);
 }
 
@@ -1104,27 +1104,27 @@
 }
 
 /* Floating chrome: menus, popovers, tooltips, selects at 10px; dialogs 14px */
-:root[data-hermes-theme='neovarch'] [data-slot='tooltip-content'],
-:root[data-hermes-theme='neovarch'] [role='tooltip'],
-:root[data-hermes-theme='neovarch'] [role='menu'],
-:root[data-hermes-theme='neovarch'] [role='listbox'],
-:root[data-hermes-theme='neovarch'] [data-slot='popover-content'],
-:root[data-hermes-theme='neovarch'] [data-slot='dropdown-menu-content'],
-:root[data-hermes-theme='neovarch'] [data-slot='context-menu-content'],
-:root[data-hermes-theme='neovarch'] [data-slot='select-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='tooltip-content'],
+:root[data-nv-skin='neovarch'] [role='tooltip'],
+:root[data-nv-skin='neovarch'] [role='menu'],
+:root[data-nv-skin='neovarch'] [role='listbox'],
+:root[data-nv-skin='neovarch'] [data-slot='popover-content'],
+:root[data-nv-skin='neovarch'] [data-slot='dropdown-menu-content'],
+:root[data-nv-skin='neovarch'] [data-slot='context-menu-content'],
+:root[data-nv-skin='neovarch'] [data-slot='select-content'] {
   border-radius: var(--nv-r-control);
 }
-:root[data-hermes-theme='neovarch'] [role='menuitem'],
-:root[data-hermes-theme='neovarch'] [role='option'] {
+:root[data-nv-skin='neovarch'] [role='menuitem'],
+:root[data-nv-skin='neovarch'] [role='option'] {
   border-radius: 8px;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='dialog-content'],
-:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-slot='dialog-content'],
+:root[data-nv-skin='neovarch'] [data-glass-raised] {
   border-radius: var(--nv-r-panel);
 }
 
 /* ── Settings as a page: numbered seven-group index ─────────────────────── */
-:root[data-hermes-theme='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
   border-radius: 0;
   border: 0;
 }
@@ -1550,29 +1550,29 @@
 }
 
 /* ── v1.4: everything rounded; session tabs read as normal words ───────── */
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] {
   text-transform: none;
   letter-spacing: 0;
   font-family: inherit;
   font-size: 0.75rem;
   border-radius: 999px;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab'] *,
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab']::before,
-:root[data-hermes-theme='neovarch'] [data-slot='pane-tab']::after {
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab'] *,
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab']::before,
+:root[data-nv-skin='neovarch'] [data-slot='pane-tab']::after {
   border-radius: 999px;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='composer-surface'],
-:root[data-hermes-theme='neovarch'] [data-slot='composer-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='composer-surface'],
+:root[data-nv-skin='neovarch'] [data-slot='composer-root'] {
   border-radius: 16px !important;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   border-radius: 0 12px 12px 0;
 }
-:root[data-hermes-theme='neovarch'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-glass-raised] {
   border-radius: var(--nv-r-panel);
 }
-:root[data-hermes-theme='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
+:root[data-nv-skin='neovarch'] [data-overlay-variant='page'] [data-glass-raised] {
   border-radius: var(--nv-r-panel);
 }
 
@@ -2663,7 +2663,7 @@
    bubble on the right ("KAMU" caption), the agent's turn is a glass pill
    (avatar + NAME · PC, live pulse) over a full-width rounded glass bubble.
    Kept last so it wins over the older ruled / wallpaper bubble rules. */
-:root[data-hermes-theme='neovarch'] {
+:root[data-nv-skin='neovarch'] {
   --nv-bubble-radius: 20px;
   --nv-bubble-fill: var(--nv-ink-2);
   --nv-bubble-rim: var(--nv-line);
@@ -2676,7 +2676,7 @@
   );
   --nv-bubble-rim: var(--nv-glass-rim);
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message {
+:root[data-nv-skin='neovarch'] .composer-human-message {
   width: fit-content;
   max-width: min(560px, 86%);
   margin-left: auto;
@@ -2686,27 +2686,27 @@
   box-shadow: var(--nv-glass-specular, none);
   padding: 0.625rem 2.25rem 0.75rem 0.875rem;
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message:hover {
+:root[data-nv-skin='neovarch'] .composer-human-message:hover {
   background: color-mix(in srgb, var(--nv-bubble-fill), var(--nv-red) 16%);
 }
-:root[data-hermes-theme='neovarch'] .composer-human-message::before {
+:root[data-nv-skin='neovarch'] .composer-human-message::before {
   content: 'KAMU';
   margin-bottom: 0.2rem;
   font-size: 0.6rem;
   letter-spacing: 0.14em;
   color: var(--nv-text-2);
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root'] {
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   padding: 0;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-root']::before {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-root']::before {
   content: none;
 }
-:root[data-hermes-theme='neovarch'] [data-slot='aui_assistant-message-content'] {
+:root[data-nv-skin='neovarch'] [data-slot='aui_assistant-message-content'] {
   border: 1px solid var(--nv-bubble-rim);
   border-radius: var(--nv-bubble-radius);
   background: var(--nv-bubble-fill);
@@ -2796,7 +2796,7 @@
    ModelChip / ModelPickerSheet: glass pill with a sparkle in the accent, mono
    name, chevron; the menu opens as a rounded glass sheet with a mono kicker
    ("model · default PC" / "model · <agent>"), "Pilih model", rounded rows. */
-:root[data-hermes-theme='neovarch'] .nv-model-chip {
+:root[data-nv-skin='neovarch'] .nv-model-chip {
   height: 26px;
   border: 1px solid var(--nv-bubble-rim, var(--nv-line));
   border-radius: 999px;
@@ -2807,14 +2807,14 @@
   letter-spacing: 0.02em;
   color: var(--nv-text);
 }
-:root[data-hermes-theme='neovarch'] .nv-model-chip:hover {
+:root[data-nv-skin='neovarch'] .nv-model-chip:hover {
   border-color: color-mix(in srgb, var(--nv-red) 55%, var(--nv-line));
   color: var(--nv-text);
 }
 .nv-model-chip-icon {
   color: var(--nv-red);
 }
-:root[data-hermes-theme='neovarch'] .nv-model-sheet {
+:root[data-nv-skin='neovarch'] .nv-model-sheet {
   overflow: hidden;
   border: 1px solid var(--nv-bubble-rim, var(--nv-line));
   border-radius: 22px;
@@ -2870,7 +2870,7 @@
 }
 
 /* Right panel Model card: read-only. */
-:root[data-hermes-theme='neovarch'] .nv-context-model {
+:root[data-nv-skin='neovarch'] .nv-context-model {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2879,10 +2879,10 @@
   border-radius: 14px;
   cursor: default;
 }
-:root[data-hermes-theme='neovarch'] .nv-context-model:hover {
+:root[data-nv-skin='neovarch'] .nv-context-model:hover {
   border-color: var(--nv-line);
 }
-:root[data-hermes-theme='neovarch'] .nv-context-model-name {
+:root[data-nv-skin='neovarch'] .nv-context-model-name {
   max-width: 100%;
   font-family: inherit;
   font-size: 0.82rem;
@@ -2904,7 +2904,7 @@
 }
 
 /* Icons: thinner strokes, rounded ends, closer to the phone's Cupertino set. */
-:root[data-hermes-theme='neovarch'] .tabler-icon {
+:root[data-nv-skin='neovarch'] .tabler-icon {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
