@@ -109,7 +109,10 @@ describe('gateway `error` event → error card + toast', () => {
 
     expect(failAssistantMessage).toHaveBeenCalledWith('sess-1', serverCopy, 1_700_000_100, null)
     const toast = $notifications.get()[0]
-    expect(toast.message).toBe(serverCopy)
+    // The toast shows it rebranded (brandText); the error card keeps it raw.
+    expect(toast.message).toBe(
+      'Neovarch could not start the assistant for this chat. Check your model settings and try again.'
+    )
     expect(toast.detail).toBeUndefined()
   })
 })
