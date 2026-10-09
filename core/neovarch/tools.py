@@ -21,6 +21,8 @@ import aiohttp
 from neovarch.paths import ForeignPathError, check_path, neovarch_home
 
 MAX_OUTPUT = 20_000
+SHELL_DEFAULT_TIMEOUT = 60
+SHELL_MAX_TIMEOUT = 600
 
 ApproveFn = Callable[[str, str, str], Awaitable[str]]
 
@@ -31,6 +33,8 @@ class ToolContext:
     approve: ApproveFn
     approvals_mode: str = "ask"            # ask | off
     session_allow: set[str] = field(default_factory=set)
+    # Live Kantor snapshot (set by the gateway; the terminal CLI has none).
+    office: Callable[[], dict] | None = None
 
 
 DANGEROUS = [
@@ -83,7 +87,7 @@ async def tool_shell(args: dict, ctx: ToolContext) -> str:
     command = str(args.get("command") or "").strip()
     if not command:
         return "error: command is required"
-    timeout = min(float(args.get("timeout") or 120), 1800)
+    timeout = min(float(args.get("timeout") or SHELL_DEFAULT_TIMEOUT), SHELL_MAX_TIMEOUT)
     reason = danger_reason(command)
     if reason and "hermes" in reason.lower():
         return f"refused: this command {reason}."
@@ -243,8 +247,53 @@ async def tool_obsidian_links(args: dict, ctx: ToolContext) -> str:
     return f"{res['path']}\nbacklinks:\n{back}\noutgoing links:\n{out}"
 
 
+BUILTIN_SKILL_NAME = "neovarch-app"
+BUILTIN_SKILL_VERSION = "1"
+BUILTIN_SKILL = f"""---
+name: {BUILTIN_SKILL_NAME}
+description: Peta fitur aplikasi Neovarch (Kantor, Kanban, Obsidian, Skill, Jadwal, Pengaturan, remote HP) dan cara membacanya dengan tool.
+builtin: true
+version: {BUILTIN_SKILL_VERSION}
+---
+# Neovarch app
+
+Gunakan skill ini saat pengguna bertanya tentang aplikasi Neovarch itu sendiri.
+
+## Halaman
+- **Obrolan / Sesi** - percakapan dengan agen; daftar sesi dengan cari, sematkan, pengelompokan.
+- **Kantor** - kantor 3D: tiap sesi aktif/baru dan tiap tugas Kanban tampil sebagai pegawai di meja
+  (bekerja / menunggu persetujuan / santai), tugas saat ini, model, umpan aktivitas, taman.
+- **Kanban** - papan tugas (todo, ready, running, blocked, done), dipakai bersama Kantor.
+- **Catatan / Obsidian** - vault Obsidian pengguna: pohon, catatan, backlink, graf; juga memori jangka panjang.
+- **Skill** - folder berisi SKILL.md di ~/.neovarch/skills.
+- **Jadwal** - cron job agen. **Pasangkan HP** - QR untuk aplikasi remote di HP.
+- **Pengaturan** - model, penyedia, endpoint kustom OpenAI-compatible, tampilan, keamanan (persetujuan), memori.
+
+## Cara membaca keadaan
+- Kantor: panggil `office_status` (sekali sudah cukup).
+- Obsidian: `obsidian_search`, `obsidian_read`, `obsidian_links`.
+- Jangan grep app.asar, folder instalasi, atau site-packages untuk mencari tahu fitur aplikasi.
+"""
+
+
+def ensure_builtin_skills(root: Path | None = None) -> None:
+    """Install (or refresh) the built-in skill; a copy the user edited is kept."""
+    root = root or (neovarch_home() / "skills")
+    target = root / BUILTIN_SKILL_NAME / "SKILL.md"
+    try:
+        if target.exists():
+            text = target.read_text(encoding="utf-8", errors="replace")
+            if "builtin: true" not in text or f"version: {BUILTIN_SKILL_VERSION}" in text:
+                return
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(BUILTIN_SKILL, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def list_skills() -> list[dict[str, str]]:
     root = neovarch_home() / "skills"
+    ensure_builtin_skills(root)
     out = []
     if not root.exists():
         return out
@@ -322,7 +371,49 @@ async def tool_report_export(args: dict, ctx: ToolContext) -> str:
     return "exported\n" + "\n".join(lines)
 
 
+def office_summary(snap: dict) -> str:
+    """Compact text view of a Kantor snapshot for the model."""
+    lines = []
+    counts = snap.get("counts") or {}
+    lines.append(f"Kantor: {counts.get('total', 0)} agen — {counts.get('working', 0)} bekerja, "
+                 f"{counts.get('waiting-approval', 0)} menunggu persetujuan, {counts.get('idle', 0)} santai.")
+    model = snap.get("model") or {}
+    if model.get("model"):
+        lines.append(f"Model aktif: {model.get('model')} (penyedia {model.get('provider') or '-'})")
+    for a in (snap.get("agents") or [])[:20]:
+        if not isinstance(a, dict):
+            continue
+        task = a.get("current_task") or a.get("task") or a.get("title") or ""
+        lines.append(f"- {a.get('name') or a.get('id')}: {a.get('status')}"
+                     + (f" — {str(task)[:120]}" if task else "")
+                     + (f" [{a.get('model')}]" if a.get("model") else ""))
+    kanban = snap.get("kanban") or {}
+    if kanban:
+        lines.append("Kanban: " + ", ".join(f"{k} {v}" for k, v in kanban.items()))
+    feed = snap.get("feed") or []
+    if feed:
+        lines.append("Aktivitas terakhir:")
+        for item in feed[:8]:
+            if isinstance(item, dict):
+                lines.append(f"  · {item.get('text') or item.get('kind')}")
+    vault = snap.get("vault") or {}
+    if isinstance(vault, dict) and vault.get("configured") is not None:
+        lines.append(f"Vault Obsidian: {'terpasang' if vault.get('configured') else 'belum diatur'}")
+    return "\n".join(lines)
+
+
+async def tool_office_status(args: dict, ctx: ToolContext) -> str:
+    if ctx.office is None:
+        return "Kantor hanya tersedia saat core berjalan sebagai gateway desktop (neovarch serve)."
+    return office_summary(ctx.office())
+
+
 TOOLS: dict[str, tuple[Callable[[dict, ToolContext], Awaitable[str]], dict]] = {
+    "office_status": (tool_office_status, {
+        "description": "Read the live Neovarch Kantor (office) state: agents, their status and current task, "
+                       "Kanban counts, recent activity and the active model. Read-only; use it to answer questions "
+                       "about the Kantor instead of searching files.",
+        "parameters": {"type": "object", "properties": {}}}),
     "shell": (tool_shell, {
         "description": "Run a shell command on the user's computer and return its output. Dangerous commands ask the user first.",
         "parameters": {"type": "object", "properties": {

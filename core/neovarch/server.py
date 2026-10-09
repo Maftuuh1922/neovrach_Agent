@@ -39,6 +39,7 @@ from aiohttp import WSMsgType, web
 
 from neovarch import PRODUCT, __version__
 from neovarch import config as cfgmod
+from neovarch import session_settings
 from neovarch.agent import Agent, default_cwd
 from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
@@ -144,7 +145,8 @@ class LiveSession:
         self.task: asyncio.Task | None = None
         self.status = "idle"
         self.approvals: dict[str, dict] = {}
-        self.ctx = ToolContext(cwd=Path(rec.get("cwd") or default_cwd()), approve=self.approve)
+        self.ctx = ToolContext(cwd=Path(rec.get("cwd") or default_cwd()), approve=self.approve,
+                               office=getattr(gw, "office_status", None))
         self.agent = Agent(rec, gw.store, self.ctx, self.emit)
         self.last_text = ""
 
@@ -198,8 +200,13 @@ class LiveSession:
         self.task = asyncio.create_task(run())
 
     def info(self) -> dict:
+        cfg = cfgmod.load_config()
+        ep = session_settings.effective_endpoint(cfg, self.rec)
         return {"title": self.rec.get("title") or "", "running": self.status == "running",
-                "model": self.rec.get("model") or cfgmod.resolve_endpoint(cfgmod.load_config())["model"],
+                # The model this session's next turn uses (its own pick or the
+                # default) — never a stale name stored when the session began.
+                "model": ep["model"], "provider": ep["provider"],
+                "reasoning_effort": session_settings.effective_effort(cfg, self.rec),
                 "cwd": str(self.ctx.cwd), "status": self.status,
                 # Version of the desktop session protocol this core speaks; the
                 # desktop warns "backend out of date" below its required level.
@@ -307,6 +314,10 @@ class Gateway:
             self.live[rec["id"]] = live
         return live
 
+    def office_status(self) -> dict:
+        """Kantor snapshot plus the active model (the agent's office_status tool)."""
+        return {**self.office.snapshot(), "model": self.model_info()}
+
     def model_info(self) -> dict:
         cfg = cfgmod.load_config()
         ep = cfgmod.resolve_endpoint(cfg)
@@ -342,6 +353,14 @@ class Gateway:
             cwd = p.get("cwd") or str(default_cwd())
             rec = self.store.create(source=str(p.get("source") or "desktop"), cwd=cwd,
                                     model=self.model_info()["model"])
+            # The composer's pick for a new chat rides on session.create.
+            if p.get("model") or p.get("provider"):
+                rec["model_override"] = {"model": str(p.get("model") or ""), "provider": str(p.get("provider") or "")}
+            if session_settings.normalize_effort(p.get("reasoning_effort")):
+                rec["reasoning_effort"] = session_settings.normalize_effort(p.get("reasoning_effort"))
+            if rec.get("model_override") or rec.get("reasoning_effort"):
+                rec["model"] = session_settings.effective_endpoint(cfgmod.load_config(), rec)["model"]
+                self.store.save(rec)
             live = self.open(rec)
             conn.attached.add(live.id)
             self.broadcast_event("sessions.changed", None, {})
@@ -399,11 +418,7 @@ class Gateway:
             key = p.get("key")
             return {"value": cfgmod.get_path(cfg, key) if key else cfg, "config": cfg}
         if method == "config.set":
-            cfg = cfgmod.load_config()
-            cfgmod.set_path(cfg, str(p["key"]), p.get("value"))
-            cfgmod.save_config(cfg)
-            self._config_changed(str(p["key"]))
-            return {"ok": True}
+            return self._config_set(p)
         if method == "office.snapshot":
             return self.office.snapshot()
         if method == "commands.catalog":
@@ -466,6 +481,68 @@ class Gateway:
             return {"plugins": [], "user_count": 0, "bundled_count": 0, "ok": True}
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
+
+    def _config_set(self, p: dict) -> dict:
+        """``config.set``: composer model/reasoning picks plus plain dotted keys."""
+        key = str(p.get("key") or "")
+        value = p.get("value")
+        sid = str(p.get("session_id") or "")
+        live = self.live.get(sid) if sid else None
+        if live is None and sid:
+            rec = self.store.find(sid)
+            live = self.open(rec) if rec else None
+        if key == "model":
+            from neovarch import providers
+            model, provider, session_only = session_settings.parse_model_value(value)
+            if not model and not provider:
+                raise RpcError(-32602, "model is required")
+            cfg = cfgmod.load_config()
+            if session_only and live is not None:
+                live.rec["model_override"] = {"model": model, "provider": provider}
+                ep = session_settings.effective_endpoint(cfg, live.rec)
+            else:
+                try:
+                    res = providers.set_model(cfg, {"model": model, "provider": provider})
+                except providers.EndpointError as exc:
+                    raise RpcError(-32602, str(exc))
+                cfgmod.save_config(cfg)
+                if live is not None:
+                    live.rec.pop("model_override", None)
+                ep = cfgmod.resolve_endpoint(cfg)
+                provider = res.get("provider") or provider
+            if live is not None:
+                live.rec["model"] = ep["model"]
+                self.store.save(live.rec)
+                self.broadcast_event("session.info", live.id, live.info())
+            self.broadcast_event("model.changed", None, {"provider": ep["provider"], "model": ep["model"]})
+            return {"ok": True, "value": ep["model"], "model": ep["model"], "provider": ep["provider"],
+                    "deferred": False, "scope": "session" if session_only and live is not None else "global"}
+        if key == "reasoning":
+            word = str(value or "").strip().lower()
+            cfg = cfgmod.load_config()
+            if word in session_settings.DISPLAY_WORDS:
+                cfgmod.set_path(cfg, "display.show_reasoning", session_settings.DISPLAY_WORDS[word])
+                cfgmod.save_config(cfg)
+                return {"ok": True, "value": word}
+            level = session_settings.normalize_effort(word)
+            if level is None:
+                raise RpcError(-32602, f"unknown reasoning level: {value}")
+            if live is not None and str(p.get("scope") or "") != "global":
+                live.rec["reasoning_effort"] = level
+                self.store.save(live.rec)
+                self.broadcast_event("session.info", live.id, live.info())
+            else:
+                cfgmod.set_path(cfg, "agent.reasoning_effort", level)
+                cfgmod.save_config(cfg)
+            return {"ok": True, "value": level}
+        if not key:
+            raise RpcError(-32602, "key is required")
+        cfg = cfgmod.load_config()
+        cfgmod.set_path(cfg, key, value)
+        session_settings.repair_config(cfg)
+        cfgmod.save_config(cfg)
+        self._config_changed(key)
+        return {"ok": True, "value": value}
 
     def _config_changed(self, key: str = "") -> None:
         if not key or key.startswith("memory"):

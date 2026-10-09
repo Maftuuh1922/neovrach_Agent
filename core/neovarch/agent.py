@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from neovarch import config as cfgmod
+from neovarch import session_settings
 from neovarch.llm import Completion, LLMError, stream_chat
 from neovarch.store import SessionStore
 from neovarch.tools import ToolContext, list_skills, run_tool, tool_schemas
@@ -16,8 +17,29 @@ from neovarch.tools import ToolContext, list_skills, run_tool, tool_schemas
 EmitFn = Callable[[str, dict[str, Any]], Any]
 
 
+# What the agent knows about the app it lives in. Without it a question like
+# "can you see the Kantor?" sent the agent grepping app.asar and site-packages.
+APP_KNOWLEDGE = """# About the Neovarch app you are running in
+You are the agent inside Neovarch Agent: a desktop app (Windows/Linux) plus a phone remote app. The desktop
+talks to this core (the `neovarch serve` gateway). Its pages, from the left rail:
+- Obrolan / Sesi: chats with you; the session list has search, pinned chats and grouping.
+- Kantor (Office): a 3D office where each running or recent chat and each Kanban task is an agent "employee"
+  at a desk (status working / waiting-approval / idle, current task, model), with a live activity feed and a garden.
+- Kanban: the task board (todo, ready, running, blocked, done) shared with the Kantor.
+- Catatan / Obsidian: the user's Obsidian vault (tree, notes, backlinks, graph); it is also your long-term memory.
+- Skill: installed skills (folders with SKILL.md under ~/.neovarch/skills).
+- Artefak, Jadwal (cron jobs), Pasangkan HP (pair the phone remote by QR), Pengaturan (model, providers,
+  custom OpenAI-compatible endpoints, appearance, security/approvals, memory).
+How to answer questions about the app:
+- Answer from this description directly. Call `office_status` to see the live Kantor (agents, status, tasks,
+  active model); never search the filesystem, the app bundle (app.asar) or Python site-packages to learn
+  what the app has.
+- Use tools only when the request needs them. For exploration, stop and answer after at most 5 tool calls
+  unless the task clearly needs more; prefer narrow commands with a short timeout over broad greps."""
+
+
 def system_prompt(cfg: dict, cwd: Path, query: str = "") -> str:
-    parts = [cfgmod.soul_text().strip()]
+    parts = [cfgmod.soul_text().strip(), APP_KNOWLEDGE]
     extra = str(cfgmod.get_path(cfg, "agent.system_prompt", "") or "").strip()
     if extra:
         parts.append(extra)
@@ -78,7 +100,9 @@ class Agent:
 
     async def run_turn(self, user_text: str) -> str:
         cfg = cfgmod.load_config()
-        endpoint = cfgmod.resolve_endpoint(cfg)
+        endpoint = session_settings.effective_endpoint(cfg, self.rec)
+        effort = session_settings.wire_effort(session_settings.effective_effort(cfg, self.rec))
+        skipped_notice = False
         self.ctx.approvals_mode = str(cfgmod.get_path(cfg, "approvals.mode", "ask") or "ask")
         max_turns = int(cfgmod.get_path(cfg, "agent.max_turns", 30) or 30)
         self.interrupted = False
@@ -110,7 +134,14 @@ class Agent:
                     on_reasoning=lambda t: self.emit("reasoning.delta", {"text": t}),
                     extra_headers=endpoint.get("headers") or None,
                     verify_ssl=endpoint.get("verify_ssl", True),
+                    reasoning_effort=effort,
                 )
+                if comp.reasoning_skipped:
+                    effort = None  # the model rejected it; do not resend this turn
+                    if not skipped_notice:
+                        skipped_notice = True
+                        self.emit("status", {"kind": "notice", "text": "Model ini tidak mendukung tingkat penalaran; "
+                                                                        "dikirim tanpa pengaturan itu."})
                 usage = comp.usage or usage
                 assistant: dict[str, Any] = {"role": "assistant", "content": comp.text, "ts": time.time()}
                 if comp.reasoning:

@@ -30,6 +30,7 @@ class ToolCall:
 class Completion:
     text: str = ""
     reasoning: str = ""
+    reasoning_skipped: bool = False
     tool_calls: list[ToolCall] = field(default_factory=list)
     finish_reason: str = ""
     usage: dict[str, Any] = field(default_factory=dict)
@@ -63,8 +64,45 @@ async def stream_chat(
     session: aiohttp.ClientSession | None = None,
     extra_headers: dict[str, str] | None = None,
     verify_ssl: bool = True,
+    reasoning_effort: str | None = None,
 ) -> Completion:
-    """POST a streaming chat completion; call back per text/reasoning delta."""
+    """POST a streaming chat completion; call back per text/reasoning delta.
+
+    ``reasoning_effort`` (minimal/low/medium/high) is sent as the
+    OpenAI-compatible ``reasoning_effort`` field; OpenRouter-style gateways get
+    ``reasoning: {effort}``. A provider that rejects the field is asked again
+    without it, and the completion says so (``reasoning_skipped``).
+    """
+    if reasoning_effort:
+        try:
+            return await _stream_chat(base_url, api_key, model, messages, tools, on_text, on_reasoning, timeout_s,
+                                      session, extra_headers, verify_ssl, reasoning_effort)
+        except LLMError as exc:
+            text = str(exc).lower()
+            if "http 400" not in text and "http 422" not in text:
+                raise
+            if "reason" not in text and "unrecognized" not in text and "unknown" not in text \
+                    and "not support" not in text and "extra" not in text:
+                raise
+        out = await _stream_chat(base_url, api_key, model, messages, tools, on_text, on_reasoning, timeout_s,
+                                 session, extra_headers, verify_ssl, None)
+        out.reasoning_skipped = True
+        return out
+    return await _stream_chat(base_url, api_key, model, messages, tools, on_text, on_reasoning, timeout_s,
+                              session, extra_headers, verify_ssl, None)
+
+
+def reasoning_fields(base_url: str, effort: str | None) -> dict[str, Any]:
+    """The request fields that carry a reasoning effort for this provider."""
+    if not effort:
+        return {}
+    if "openrouter.ai" in (base_url or ""):
+        return {"reasoning": {"effort": effort}}
+    return {"reasoning_effort": effort}
+
+
+async def _stream_chat(base_url, api_key, model, messages, tools, on_text, on_reasoning, timeout_s,
+                       session, extra_headers, verify_ssl, reasoning_effort) -> Completion:
     if not base_url:
         raise LLMError("No model provider configured. Run `neovarch setup` (or set model.base_url in config.yaml).")
     url = base_url.rstrip("/") + "/chat/completions"
@@ -73,6 +111,7 @@ async def stream_chat(
     if tools:
         body["tools"] = tools
         body["tool_choice"] = "auto"
+    body.update(reasoning_fields(base_url, reasoning_effort))
     headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
