@@ -23,6 +23,7 @@ import 'glass/glass_chat.dart';
 import 'glass/liquid_glass.dart';
 import 'nv_widgets.dart';
 import 'remote_attachments.dart';
+import 'model_picker.dart';
 import 'remote_composer.dart';
 
 class RemoteChatScreen extends ConsumerStatefulWidget {
@@ -422,6 +423,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
             child: Text(r.attachNotice!, key: const ValueKey('attach-notice'), style: TextStyle(fontSize: 12, color: NV.muted, height: 1.35)),
           ),
+        const Align(alignment: Alignment.centerLeft, child: ModelChip()),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           // "+": uploads, and on a PC with the composer catalog also skills,
           // model, reasoning, mentions, URL and snippets (desktop parity).
@@ -431,7 +433,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
             onPressed: r.connected ? () => _openMenu(r) : null,
           ),
           const SizedBox(width: 4),
-          if (canDictate || VoiceService.debugEngine != null)
+          if (canDictate || VoiceService.hasTestEngine)
             KeyedSubtree(
               key: const ValueKey('composer-mic'),
               child: Stack(clipBehavior: Clip.none, children: [

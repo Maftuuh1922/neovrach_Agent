@@ -11,10 +11,12 @@ import '../../theme/neovarch_mobile_theme.dart';
 import '../../ui/widgets/common.dart' show CenterLoader, toast;
 import '../../ui/widgets/motion.dart' show reduceMotion;
 import '../agent_identity.dart';
+import '../models_api.dart' show modelShort;
 import '../office_models.dart';
 import '../office_scene_state.dart';
 import '../remote_controller.dart';
 import 'nv_widgets.dart';
+import 'model_picker.dart';
 import 'remote_office_3d.dart';
 import 'remote_vault_screen.dart';
 
@@ -390,6 +392,32 @@ class _AgentSheetState extends ConsumerState<AgentSheet> {
               label: const Text('Buka chat-nya'),
             ),
           ),
+        if (!r.modelsUnsupported && (a.model.isNotEmpty || r.models != null)) ...[
+          const SizedBox(height: 10),
+          InkWell(
+            key: const ValueKey('agent-model'),
+            borderRadius: BorderRadius.circular(NV.rCtl),
+            onTap: () => showModelPicker(context, agent: a),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(children: [
+                Icon(CupertinoIcons.sparkles, size: 16, color: NV.red),
+                const SizedBox(width: 8),
+                Text('MODEL', style: NV.monoLabel(size: 9)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    a.model.isEmpty ? 'default PC' : '${modelShort(a.model)}${a.modelOverride == null ? ' · default PC' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: NV.code(size: 12, color: NV.text),
+                  ),
+                ),
+                Text('Ganti', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: NV.redInk)),
+              ]),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Text('KASIH TUGAS', style: NV.monoLabel(size: 9)),
         const SizedBox(height: 6),

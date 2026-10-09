@@ -13,6 +13,7 @@ import 'package:neovarch_agent/remote/ui/profile_header_slot.dart';
 import 'package:neovarch_agent/data/gateway_client.dart';
 import 'package:neovarch_agent/remote/appearance.dart';
 import 'package:neovarch_agent/remote/office_models.dart';
+import 'package:neovarch_agent/remote/models_api.dart';
 import 'package:neovarch_agent/remote/office_scene_state.dart';
 import 'package:neovarch_agent/remote/remote_controller.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart' show RemoteStatus;
@@ -386,6 +387,71 @@ void main() {
       expect(find.textContaining('Izin mikrofon ditolak'), findsOneWidget);
     });
   });
+
+  group('Models (9Router contract v1, fake adapter)', () {
+    late FakeModels api;
+    setUp(() => api = FakeModels());
+
+    test('snapshot parsing and grouping', () {
+      final m = ModelsSnapshot.fromJson(FakeModels.json);
+      expect(m.defaultModel, const ModelRef('oc/big-pickle', '9router'));
+      expect(m.groups().first.$1, 'OpenCode Free');
+      expect(m.groups(query: 'sonnet').single.$2.single.id, 'kr/claude-sonnet-4.5');
+      expect(modelShort('oc/big-pickle'), 'big-pickle');
+      final a = OfficeAgent.fromJson({'id': 'session:s1', 'model': 'kr/claude-sonnet-4.5', 'model_override': {'model': 'kr/claude-sonnet-4.5', 'provider': '9router'}, 'model_source': 'agent'});
+      expect(a.modelOverride!.model, 'kr/claude-sonnet-4.5');
+      expect(a.modelSource, 'agent');
+    });
+
+    testWidgets('composer chip shows the PC default; picking a model sets it; model.default.changed updates live', (tester) async {
+      final r = controller()..debugModelsApi = api;
+      await r.refreshModels();
+      await pump(tester, r, home: RemoteChatScreen(onOpenApprovals: () {}));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.descendant(of: find.byKey(const ValueKey('model-chip')), matching: find.text('big-pickle')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('model-chip')));
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byKey(const ValueKey('model-picker')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('model-kr/claude-sonnet-4.5')));
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(api.defaults.single, 'kr/claude-sonnet-4.5');
+      expect(find.descendant(of: find.byKey(const ValueKey('model-chip')), matching: find.text('claude-sonnet-4.5')), findsOneWidget);
+      // changed on the PC
+      r.debugEvent(const GatewayEventFrame('model.default.changed', null, {'model': 'oc/big-pickle', 'provider': '9router'}));
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const ValueKey('model-chip')), matching: find.text('big-pickle')), findsOneWidget);
+    });
+
+    testWidgets('agent sheet: own model, and back to the PC default', (tester) async {
+      fakeScene();
+      final r = controller()..debugModelsApi = api;
+      await r.refreshModels();
+      await pump(tester, r);
+      await tester.tap(find.byKey(const ValueKey('figure-session:s1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('agent-model')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('model-kr/claude-sonnet-4.5')));
+      await tester.pumpAndSettle();
+      expect(api.agentSets.last, ('session:s1', 'kr/claude-sonnet-4.5'));
+      await tester.tap(find.byKey(const ValueKey('agent-model')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('model-follow-default')));
+      await tester.pumpAndSettle();
+      expect(api.agentSets.last, ('session:s1', null));
+    });
+
+    testWidgets('older PC without /api/models: no chip', (tester) async {
+      final r = controller()..modelsUnsupported = true;
+      await pump(tester, r, home: RemoteChatScreen(onOpenApprovals: () {}));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('model-chip')), findsNothing);
+    });
+  });
 }
 
 class SocketExceptionLike implements Exception {
@@ -414,4 +480,30 @@ class FakeEngine implements SpeechEngine {
   }
   @override
   Future<void> stop() async => listening = false;
+}
+
+class FakeModels implements ModelsApi {
+  static final json = <String, dynamic>{
+    'models': [
+      {'id': 'oc/big-pickle', 'label': 'Big Pickle', 'provider': '9router', 'group': 'OpenCode Free', 'free': true, 'recommended': true},
+      {'id': 'oc/nemotron-3-ultra-free', 'label': 'Nemotron 3 Ultra', 'provider': '9router', 'group': 'OpenCode Free', 'free': true},
+      {'id': 'kr/claude-sonnet-4.5', 'label': 'Claude Sonnet 4.5', 'provider': '9router', 'group': 'Kiro'},
+    ],
+    'default': {'model': 'oc/big-pickle', 'provider': '9router'},
+    'router': {'setup': {'ready': true}},
+  };
+  final defaults = <String>[];
+  final agentSets = <(String, String?)>[];
+  @override
+  Future<ModelsSnapshot> listModels({bool refresh = false}) async => ModelsSnapshot.fromJson(json);
+  @override
+  Future<ModelRef> setDefaultModel(String model, {String? provider}) async {
+    defaults.add(model);
+    return ModelRef(model, provider ?? '9router');
+  }
+  @override
+  Future<AgentModel> setAgentModel(String agentId, String? model, {String? provider}) async {
+    agentSets.add((agentId, model));
+    return AgentModel(agentId: agentId, model: model ?? 'oc/big-pickle', provider: '9router');
+  }
 }

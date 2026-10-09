@@ -31,6 +31,7 @@ import '../data/gateway_client.dart';
 import '../models/models.dart';
 import 'attachments.dart';
 import 'composer.dart';
+import 'models_api.dart';
 import 'office_models.dart';
 import 'pairing.dart';
 import 'vault_models.dart';
@@ -142,7 +143,7 @@ class ActiveSession {
   const ActiveSession({required this.id, required this.title, required this.status, required this.model, required this.preview});
 }
 
-class RemoteGateway implements VaultApi {
+class RemoteGateway implements VaultApi, ModelsApi {
   RemoteGateway({
     required this.baseUrl,
     required this.token,
@@ -704,6 +705,20 @@ class RemoteGateway implements VaultApi {
   /// `POST /api/model/set` (the same call as the desktop model pill).
   Future<void> setModel({required String provider, required String model}) =>
       _json('POST', '/api/model/set', body: {'provider': provider, 'model': model, 'scope': 'main'});
+
+  // -------------------------------------------------------------- models --
+  // 9Router contract v1 (/api/models, /api/models/default, /api/agents/{id}/model).
+  @override
+  Future<ModelsSnapshot> listModels({bool refresh = false}) async =>
+      ModelsSnapshot.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/models', query: refresh ? {'refresh': '1'} : null) as Map));
+
+  @override
+  Future<ModelRef> setDefaultModel(String model, {String? provider}) async =>
+      ModelRef.fromJson(await _json('PUT', '/api/models/default', body: {'model': model, 'provider': ?provider}));
+
+  @override
+  Future<AgentModel> setAgentModel(String agentId, String? model, {String? provider}) async => AgentModel.fromJson(Map<String, dynamic>.from(
+      await _json('PUT', '/api/agents/${Uri.encodeComponent(agentId)}/model', body: {'model': model, 'provider': ?provider}) as Map));
 
   /// `GET /api/office`: the agents ("pegawai") and the activity feed.
   Future<OfficeSnapshot> office() async => OfficeSnapshot.fromJson(Map<String, dynamic>.from(await _json('GET', '/api/office') as Map));

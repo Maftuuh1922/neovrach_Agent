@@ -12,6 +12,7 @@ import '../data/device_tools.dart';
 import '../data/gateway_client.dart';
 import '../models/models.dart';
 import 'attachments.dart';
+import 'models_api.dart';
 import 'office_models.dart';
 import 'pairing.dart';
 import 'remote_gateway.dart';
@@ -88,6 +89,14 @@ class RemoteController extends ChangeNotifier {
     notifyApprovals = v;
     notifyListeners();
   }
+
+  // models (9Router contract v1; null on cores without /api/models)
+  ModelsSnapshot? models;
+  String? modelsError;
+  bool modelsUnsupported = false;
+  @visibleForTesting
+  ModelsApi? debugModelsApi;
+  ModelsApi? get _modelsApi => debugModelsApi ?? gateway;
 
   // board / status
   KanbanSnapshot? board;
@@ -211,6 +220,9 @@ class RemoteController extends ChangeNotifier {
     serverInfo = const {};
     office = null;
     officeError = null;
+    models = null;
+    modelsError = null;
+    modelsUnsupported = false;
     composer = null;
     selectedSkills.clear();
     reasoningEffort = null;
@@ -295,6 +307,18 @@ class RemoteController extends ChangeNotifier {
           attachNotice = '${f.payload['message'] ?? ''}';
           notifyListeners();
         }
+      case 'models.changed':
+        unawaited(refreshModels());
+      case 'model.default.changed':
+        final m = models;
+        if (m != null) {
+          models = m.withDefault(ModelRef.fromJson(f.payload));
+          notifyListeners();
+        } else {
+          unawaited(refreshModels());
+        }
+      case 'agent.model.changed':
+        notifyListeners(); // office.update follows with the new effective model
       case 'resync.required':
         unawaited(refreshAll());
         if (storedId != null) unawaited(openSession(storedId!, quiet: true));
@@ -329,7 +353,7 @@ class RemoteController extends ChangeNotifier {
 
   /// Snapshots after (re)connecting; from here on the PC pushes changes.
   Future<void> refreshAll() async {
-    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer()]);
+    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer(), refreshModels()]);
   }
 
   // ------------------------------------------------------------- composer --
@@ -431,6 +455,52 @@ class RemoteController extends ChangeNotifier {
     final moved = office!.feed.isNotEmpty && office!.feed.first.kind == 'task' && office!.feed.first.id != (before?.feed.firstOrNull?.id);
     if (before != null && (moved || k.entries.any((e) => kb[e.key] != e.value))) unawaited(refreshBoard());
     notifyListeners();
+  }
+
+  // --------------------------------------------------------------- models --
+  Future<void> refreshModels({bool refresh = false}) async {
+    final api = _modelsApi;
+    if (api == null || (debugModelsApi == null && !connected)) return;
+    try {
+      models = await api.listModels(refresh: refresh);
+      modelsError = null;
+      modelsUnsupported = false;
+    } on RemoteRestError catch (e) {
+      if (e.status == 404) {
+        modelsUnsupported = true; // older core: the composer "+" menu still has model.options
+      } else {
+        modelsError = e.message;
+      }
+    } catch (e) {
+      modelsError = '$e';
+    }
+    notifyListeners();
+  }
+
+  /// The PC's default model (every agent without its own model).
+  Future<String?> setDefaultModel(ModelEntry m) async {
+    final api = _modelsApi;
+    if (api == null) return 'Belum terhubung ke PC.';
+    try {
+      final d = await api.setDefaultModel(m.id, provider: m.provider);
+      models = models?.withDefault(d.model.isEmpty ? ModelRef(m.id, m.provider) : d);
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
+  /// One agent's own model; [m] null = follow the PC default again.
+  Future<String?> setAgentModel(String agentId, ModelEntry? m) async {
+    final api = _modelsApi;
+    if (api == null) return 'Belum terhubung ke PC.';
+    try {
+      await api.setAgentModel(agentId, m?.id, provider: m?.provider);
+      return null;
+    } catch (e) {
+      return '$e';
+    }
   }
 
   // ----------------------------------------------------------------- chat --

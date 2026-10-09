@@ -14,6 +14,7 @@ import '../../ui/widgets/motion.dart' show reduceMotion;
 import 'app_icon_panel.dart';
 import 'appearance/appearance_section.dart' show NvAppearanceSection;
 import 'glass_style_picker.dart';
+import 'model_picker.dart';
 import 'nv_widgets.dart';
 import 'profile_header_slot.dart';
 import 'remote_social_screen.dart' show SocialSection;
@@ -41,6 +42,13 @@ class RemoteProfileScreen extends StatelessWidget {
           const NvHeader(kicker: 'hp ini', title: 'Profil'),
           ProfileHeaderSlot(autoLoad: autoLoad),
           const NvSection('pengaturan'),
+          const ProfileGroup(
+            id: 'model',
+            icon: CupertinoIcons.sparkles,
+            title: 'Model AI',
+            subtitle: 'Model default agen di PC',
+            children: [ModelSettingsPanel()],
+          ),
           const ProfileGroup(
             id: 'appearance',
             icon: CupertinoIcons.paintbrush_fill,

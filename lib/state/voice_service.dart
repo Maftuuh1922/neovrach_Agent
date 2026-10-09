@@ -73,6 +73,8 @@ class VoiceService extends ChangeNotifier {
   /// Tests: a fake recogniser and permission answer.
   @visibleForTesting
   static SpeechEngine? debugEngine;
+  /// True when a test engine stands in (shows the mic on any platform).
+  static bool get hasTestEngine => debugEngine != null;
   @visibleForTesting
   static Future<bool> Function()? debugMicPermission;
 
