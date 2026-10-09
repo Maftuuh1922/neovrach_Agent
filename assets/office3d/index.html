@@ -781,6 +781,9 @@
   window.nvOffice = {
     setState: function (s) { try { apply(typeof s === 'string' ? JSON.parse(s) : s); } catch (e) { post({ type: 'error', reason: 'state: ' + e.message }); } },
     setActive: function (on) { active = !!on; dirty = true; },
+    // Kartu Neovarch: render now and read the canvas in the same task (no
+    // preserveDrawingBuffer needed); JPEG keeps the bridge payload small.
+    snapshot: function () { try { renderer.render(scene, camera); return canvas.toDataURL('image/jpeg', 0.86); } catch (e) { return ''; } },
     resetView: function () { orbit.theta = THETA0; orbit.phi = PHI0; orbit.r = orbit.base; placeCamera(); },
     debugAgents: function () { return Object.keys(agents).map(function (id) { var v = agents[id]; return { id: id, status: v.status, x: v.goal.x, z: v.goal.z }; }); }
   };

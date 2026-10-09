@@ -209,16 +209,12 @@ class MainActivity : FlutterActivity() {
                 val share = java.io.File(cacheDir, "share").apply { mkdirs() }
                 val target = if (f.parentFile?.canonicalPath == share.canonicalPath) f else java.io.File(share, f.name).also { f.copyTo(it, true) }
                 val uri = Uri.parse("content://$packageName.nvshare/${Uri.encode(target.name)}")
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = call.argument<String>("mime") ?: "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    call.argument<String>("text")?.let { putExtra(Intent.EXTRA_TEXT, it) }
-                    clipData = android.content.ClipData.newRawUri("profil", uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(Intent.createChooser(send, "Bagikan profil").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                result.success(true)
+                result.success(shareImage(uri, call.argument<String>("mime") ?: "image/png", call.argument<String>("text"),
+                    call.argument<String>("title") ?: "Bagikan", call.argument<String>("package"), call.argument<String>("mode") ?: "send"))
             }
+            // Kartu Neovarch: which of the given share targets are installed
+            // (each package is listed in the manifest's <queries>).
+            "installedPackages" -> result.success((call.argument<List<String>>("packages") ?: emptyList()).filter { isInstalled(it) })
             "saveImageToGallery" -> Thread {
                 val out = try { saveToGallery(java.io.File(call.argument<String>("path") ?: ""), call.argument<String>("name") ?: "neovarch.png") } catch (e: Exception) { null }
                 Handler(Looper.getMainLooper()).post { result.success(out) }
@@ -304,6 +300,50 @@ class MainActivity : FlutterActivity() {
             }
         } ?: return mapOf("error" to "unreadable", "name" to name)
         return mapOf("path" to f.absolutePath, "name" to name, "mime" to mime, "size" to copied)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isInstalled(pkg: String): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 33) packageManager.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        else packageManager.getPackageInfo(pkg, 0)
+        true
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
+     * Share an image from cache/share. With [pkg] the intent goes straight to
+     * that app ("ig-story" = Instagram's ADD_TO_STORY with the image as the
+     * story background); if the app can't take it, the system chooser opens
+     * instead. Returns "shared", "chooser" (fell back) or an error string.
+     */
+    private fun shareImage(uri: Uri, mime: String, text: String?, title: String, pkg: String?, mode: String): String {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            text?.let { putExtra(Intent.EXTRA_TEXT, it) }
+            clipData = android.content.ClipData.newRawUri("kartu", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(send, title).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (pkg.isNullOrEmpty()) {
+            startActivity(chooser)
+            return "chooser"
+        }
+        val direct = if (mode == "ig-story") Intent("com.instagram.share.ADD_TO_STORY").apply {
+            setDataAndType(uri, mime)
+            putExtra("source_application", packageName)
+            setPackage(pkg)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } else Intent(send).apply { setPackage(pkg) }
+        return try {
+            grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (direct.resolveActivity(packageManager) == null) throw ActivityNotFoundException(pkg)
+            startActivity(direct)
+            "shared"
+        } catch (e: Exception) {
+            try { startActivity(chooser); "chooser" } catch (e2: Exception) { "gagal: ${e2.message}" }
+        }
     }
 
     /** Copy a PNG into Pictures/Neovarch via MediaStore (no permission on API 29+). */
