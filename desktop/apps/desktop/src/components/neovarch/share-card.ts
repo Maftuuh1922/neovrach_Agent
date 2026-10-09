@@ -212,7 +212,7 @@ export function cardColors(style: ShareCardStyle, accentHex: string): CardColors
 export type DrawOp =
   | { align?: 'center' | 'left' | 'right'; color: string; font: string; kind: 'text'; maxWidth?: number; text: string; x: number; y: number }
   | { fill: string; h: number; kind: 'rect'; r: number; stroke?: string; w: number; x: number; y: number }
-  | { fill: string; kind: 'circle'; r: number; stroke?: string; x: number; y: number }
+  | { blur?: number; fill: string; kind: 'circle'; r: number; stroke?: string; x: number; y: number }
   | { h: number; kind: 'image'; r: number; src: string; w: number; x: number; y: number }
   | { kind: 'qr'; modules: boolean[][]; size: number; x: number; y: number }
 
@@ -277,8 +277,8 @@ export function layoutShareCard(data: ShareCardData, opts: ShareCardOptions): Dr
   ops.push({ fill: c.ground, h: H, kind: 'rect', r: 0, w: W, x: 0, y: 0 })
 
   if (opts.style === 'kaca') {
-    ops.push({ fill: alpha(c.accent, 0.28), kind: 'circle', r: W * 0.45, x: W * 0.15, y: H * 0.15 })
-    ops.push({ fill: alpha(c.accent, 0.2), kind: 'circle', r: W * 0.38, x: W * 0.95, y: H * 0.65 })
+    ops.push({ blur: 120, fill: alpha(c.accent, 0.42), kind: 'circle', r: W * 0.42, x: W * 0.15, y: H * 0.15 })
+    ops.push({ blur: 120, fill: alpha(c.accent, 0.3), kind: 'circle', r: W * 0.36, x: W * 0.95, y: H * 0.65 })
   }
 
   if (opts.style === 'gelap') {
@@ -357,7 +357,7 @@ export function layoutShareCard(data: ShareCardData, opts: ShareCardOptions): Dr
 
   // Kantor 3D snapshot
   if (opts.showOffice && data.officeShot) {
-    const oh = story ? 540 : 250
+    const oh = story ? 720 : 250
     ops.push({ h: oh, kind: 'image', r: 54, src: data.officeShot, w: iw, x: x0, y })
     ops.push({ fill: 'rgba(0, 0, 0, 0.55)', h: 52, kind: 'rect', r: 26, w: 420, x: x0 + 24, y: y + oh - 76 })
     const caption = s.agentsTotal !== undefined ? `KANTOR · ${s.agentsActive ?? 0}/${s.agentsTotal} BEKERJA` : 'KANTOR 3D'
@@ -465,6 +465,8 @@ export async function paintShareCard(ctx: CanvasRenderingContext2D, ops: DrawOp[
         break
 
       case 'circle':
+        // soft light behind the glass: a blurred flat disc (no gradient)
+        ctx.filter = op.blur ? `blur(${op.blur}px)` : 'none'
         ctx.beginPath()
         ctx.arc(op.x, op.y, op.r, 0, Math.PI * 2)
         ctx.fillStyle = op.fill
@@ -475,6 +477,8 @@ export async function paintShareCard(ctx: CanvasRenderingContext2D, ops: DrawOp[
           ctx.lineWidth = 5
           ctx.stroke()
         }
+
+        ctx.filter = 'none'
 
         break
 
