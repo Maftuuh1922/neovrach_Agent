@@ -265,6 +265,18 @@ class RemoteController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Tests: feed a gateway event exactly as the WebSocket subscription does.
+  @visibleForTesting
+  void debugEvent(GatewayEventFrame f) => _onEvent(f);
+
+  /// Back in the foreground: phones may have slept through pushes, so take
+  /// fresh snapshots (office, board, live sessions) once; from there the PC
+  /// pushes again. A dropped socket reconnects (and resyncs on connect).
+  Future<void> resyncOnResume() async {
+    if (!connected) return reconnect();
+    await Future.wait([refreshOffice(), refreshBoard(), refreshStatus()]);
+  }
+
   void _onEvent(GatewayEventFrame f) {
     switch (f.type) {
       case 'office.update':

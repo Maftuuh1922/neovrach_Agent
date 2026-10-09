@@ -99,7 +99,7 @@ class _RemoteShellState extends ConsumerState<RemoteShell> with WidgetsBindingOb
     // Back in the foreground: phones drop sockets in the background.
     if (state == AppLifecycleState.resumed) {
       final r = ref.read(remoteProvider);
-      if (!r.connected) r.reconnect();
+      r.resyncOnResume();
       _takeRoute();
     }
   }

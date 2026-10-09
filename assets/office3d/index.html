@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Kantor 3D</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+  canvas{display:block;width:100%;height:100%;touch-action:none}
+</style>
+</head>
+<body>
+<!--
+  Neovarch phone remote: the PC's office as a low-poly, semi-Japanese 3D room
+  (tatami floor, shoji walls, paper lanterns, low wooden desks, warm light).
+  Data comes only from Flutter over the JS bridge:
+    window.nvOffice.setState({agents:[{id,name,status,task,desk}], kanban:{...}, accent:'#rrggbb', dark:bool, motion:bool})
+  Messages back on the `NvOffice` JavaScript channel (JSON):
+    {type:'ready'} | {type:'tap', id} | {type:'error', reason}
+  three.min.js is a tree-shaken three.js r180 subset (MIT), loaded only when
+  this page is opened (the visual view is shown).
+-->
+<script src="three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  function post(msg) {
+    var s = JSON.stringify(msg);
+    try { if (window.NvOffice && window.NvOffice.postMessage) window.NvOffice.postMessage(s); } catch (e) {}
+    window.__nvLast = s;
+  }
+  if (!window.THREE) { post({ type: 'error', reason: 'three' }); return; }
+  var T = window.THREE;
+
+  // ------------------------------------------------------------ renderer --
+  var canvas = document.createElement('canvas');
+  var renderer;
+  try {
+    var gl = canvas.getContext('webgl2', { alpha: true, antialias: true, premultipliedAlpha: true }) ||
+             canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true });
+    if (!gl) throw new Error('no webgl');
+    renderer = new T.WebGLRenderer({ canvas: canvas, context: gl, alpha: true, antialias: true });
+  } catch (e) {
+    post({ type: 'error', reason: 'webgl' });
+    return;
+  }
+  document.body.appendChild(canvas);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = T.SRGBColorSpace;
+  canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); post({ type: 'error', reason: 'context-lost' }); });
+
+  var scene = new T.Scene();
+  var camera = new T.PerspectiveCamera(38, 1, 0.1, 100);
+  var target = new T.Vector3(-0.4, 0.2, 0.6);
+
+  // ------------------------------------------------------------- palette --
+  var C = {
+    // shared with the desktop office (office3d-model.ts OFFICE3D_PALETTE / STATUS)
+    tatami: 0xc9b98a, tatami2: 0xb3a271, heri: 0x2e2a24, wood: 0x8a6a48, woodDark: 0x5a3b24, woodLight: 0xc79a63, desk: 0x6b4429,
+    paper: 0xf3ebdc, plinth: 0x5a3b24, lantern: 0xf6e3c0, skin: 0xe8c6a0, hair: 0x1e1a18, working: 0x6fcf8a, amber: 0xf2b544, idle: 0x9c9488,
+    leaf: 0x4f6b3a, pot: 0x3c3f44, cushion: [0x2f3a56], coats: [0x3a4a6e, 0x7a2e2e, 0x3e5a4a, 0x6a5a8c, 0x8a6a3a, 0x45434a]
+  };
+  var accent = new T.Color('#ee1c1c');
+  var dark = true, motion = true;
+
+  function lam(color, opts) {
+    var m = new T.MeshLambertMaterial(Object.assign({ color: color, flatShading: true }, opts || {}));
+    return m;
+  }
+  function box(w, h, d, mat, x, y, z, parent) {
+    var m = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    (parent || scene).add(m);
+    return m;
+  }
+
+  // -------------------------------------------------------------- lights --
+  var hemi = new T.HemisphereLight(0xfff1dc, 0x4a3524, 1.15);
+  scene.add(hemi);
+  var sun = new T.DirectionalLight(0xffe2bc, 1.1);
+  sun.position.set(6, 10, 7);
+  scene.add(sun);
+  var lampA = new T.PointLight(0xffb066, 6, 9, 1.6);
+  lampA.position.set(-1.9, 2.5, -0.7);
+  scene.add(lampA);
+  var lampB = new T.PointLight(0xffb066, 5, 8, 1.6);
+  lampB.position.set(5.2, 2.4, 0.2);
+  scene.add(lampB);
+
+  // ---------------------------------------------------------------- room --
+  var W = 14, D = 10, X0 = -7, Z0 = -5, WALL = 2.7;
+  // raised wooden plinth under the tatami (reads as a floating diorama on glass)
+  box(W + 0.5, 0.3, D + 0.5, lam(C.plinth), 0, -0.16, 0);
+  // tatami: 2:1 mats in a classic offset layout, each with a dark border
+  var matA = lam(C.tatami), matB = lam(C.tatami2), heri = lam(C.heri);
+  // brick-laid 2 x 1 mats, each row offset by one, dark heri along the long edges
+  for (var r = 0; r < D; r++) {
+    var off = r % 2 ? 1 : 0;
+    for (var x = -off; x < W; x += 2) {
+      var x0 = Math.max(0, x), x1 = Math.min(W, x + 2);
+      var cx = X0 + (x0 + x1) / 2, cz = Z0 + r + 0.5, mw = x1 - x0;
+      box(mw - 0.05, 0.06, 0.95, (r * 7 + x) % 3 === 0 ? matB : matA, cx, 0.03, cz);
+      box(mw - 0.05, 0.065, 0.06, heri, cx, 0.035, cz - 0.45);
+      box(mw - 0.05, 0.065, 0.06, heri, cx, 0.035, cz + 0.45);
+    }
+  }
+  // walls: back (z = Z0) and left (x = X0), wood posts + shoji panels
+  var wood = lam(C.wood), woodDark = lam(C.woodDark), woodLight = lam(C.woodLight);
+  var paper = new T.MeshLambertMaterial({ color: C.paper, emissive: 0x6b5236, emissiveIntensity: 0.35, side: T.DoubleSide });
+  function shojiWall(alongX) {
+    var len = alongX ? W : D;
+    var n = alongX ? 7 : 5, pw = len / n;
+    for (var i = 0; i < n; i++) {
+      var a = -len / 2 + pw * (i + 0.5);
+      var px = alongX ? a : X0 + 0.05, pz = alongX ? Z0 + 0.05 : a;
+      var g = new T.Group();
+      g.position.set(px, 0, pz);
+      if (!alongX) g.rotation.y = Math.PI / 2;
+      scene.add(g);
+      var p = new T.Mesh(new T.PlaneGeometry(pw - 0.12, WALL - 0.55), paper);
+      p.position.set(0, 0.32 + (WALL - 0.55) / 2, 0.02);
+      g.add(p);
+      // lattice (kumiko): 3 verticals x 4 horizontals
+      for (var v = 1; v < 3; v++) box(0.035, WALL - 0.55, 0.04, woodDark, -pw / 2 + 0.06 + v * (pw - 0.12) / 3, 0.32 + (WALL - 0.55) / 2, 0.05, g);
+      for (var h = 1; h < 5; h++) box(pw - 0.12, 0.035, 0.04, woodDark, 0, 0.32 + h * (WALL - 0.55) / 5, 0.05, g);
+      // posts
+      box(0.12, WALL, 0.14, wood, -pw / 2, WALL / 2, 0.04, g);
+    }
+    // kamoi (top beam) and base board
+    if (alongX) { box(W, 0.2, 0.18, wood, 0, WALL - 0.12, Z0 + 0.06); box(W, 0.3, 0.16, woodDark, 0, 0.15, Z0 + 0.06); }
+    else { box(0.18, 0.2, D, wood, X0 + 0.06, WALL - 0.12, 0); box(0.16, 0.3, D, woodDark, X0 + 0.06, 0.15, 0); }
+  }
+  shojiWall(true);
+  shojiWall(false);
+  box(0.16, WALL, 0.16, wood, X0 + 0.06, WALL / 2, Z0 + 0.06); // corner post
+
+  // ---------------------------------------------------------------- desks --
+  var DESKS = [];
+  for (var di = 0; di < 8; di++) DESKS.push(new T.Vector3(-5.3 + (di % 4) * 2.55, 0, (di < 4 ? -2.4 : 0.9)));
+  var screens = [];
+  DESKS.forEach(function (d, i) {
+    var g = new T.Group();
+    g.position.copy(d);
+    scene.add(g);
+    box(1.5, 0.08, 0.85, lam(C.desk), 0, 0.42, 0, g);           // top
+    [[-0.66, -0.34], [0.66, -0.34], [-0.66, 0.34], [0.66, 0.34]].forEach(function (l) { box(0.08, 0.38, 0.08, woodDark, l[0], 0.2, l[1], g); });
+    // zabuton cushion behind the desk (the agent kneels here facing +z)
+    box(0.7, 0.08, 0.7, lam(C.cushion[i % 4]), 0, 0.1, -0.78, g);
+    // laptop: base + lid (lid glows with the accent while the agent works)
+    box(0.5, 0.025, 0.34, woodDark, 0, 0.475, -0.08, g);
+    var lidMat = new T.MeshLambertMaterial({ color: 0x2a2420, emissive: 0x000000, flatShading: true });
+    var lid = box(0.5, 0.32, 0.025, lidMat, 0, 0.64, -0.24, g);
+    lid.rotation.x = -0.25;
+    // tea cup
+    var cup = new T.Mesh(new T.CylinderGeometry(0.05, 0.04, 0.08, 7), lam(0xe9e2d2));
+    cup.position.set(0.55, 0.5, 0.2);
+    g.add(cup);
+    screens.push(lidMat);
+  });
+
+  // ------------------------------------------------ tea corner (idle area) --
+  var TEA = new T.Vector3(5.0, 0, 2.7);
+  box(3.3, 0.1, 3.6, lam(C.wood), TEA.x, 0.07, TEA.z); // engawa-style wooden platform
+  var tea = new T.Mesh(new T.CylinderGeometry(0.75, 0.75, 0.07, 10), woodLight);
+  tea.position.set(TEA.x, 0.5, TEA.z);
+  scene.add(tea);
+  var teaLeg = new T.Mesh(new T.CylinderGeometry(0.12, 0.16, 0.32, 6), woodDark);
+  teaLeg.position.set(TEA.x, 0.3, TEA.z);
+  scene.add(teaLeg);
+  var pot = new T.Mesh(new T.SphereGeometry(0.11, 7, 5), lam(0x3d3a36));
+  pot.position.set(TEA.x + 0.15, 0.6, TEA.z - 0.1);
+  scene.add(pot);
+  var IDLE = [];
+  for (var s = 0; s < 8; s++) {
+    var a = [0.25, 1.25, 0.75, 1.75, 0, 1, 0.5, 1.5][s] * Math.PI + Math.PI / 8, rr = s < 4 ? 1.2 : 1.55;
+    IDLE.push(new T.Vector3(TEA.x + Math.cos(a) * rr, 0.14, TEA.z + Math.sin(a) * rr));
+  }
+  // spare spots for working agents without a desk (more than 8 busy)
+  var AISLE = [];
+  for (var q = 0; q < 6; q++) AISLE.push(new T.Vector3(-5.0 + q * 1.6, 0, 3.4));
+
+  // --------------------------------------------------------------- props --
+  function bonsai(x, z, s) {
+    var g = new T.Group();
+    g.position.set(x, 0, z);
+    g.scale.setScalar(s || 1);
+    scene.add(g);
+    var p = new T.Mesh(new T.CylinderGeometry(0.3, 0.22, 0.32, 7), lam(C.pot));
+    p.position.y = 0.16; g.add(p);
+    var t = new T.Mesh(new T.CylinderGeometry(0.04, 0.07, 0.5, 5), woodDark);
+    t.position.set(0.04, 0.55, 0); t.rotation.z = -0.2; g.add(t);
+    [[0, 0.9, 0, 0.38], [0.28, 0.78, 0.1, 0.26], [-0.25, 0.74, -0.08, 0.24]].forEach(function (b) {
+      var m = new T.Mesh(new T.IcosahedronGeometry(b[3], 0), lam(C.leaf));
+      m.position.set(b[0], b[1], b[2]); g.add(m);
+    });
+  }
+  bonsai(-6.3, -4.3, 1.1);
+  bonsai(6.3, -4.3, 1.0);
+  bonsai(-6.3, 4.2, 0.9);
+  // paper lanterns (chochin) hanging over the desks and the tea corner
+  var lanterns = [];
+  function lantern(x, y, z) {
+    var g = new T.Group();
+    g.position.set(x, y, z);
+    scene.add(g);
+    var body = new T.Mesh(new T.SphereGeometry(0.3, 8, 6), new T.MeshLambertMaterial({ color: C.lantern, emissive: 0xff9a40, emissiveIntensity: 0.9, flatShading: true }));
+    body.scale.y = 1.3; g.add(body);
+    box(0.24, 0.06, 0.24, woodDark, 0, 0.4, 0, g);
+    box(0.24, 0.06, 0.24, woodDark, 0, -0.4, 0, g);
+    box(0.015, 0.8, 0.015, woodDark, 0, 0.8, 0, g);
+    lanterns.push(body);
+  }
+  lantern(-1.9, 2.75, -0.7);
+  lantern(5.2, 2.6, 0.2);
+  // andon floor lamp by the tea corner
+  var andon = new T.Mesh(new T.BoxGeometry(0.4, 0.8, 0.4), new T.MeshLambertMaterial({ color: C.paper, emissive: 0xffa040, emissiveIntensity: 0.7 }));
+  andon.position.set(6.4, 0.55, -1.0);
+  scene.add(andon);
+  box(0.46, 0.06, 0.46, woodDark, 6.4, 0.97, -1.0);
+  box(0.46, 0.15, 0.46, woodDark, 6.4, 0.1, -1.0);
+
+  // kanban board on the left wall: a wooden frame with a canvas face
+  var boardCanvas = document.createElement('canvas');
+  boardCanvas.width = 512; boardCanvas.height = 256;
+  var boardTex = new T.CanvasTexture(boardCanvas);
+  boardTex.colorSpace = T.SRGBColorSpace;
+  var board = new T.Mesh(new T.PlaneGeometry(3.4, 1.7), new T.MeshBasicMaterial({ map: boardTex }));
+  board.position.set(X0 + 0.14, 1.55, -1.6);
+  board.rotation.y = Math.PI / 2;
+  scene.add(board);
+  box(0.06, 1.86, 3.56, woodDark, X0 + 0.1, 1.55, -1.6);
+  var kanban = {};
+  function drawBoard() {
+    var g = boardCanvas.getContext('2d');
+    g.fillStyle = '#efe4c9'; g.fillRect(0, 0, 512, 256);
+    var cols = [['TODO', (kanban.todo || 0) + (kanban.ready || 0) + (kanban.triage || 0)], ['JALAN', kanban.running || 0], ['BLOKIR', kanban.blocked || 0], ['SELESAI', kanban.done || 0]];
+    cols.forEach(function (c, i) {
+      var x = i * 128;
+      if (i) { g.fillStyle = 'rgba(78,50,29,.35)'; g.fillRect(x, 16, 2, 224); }
+      g.fillStyle = '#4e321d'; g.font = '700 22px sans-serif'; g.textAlign = 'center';
+      g.fillText(c[0], x + 64, 40);
+      g.font = '700 54px sans-serif';
+      g.fillStyle = i === 1 ? '#' + accent.getHexString() : (i === 2 ? '#c27a12' : '#2f2a24');
+      g.fillText(String(c[1]), x + 64, 104);
+      for (var k = 0; k < Math.min(c[1], 5); k++) {
+        g.fillStyle = i === 1 ? 'rgba(' + Math.round(accent.r * 255) + ',' + Math.round(accent.g * 255) + ',' + Math.round(accent.b * 255) + ',.75)' : (i === 3 ? '#b9c7c2' : (i === 2 ? '#f2b45a' : '#f2e3a6'));
+        g.fillRect(x + 22, 124 + k * 24, 84, 18);
+      }
+    });
+    boardTex.needsUpdate = true;
+  }
+
+  // -------------------------------------------------------------- agents --
+  var agents = {};         // id -> view
+  var pickables = [];
+  function hueOf(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
+  var LABEL_PX = 20;       // label height on screen, css px
+  function labelTexture(name, status) {
+    var cv = document.createElement('canvas');
+    var dpr = 3, fs = 11 * dpr;
+    var g = cv.getContext('2d');
+    g.font = '700 ' + fs + 'px sans-serif';
+    var tw = Math.ceil(g.measureText(name).width);
+    var h = LABEL_PX * dpr, w = tw + 30 * dpr;
+    cv.width = w; cv.height = h;
+    g = cv.getContext('2d');
+    var r = h / 2;
+    g.fillStyle = dark ? 'rgba(18,14,11,.82)' : 'rgba(255,250,240,.9)';
+    g.beginPath(); g.moveTo(r, 0); g.lineTo(w - r, 0); g.arc(w - r, r, r, -Math.PI / 2, Math.PI / 2); g.lineTo(r, h); g.arc(r, r, r, Math.PI / 2, Math.PI * 1.5); g.fill();
+    g.fillStyle = status === 'working' ? '#6fcf8a' : (status === 'waiting-approval' ? '#f2b544' : '#9c9488');
+    g.beginPath(); g.arc(13 * dpr, r, 4 * dpr, 0, Math.PI * 2); g.fill();
+    g.fillStyle = dark ? '#f6efe2' : '#2a2018';
+    g.font = '700 ' + fs + 'px sans-serif';
+    g.textBaseline = 'middle';
+    g.fillText(name, 22 * dpr, r + dpr * 0.5);
+    var tex = new T.CanvasTexture(cv);
+    tex.colorSpace = T.SRGBColorSpace;
+    return { tex: tex, aspect: w / h };
+  }
+  function makeAgent(a) {
+    var g = new T.Group();
+    var hue = hueOf(a.id);
+    var robe = new T.Color(C.coats[hue % C.coats.length]);
+    var body = new T.Mesh(new T.CylinderGeometry(0.2, 0.32, 0.6, 7), lam(robe));
+    body.position.y = 0.42;
+    var obi = new T.Mesh(new T.CylinderGeometry(0.235, 0.255, 0.08, 7), lam(robe.clone().offsetHSL(0.5, 0, -0.1)));
+    obi.position.y = 0.42;
+    var head = new T.Mesh(new T.IcosahedronGeometry(0.19, 1), lam(C.skin));
+    head.position.y = 0.92;
+    var hair = new T.Mesh(new T.SphereGeometry(0.2, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), lam(C.hair));
+    hair.position.y = 0.95;
+    hair.rotation.x = -0.25;
+    var fig = new T.Group();
+    fig.add(body, obi, head, hair);
+    fig.scale.setScalar(1.35);
+    g.add(fig);
+    var shadow = new T.Mesh(new T.CircleGeometry(0.38, 12), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.075;
+    g.add(shadow);
+    var ring = new T.Mesh(new T.TorusGeometry(0.46, 0.035, 4, 24), new T.MeshBasicMaterial({ color: C.working, transparent: true, opacity: 0.9 }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.09;
+    g.add(ring);
+    var badge = new T.Mesh(new T.IcosahedronGeometry(0.09, 0), new T.MeshBasicMaterial({ color: C.working }));
+    badge.position.y = 1.62;
+    g.add(badge);
+    var label = new T.Sprite(new T.SpriteMaterial({ transparent: true, depthTest: false, sizeAttenuation: false }));
+    label.position.y = 1.85;
+    label.renderOrder = 10;
+    g.add(label);
+    [body, obi, head, hair, label].forEach(function (m) { m.userData.agentId = a.id; pickables.push(m); });
+    scene.add(g);
+    var v = { id: a.id, group: g, fig: fig, ring: ring, badge: badge, label: label, pos: null, goal: new T.Vector3(), face: 0, phase: hue / 57, key: '' };
+    return v;
+  }
+  function deskFor(a, i, used) { return a.desk; }
+  function apply(state) {
+    if (state.accent) accent.set(state.accent);
+    if (typeof state.dark === 'boolean') dark = state.dark;
+    if (typeof state.motion === 'boolean') motion = state.motion;
+    kanban = state.kanban || {};
+    drawBoard();
+    hemi.intensity = dark ? 1.0 : 1.25;
+    var seen = {};
+    var idleN = 0, aisleN = 0;
+    (state.agents || []).forEach(function (a) {
+      seen[a.id] = true;
+      var v = agents[a.id] || (agents[a.id] = makeAgent(a));
+      v.status = a.status; v.name = a.name; v.desk = a.desk;
+      var busy = a.status === 'working' || a.status === 'waiting-approval';
+      if (busy && a.desk != null && a.desk < DESKS.length) {
+        v.goal.copy(DESKS[a.desk]).add(new T.Vector3(0, 0.1, -0.78));
+        v.faceGoal = 0;               // facing +z, over the desk
+      } else if (busy) {
+        v.goal.copy(AISLE[aisleN++ % AISLE.length]);
+        v.faceGoal = 0;
+      } else {
+        var spot = IDLE[idleN++ % IDLE.length];
+        v.goal.copy(spot);
+        v.faceGoal = Math.atan2(TEA.x - spot.x, TEA.z - spot.z);
+      }
+      if (!v.pos || !motion) { v.pos = v.goal.clone(); v.face = v.faceGoal; }
+      var key = a.name + '|' + a.status + '|' + dark + '|' + accent.getHexString();
+      if (key !== v.key) {
+        v.key = key;
+        var lt = labelTexture(a.name, a.status);
+        if (v.label.material.map) v.label.material.map.dispose();
+        v.label.material.map = lt.tex; v.label.material.needsUpdate = true;
+        v.labelAspect = lt.aspect;
+      }
+      var col = a.status === 'working' ? new T.Color(C.working) : (a.status === 'waiting-approval' ? new T.Color(C.amber) : new T.Color(C.idle));
+      v.ring.material.color.copy(col); v.badge.material.color.copy(col);
+      v.ring.visible = busy; v.badge.visible = busy;
+    });
+    Object.keys(agents).forEach(function (id) {
+      if (seen[id]) return;
+      var v = agents[id];
+      scene.remove(v.group);
+      pickables = pickables.filter(function (m) { return m.userData.agentId !== id; });
+      delete agents[id];
+    });
+    // laptop lids glow for occupied, working desks
+    screens.forEach(function (m, i) {
+      var who = null;
+      Object.keys(agents).forEach(function (id) { var v = agents[id]; if (v.desk === i && (v.status === 'working' || v.status === 'waiting-approval')) who = v; });
+      m.emissive.copy(who ? (who.status === 'working' ? new T.Color(C.working) : new T.Color(C.amber)) : new T.Color(0));
+      m.emissiveIntensity = who ? 0.8 : 0;
+    });
+    layoutLabels();
+    dirty = true;
+  }
+
+  // ---------------------------------------------------------- camera rig --
+  // Spherical orbit around the room with limits; one finger rotates, two
+  // fingers pinch-zoom (wheel on desktop). A short tap picks an agent.
+  var THETA0 = 0.62, PHI0 = 0.98;
+  var orbit = { theta: THETA0, phi: PHI0, r: 18, rMin: 9, rMax: 26 };
+  // same limits as the desktop (OFFICE3D_CAMERA): azimuth -0.3..1.75, polar 0.35..1.25
+  var LIM = { tMin: -0.3, tMax: 1.75, pMin: 0.35, pMax: 1.25 };
+  function fitRadius() {
+    var aspect = Math.max(0.4, camera.aspect);
+    orbit.base = aspect >= 1.25 ? 20 : 20 * Math.pow(1.25 / aspect, 0.9);
+    orbit.rMin = orbit.base * 0.5; orbit.rMax = orbit.base * 1.35;
+  }
+  function placeCamera() {
+    orbit.theta = Math.min(LIM.tMax, Math.max(LIM.tMin, orbit.theta));
+    orbit.phi = Math.min(LIM.pMax, Math.max(LIM.pMin, orbit.phi));
+    orbit.r = Math.min(orbit.rMax, Math.max(orbit.rMin, orbit.r));
+    var sp = new T.Spherical(orbit.r, orbit.phi, orbit.theta);
+    camera.position.setFromSpherical(sp).add(target);
+    camera.lookAt(target);
+    dirty = true;
+  }
+  var pointers = {}, gesture = null, raycaster = new T.Raycaster(), ndc = new T.Vector2();
+  canvas.addEventListener('pointerdown', function (e) {
+    canvas.setPointerCapture(e.pointerId);
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() };
+    var ids = Object.keys(pointers);
+    if (ids.length === 2) {
+      var a = pointers[ids[0]], b = pointers[ids[1]];
+      gesture = { pinch: Math.hypot(a.x - b.x, a.y - b.y), r: orbit.r, moved: true };
+    } else gesture = { moved: false };
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    var p = pointers[e.pointerId];
+    if (!p) return;
+    var dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    var ids = Object.keys(pointers);
+    if (ids.length >= 2 && gesture && gesture.pinch) {
+      var a = pointers[ids[0]], b = pointers[ids[1]];
+      var d = Math.hypot(a.x - b.x, a.y - b.y);
+      orbit.r = gesture.r * gesture.pinch / Math.max(d, 1);
+      placeCamera();
+    } else if (ids.length === 1) {
+      if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 8) gesture.moved = true;
+      if (gesture.moved) {
+        orbit.theta -= dx * 0.008;
+        orbit.phi -= dy * 0.006;
+        placeCamera();
+      }
+    }
+  });
+  function up(e) {
+    var p = pointers[e.pointerId];
+    delete pointers[e.pointerId];
+    if (!p || !gesture) return;
+    if (!gesture.moved && Object.keys(pointers).length === 0 && performance.now() - p.t0 < 600) pick(e.clientX, e.clientY);
+    if (Object.keys(pointers).length === 0) gesture = null;
+  }
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', function (e) { delete pointers[e.pointerId]; gesture = null; });
+  canvas.addEventListener('wheel', function (e) { e.preventDefault(); orbit.r *= Math.exp(e.deltaY * 0.001); placeCamera(); }, { passive: false });
+  function pick(x, y) {
+    var rect = canvas.getBoundingClientRect();
+    ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    var hit = raycaster.intersectObjects(pickables, false)[0];
+    if (!hit) {
+      // forgiving touch target: nearest agent within ~28 px
+      var best = null, bestD = 28;
+      Object.keys(agents).forEach(function (id) {
+        var v = agents[id];
+        var s = v.group.position.clone().setY(0.7).project(camera);
+        var px = (s.x + 1) / 2 * rect.width, py = (1 - s.y) / 2 * rect.height;
+        var dd = Math.hypot(px - (x - rect.left), py - (y - rect.top));
+        if (dd < bestD) { bestD = dd; best = id; }
+      });
+      if (best) post({ type: 'tap', id: best });
+      return;
+    }
+    post({ type: 'tap', id: hit.object.userData.agentId });
+  }
+
+  // --------------------------------------------------------------- frame --
+  var dirty = true, last = 0, clock = new T.Clock(), active = true;
+  function layoutLabels() {
+    var h = renderer.domElement.clientHeight || 1;
+    var k = 1 / Math.tan(T.MathUtils.degToRad(camera.fov / 2));
+    var sy = (LABEL_PX / h) * 2 / k;
+    Object.keys(agents).forEach(function (id) { var v = agents[id]; v.label.scale.set(sy * (v.labelAspect || 3), sy, 1); });
+  }
+  function resize() {
+    var w = window.innerWidth || 1, h = window.innerHeight || 1;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    var hadBase = orbit.base;
+    fitRadius();
+    if (!hadBase) orbit.r = orbit.base;
+    placeCamera();
+    layoutLabels();
+  }
+  window.addEventListener('resize', resize);
+  function step(dt, t) {
+    var moving = false;
+    Object.keys(agents).forEach(function (id) {
+      var v = agents[id];
+      var d = v.goal.clone().sub(v.pos);
+      var dist = d.length();
+      var walking = dist > 0.02;
+      if (walking) {
+        var stepLen = Math.min(dist, 2.4 * dt);
+        v.pos.add(d.multiplyScalar(stepLen / dist));
+        v.face = Math.atan2(v.goal.x - v.pos.x, v.goal.z - v.pos.z);
+        moving = true;
+      } else {
+        var df = ((v.faceGoal - v.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        v.face += df * Math.min(1, dt * 6);
+      }
+      v.group.position.copy(v.pos);
+      v.group.rotation.y = v.face;
+      var bob = !motion ? 0 : walking ? Math.abs(Math.sin(t * 12 + v.phase)) * 0.06
+        : v.status === 'working' ? Math.abs(Math.sin(t * 5 + v.phase)) * 0.025 : Math.sin(t * 1.4 + v.phase) * 0.02;
+      // kneeling at a desk or by the tea table: a little lower
+      v.fig.position.y = (walking ? 0 : -0.08) + bob;
+      v.label.position.y = 1.85 + (walking ? 0 : -0.1);
+      if (v.badge.visible) {
+        v.badge.rotation.y = t * 2;
+        v.badge.position.y = 1.62 + (motion ? Math.sin(t * 3 + v.phase) * 0.04 : 0) + (walking ? 0 : -0.08);
+        v.ring.material.opacity = v.status === 'waiting-approval' && motion ? 0.55 + 0.4 * Math.abs(Math.sin(t * 3)) : 0.9;
+      }
+    });
+    if (motion) {
+      lanterns.forEach(function (l, i) { l.material.emissiveIntensity = 0.85 + 0.08 * Math.sin(t * 2.3 + i * 1.7); });
+      lampA.intensity = 6 + 0.25 * Math.sin(t * 2.1);
+      screens.forEach(function (m, i) { if (m.emissiveIntensity > 0) m.emissiveIntensity = 0.65 + 0.2 * Math.abs(Math.sin(t * 3 + i)); });
+    }
+    return moving;
+  }
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!active || document.hidden) return;
+    // ~30 fps cap keeps phones cool; with motion off, render on change only
+    if (now - last < 32) return;
+    var dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    var t = clock.getElapsedTime();
+    var moving = step(dt, t);
+    if (motion || moving || dirty) {
+      renderer.render(scene, camera);
+      dirty = false;
+    }
+  }
+
+  window.nvOffice = {
+    setState: function (s) { try { apply(typeof s === 'string' ? JSON.parse(s) : s); } catch (e) { post({ type: 'error', reason: 'state: ' + e.message }); } },
+    setActive: function (on) { active = !!on; dirty = true; },
+    resetView: function () { orbit.theta = THETA0; orbit.phi = PHI0; orbit.r = orbit.base; placeCamera(); },
+    debugAgents: function () { return Object.keys(agents).map(function (id) { var v = agents[id]; return { id: id, status: v.status, x: v.goal.x, z: v.goal.z }; }); }
+  };
+  resize();
+  drawBoard();
+  requestAnimationFrame(frame);
+  if (/[?&]demo\b/.test(location.search)) {
+    window.nvOffice.setState({
+      accent: '#ee1c1c', dark: true, motion: false,
+      kanban: { todo: 3, running: 2, blocked: 1, done: 5 },
+      agents: [
+        { id: 'session:a', name: 'Raka', status: 'working', task: 'Rapikan folder Unduhan', desk: 0 },
+        { id: 'session:b', name: 'Ayu', status: 'waiting-approval', task: 'Hapus cache lama', desk: 1 },
+        { id: 'kanban:writer', name: 'writer', status: 'working', task: 'Draf laporan', desk: 2 },
+        { id: 'session:c', name: 'Citra', status: 'idle', task: null, desk: 3 },
+        { id: 'session:d', name: 'Dimas', status: 'idle', task: null, desk: null },
+        { id: 'session:e', name: 'Sari', status: 'working', task: 'Ringkas rapat', desk: 5 }
+      ]
+    });
+  }
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>
