@@ -73,6 +73,10 @@ async def stream_chat(
     if tools:
         body["tools"] = tools
         body["tool_choice"] = "auto"
+    from neovarch.composer import current_effort
+    effort = current_effort()
+    if effort:
+        body["reasoning_effort"] = effort
     headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"

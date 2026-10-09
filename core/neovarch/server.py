@@ -45,6 +45,7 @@ from neovarch.store import Kanban, SessionStore, summarize
 from neovarch.office import Office
 from neovarch import cron as cronmod
 from neovarch import netinfo
+from neovarch import composer as composermod
 from neovarch.realtime import EventBus
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
@@ -316,6 +317,20 @@ class Gateway:
 
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
+        # Remote composer (phone): catalog + optional prompt.submit picks
+        # (skills, reasoning_effort). Additive; see neovarch/composer.py.
+        if method == "composer.catalog":
+            return composermod.catalog()
+        if method == "prompt.submit":
+            p, effort = composermod.prepare_submit(p)
+            token = composermod.set_turn_effort(effort)
+            try:  # the turn task copies this context, so the pick rides along
+                return await self._rpc(conn, method, p)
+            finally:
+                composermod.reset_turn_effort(token)
+        return await self._rpc(conn, method, p)
+
+    async def _rpc(self, conn: Conn, method: str, p: dict) -> Any:
         if method == "ping":
             return {"pong": True, "seq": self.bus.seq, "boot_id": self.bus.boot_id, "ts": time.time()}
         if method == "events.replay":
@@ -1205,6 +1220,7 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/obsidian/note", vault_note)
     r.add_get("/api/obsidian/graph", vault_graph)
     r.add_get("/api/obsidian/search", vault_search)
+    composermod.register(r, gw)
     r.add_get("/api/appearance", appearance_get)
     r.add_put("/api/appearance", appearance_put)
     r.add_post("/api/appearance", appearance_put)
