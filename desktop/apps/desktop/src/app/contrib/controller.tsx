@@ -8,10 +8,17 @@ import { PALETTE_AREA, type PaletteContribution, paletteToggle } from '@/app/com
 import { type StatusbarItem } from '@/app/shell/statusbar-controls'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
+import { NeovarchAppearanceSync, NeovarchFirstRunTheme } from '@/components/neovarch/appearance'
 import { NeovarchCommandBar } from '@/components/neovarch/command-bar'
 import { NeovarchContextRail } from '@/components/neovarch/context-rail'
+import { NeovarchDocPreview } from '@/components/neovarch/doc-preview'
+import { NeovarchOfficePage } from '@/components/neovarch/office'
+import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { NeovarchRail } from '@/components/neovarch/rail'
 import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
+import { NeovarchUpdateBanner } from '@/components/neovarch/update-banner'
+import { NeovarchVaultPage, VAULT_ROUTE } from '@/components/neovarch/vault'
+import { NeovarchWallpaper } from '@/components/neovarch/wallpaper'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
@@ -118,7 +125,7 @@ import { AppContextMenu } from '../context-menu/app-context-menu'
 import { HudShell } from '../hud/hud-shell'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { terminalPaletteToggle } from '../right-sidebar/terminal/reveal-focus'
-import { $workspaceIsPage, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
+import { $workspaceIsPage, ROUTES_AREA, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
 import { Butterbar } from '../shell/butterbar'
 import { TermsButterbar } from '../shell/terms-butterbar'
 
@@ -747,6 +754,26 @@ registry.register(
   registry.subscribeArea('panes', syncStripTabToggles)
 }
 
+// Neovarch's Office: a first-party full page at /office (the rail opens it).
+registry.register({
+  id: 'nv-office',
+  area: ROUTES_AREA,
+  source: 'core',
+  title: 'Kantor',
+  data: { path: OFFICE_ROUTE },
+  render: () => <NeovarchOfficePage />
+})
+
+// Obsidian vault viewer (tree, note, backlinks, graph) at /vault.
+registry.register({
+  id: 'nv-vault',
+  area: ROUTES_AREA,
+  source: 'core',
+  title: 'Vault',
+  data: { path: VAULT_ROUTE },
+  render: () => <NeovarchVaultPage />
+})
+
 // YOLO (dangerous-command approval bypass) is a status-bar zap and a /yolo
 // command; ⌘K is the third door onto the SAME store function, so a user who
 // lives in the palette never has to hunt for the pill.
@@ -817,6 +844,9 @@ export function ContribController() {
           stage. The stage is a containing block (transform) so the shell's
           `fixed` titlebar clusters and overlays position against it, not the
           window — they sit beside the rail and under the command bar. */}
+      {/* Custom wallpaper (Settings ▸ Tampilan ▸ Latar belakang): one fixed
+          layer under the frame; renders nothing when none is chosen. */}
+      <NeovarchWallpaper />
       <div className="nv-frame" data-slot="nv-frame">
         <NeovarchCommandBar />
         <div className="nv-frame-body">
@@ -848,6 +878,10 @@ export function ContribController() {
                     renders nothing while none are registered. */}
                 <Butterbar />
                 <TermsButterbar />
+                <NeovarchUpdateBanner />
+                <NeovarchAppearanceSync />
+                <NeovarchFirstRunTheme />
+                <NeovarchDocPreview />
                 {statusbarVisible && <WiredPane part="statusbar" />}
               </div>
             </ContribWiring>

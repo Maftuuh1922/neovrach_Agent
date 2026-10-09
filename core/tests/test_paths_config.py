@@ -51,7 +51,8 @@ def test_resolve_endpoint_presets_and_custom(home):
     cfg["model"] = {"provider": "custom:Mock", "default": "x"}
     cfg["custom_providers"] = [{"name": "Mock", "base_url": "http://127.0.0.1:1/v1/", "api_key": "k"}]
     ep = cfgmod.resolve_endpoint(cfg)
-    assert ep == {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "model": "x", "provider": "custom:Mock"}
+    assert ep == {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "model": "x", "provider": "custom:Mock",
+                  "headers": {}, "verify_ssl": True}
 
 
 def test_soul_is_neovarch(home):

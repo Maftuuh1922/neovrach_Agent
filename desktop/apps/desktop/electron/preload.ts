@@ -727,3 +727,20 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     return () => ipcRenderer.removeListener('hermes:open-find-bar', listener)
   }
 })
+
+// Neovarch wallpaper bridge (Settings ▸ Tampilan ▸ Latar belakang). Its own
+// global, so the renderer's wallpaper code never needs the legacy bridge.
+contextBridge.exposeInMainWorld('neovarchWallpaper', {
+  pick: () => ipcRenderer.invoke('neovarch:wallpaper:pick'),
+  importFile: (filePath: string) => ipcRenderer.invoke('neovarch:wallpaper:import-file', filePath),
+  importBytes: (data: ArrayBuffer | Uint8Array) => ipcRenderer.invoke('neovarch:wallpaper:import-bytes', data),
+  read: (name: string) => ipcRenderer.invoke('neovarch:wallpaper:read', name),
+  clear: () => ipcRenderer.invoke('neovarch:wallpaper:clear'),
+  pathForFile: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file) || ''
+    } catch {
+      return ''
+    }
+  }
+})

@@ -18,7 +18,7 @@
 // `?token=` on /api/ws. Rotating the secret ("Buat token baru") invalidates every
 // paired phone.
 
-import { type ChildProcess, spawn } from 'node:child_process'
+import { type ChildProcess, execFile, spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import net from 'node:net'
@@ -43,6 +43,13 @@ export interface RemoteSettings {
 export interface RemoteAddress {
   address: string
   iface: string
+  /** lan: private LAN IPv4; tailscale: tailnet IPv4 (100.64.0.0/10); magicdns: Tailscale MagicDNS name */
+  kind?: 'lan' | 'magicdns' | 'tailscale'
+}
+
+export interface TailscaleInfo {
+  dnsName: string | null
+  ips: string[]
 }
 
 export interface RemoteStatus {
@@ -55,6 +62,9 @@ export interface RemoteStatus {
   url: string | null
   token: string | null
   pairingUri: string | null
+  /** fallback origins the phone tries after `url`, in order (other LAN, MagicDNS, tailnet IP) */
+  altUrls: string[]
+  tailscale: TailscaleInfo | null
   deviceName: string
   profile: string | null
   error: string | null
@@ -148,7 +158,7 @@ export function lanAddresses(interfaces = os.networkInterfaces()): RemoteAddress
         continue
       }
 
-      out.push({ address: entry.address, iface })
+      out.push({ address: entry.address, iface, kind: isTailnetIp(entry.address) ? 'tailscale' : 'lan' })
     }
   }
 
@@ -159,8 +169,81 @@ export function lanAddresses(interfaces = os.networkInterfaces()): RemoteAddress
   return out.sort((a, b) => rank(a) - rank(b))
 }
 
-export function buildPairingUri(input: { url: string; token: string; name: string; profile: string | null }): string {
-  const q = new URLSearchParams({ v: '1', url: input.url, token: input.token, name: input.name })
+/** 100.64.0.0/10: the CGNAT range Tailscale assigns tailnet addresses from. */
+export function isTailnetIp(address: string): boolean {
+  const m = /^100\.(\d+)\./.exec(address)
+
+  return Boolean(m && Number(m[1]) >= 64 && Number(m[1]) <= 127)
+}
+
+/** Parse `tailscale status --json` (Self.DNSName + Self.TailscaleIPs). */
+export function parseTailscaleStatus(json: string): TailscaleInfo | null {
+  try {
+    const self = (JSON.parse(json) as { Self?: { DNSName?: string; TailscaleIPs?: string[] } }).Self
+
+    if (!self) {
+      return null
+    }
+
+    return {
+      dnsName: (self.DNSName ?? '').replace(/\.$/, '') || null,
+      ips: (self.TailscaleIPs ?? []).filter(isTailnetIp)
+    }
+  } catch {
+    return null
+  }
+}
+
+export function readTailscale(): Promise<TailscaleInfo | null> {
+  const exe = process.platform === 'win32' ? 'tailscale.exe' : 'tailscale'
+
+  return new Promise(resolve => {
+    execFile(exe, ['status', '--json'], { timeout: 4000, windowsHide: true }, (err, stdout) => {
+      resolve(err ? null : parseTailscaleStatus(String(stdout)))
+    })
+  })
+}
+
+/** Phone try order after the primary `url`: other real LAN addresses, MagicDNS, tailnet IPs. */
+export function fallbackUrls(input: {
+  primary: string | null
+  addresses: RemoteAddress[]
+  tailscale: TailscaleInfo | null
+  port: number
+}): string[] {
+  const hosts: string[] = []
+  const lan = input.addresses.filter(a => !isTailnetIp(a.address) && !VIRTUAL_IFACE.test(a.iface))
+  const tailnet = new Set([
+    ...input.addresses.filter(a => isTailnetIp(a.address)).map(a => a.address),
+    ...(input.tailscale?.ips ?? [])
+  ])
+
+  hosts.push(...lan.map(a => a.address))
+
+  if (input.tailscale?.dnsName) {
+    hosts.push(input.tailscale.dnsName)
+  }
+
+  hosts.push(...[...tailnet].sort())
+
+  return [...new Set(hosts)].filter(h => h !== input.primary).map(h => `http://${h}:${input.port}`)
+}
+
+export function buildPairingUri(input: {
+  url: string
+  token: string
+  name: string
+  profile: string | null
+  alt?: string[]
+}): string {
+  const q = new URLSearchParams({ v: '1', url: input.url })
+
+  for (const alt of input.alt ?? []) {
+    q.append('alt', alt)
+  }
+
+  q.set('token', input.token)
+  q.set('name', input.name)
 
   if (input.profile) {
     q.set('profile', input.profile)
@@ -211,6 +294,24 @@ export function createRemoteController(deps: RemoteControllerDeps) {
   let error: string | null = null
   let logTail = ''
   let generation = 0
+  let tailscale: TailscaleInfo | null = null
+  let tailscaleAt = 0
+
+  // Tailscale is optional: read it lazily (at most once a minute) and re-emit
+  // when the MagicDNS name or tailnet IPs change.
+  function refreshTailscale(force = false) {
+    if (!force && Date.now() - tailscaleAt < 60_000) {
+      return
+    }
+
+    tailscaleAt = Date.now()
+    void readTailscale().then(next => {
+      if (JSON.stringify(next) !== JSON.stringify(tailscale)) {
+        tailscale = next
+        emit()
+      }
+    })
+  }
 
   function readSettings(): RemoteSettings {
     try {
@@ -254,6 +355,8 @@ export function createRemoteController(deps: RemoteControllerDeps) {
     const url = address ? `http://${address}:${settings.port}` : null
     const token = mintAccessToken(decodeSecret(settings.secret), settings.issuedAt)
     const profile = deps.currentProfile()
+    refreshTailscale()
+    const altUrls = fallbackUrls({ primary: address, addresses, tailscale, port: settings.port })
 
     return {
       enabled: settings.enabled,
@@ -264,7 +367,10 @@ export function createRemoteController(deps: RemoteControllerDeps) {
       address,
       url,
       token: settings.enabled ? token : null,
-      pairingUri: settings.enabled && url ? buildPairingUri({ url, token, name: settings.deviceName, profile }) : null,
+      pairingUri:
+        settings.enabled && url ? buildPairingUri({ url, token, name: settings.deviceName, profile, alt: altUrls }) : null,
+      altUrls,
+      tailscale,
       deviceName: settings.deviceName,
       profile,
       error,

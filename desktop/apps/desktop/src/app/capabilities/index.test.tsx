@@ -287,16 +287,15 @@ describe('CapabilitiesView toolset management', { timeout: 60_000 }, () => {
     )
   })
 
-  it('mounts the hub iframe lazily and keeps it (hidden) across tab switches', async () => {
-    // On a non-Skills tab the docs-site iframe must not exist at all — an
-    // eagerly mounted hub is exactly the Capabilities lag bug.
+  it('never mounts an online hub: Skills and Tools are local only, with no Connectors or Plugins tab', async () => {
+    // Neovarch serves skills and tools from the local core only, so neither
+    // the routed nor the embedded view may load the docs-site hub iframe.
     await renderSkills() // ?tab=toolsets
     await screen.findByRole('switch', { name: 'Turn Web Search toolset off' })
     expect(document.querySelector('iframe')).toBeNull()
     cleanup()
 
-    // Embedded mode drives tabs through local state (the route hooks are
-    // mocked here), starting on Skills: the picker mounts with the tab.
+    // Embedded mode drives tabs through local state, starting on Skills.
     await act(async () => {
       render(
         <QueryClientProvider client={queryClient}>
@@ -307,19 +306,16 @@ describe('CapabilitiesView toolset management', { timeout: 60_000 }, () => {
       )
     })
 
-    const iframe = document.querySelector('iframe')
-    expect(iframe).toBeTruthy()
-    expect(iframe!.closest('section')!.classList.contains('hidden')).toBe(false)
+    expect(document.querySelector('iframe')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Connectors/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Plugins/ })).toBeNull()
 
-    // Switch to Tools → the iframe STAYS mounted (no docs-site reload on the
-    // next visit) but its section is fully hidden, so nothing from the hub
-    // can paint over the toolsets UI.
+    // Switching to Tools shows the toolsets and still no hub.
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Tools/ }))
     })
-    const kept = document.querySelector('iframe')
-    expect(kept).toBeTruthy()
-    expect(kept!.closest('section')!.classList.contains('hidden')).toBe(true)
+    await screen.findByRole('switch', { name: 'Turn Web Search toolset off' })
+    expect(document.querySelector('iframe')).toBeNull()
   })
 
   it('shows a vision explainer that deep-links to Settings → Models', async () => {

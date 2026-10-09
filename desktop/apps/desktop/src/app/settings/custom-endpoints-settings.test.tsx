@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type I18nContextValue, I18nProvider, useI18n } from '@/i18n'
 import type { CustomEndpointsResponse } from '@/types/hermes'
 
+// Neovarch's URL field shows an online gateway and a local port as examples.
+const URL_PLACEHOLDER = 'https://router.contoh.com/v1 · http://127.0.0.1:20128/v1'
+
 const getCustomEndpoints = vi.fn()
 const saveCustomEndpoint = vi.fn()
 const validateCustomEndpoint = vi.fn()
@@ -136,7 +139,7 @@ describe('CustomEndpointsSettings', () => {
 
     await screen.findByText('No custom endpoints')
     fireEvent.change(screen.getByPlaceholderText('Axet Proxy'), { target: { value: 'Responses gateway' } })
-    fireEvent.change(screen.getByPlaceholderText('http://127.0.0.1:8081/v1'), {
+    fireEvent.change(screen.getByPlaceholderText(URL_PLACEHOLDER), {
       target: { value: 'https://responses-gateway.example.com/v1' }
     })
     fireEvent.click(screen.getByRole('button', { name: 'Responses API' }))
@@ -187,7 +190,7 @@ describe('CustomEndpointsSettings', () => {
     expect(screen.getByText('Applies to')).toBeTruthy()
 
     fireEvent.change(await screen.findByPlaceholderText('Axet Proxy'), { target: { value: 'Studio gateway' } })
-    fireEvent.change(await screen.findByPlaceholderText('http://127.0.0.1:8081/v1'), {
+    fireEvent.change(await screen.findByPlaceholderText(URL_PLACEHOLDER), {
       target: { value: 'https://studio.example.com/v1' }
     })
     fireEvent.change(await screen.findByPlaceholderText('gpt-5.4'), { target: { value: 'studio-model' } })
@@ -224,7 +227,7 @@ describe('CustomEndpointsSettings', () => {
 
     await screen.findByText('No custom endpoints')
     fireEvent.change(screen.getByPlaceholderText('Axet Proxy'), { target: { value: 'Profile A' } })
-    fireEvent.change(screen.getByPlaceholderText('http://127.0.0.1:8081/v1'), {
+    fireEvent.change(screen.getByPlaceholderText(URL_PLACEHOLDER), {
       target: { value: 'http://profile-a.test/v1' }
     })
     fireEvent.change(screen.getByPlaceholderText('gpt-5.4'), { target: { value: 'model-a' } })
@@ -254,7 +257,7 @@ describe('CustomEndpointsSettings', () => {
     render(<CustomEndpointsSettings onConfigSaved={vi.fn()} onMainModelChanged={vi.fn()} />)
 
     await screen.findByText('No custom endpoints')
-    const urlInput = screen.getByPlaceholderText<HTMLInputElement>('http://127.0.0.1:8081/v1')
+    const urlInput = screen.getByPlaceholderText<HTMLInputElement>(URL_PLACEHOLDER)
     fireEvent.change(urlInput, { target: { value: 'http://h.test' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Test' })))
 

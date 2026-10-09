@@ -203,6 +203,46 @@ async def tool_skill(args: dict, ctx: ToolContext) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else f"(no skill named {name})"
 
 
+def _vault():
+    from neovarch import obsidian
+    return obsidian, obsidian.require_vault()
+
+
+async def tool_obsidian_search(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    hits = obs.search(vault, str(args.get("query") or ""), int(args.get("limit") or 10))
+    if not hits:
+        return "(no matching notes)"
+    return _clip("\n".join(
+        f"- {h['path']}" + (f"  tags: {', '.join('#' + t for t in h['tags'])}" if h["tags"] else "")
+        + f"\n  {h['snippet']}" for h in hits))
+
+
+async def tool_obsidian_read(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    note = obs.read_note(vault, str(args.get("path") or ""))
+    return _clip(f"# {note['path']}\n{note['content']}")
+
+
+async def tool_obsidian_write(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    fm = args.get("frontmatter") if isinstance(args.get("frontmatter"), dict) else None
+    res = obs.write_note(vault, str(args.get("path") or ""), str(args.get("content") or ""),
+                         str(args.get("mode") or "create"), fm)
+    # The obsidian:// link lets the user open the note straight in the Obsidian app
+    # (the chat renders it as a clickable "Buka di Obsidian" link).
+    return (f"{res['mode']}: {res['path']} ({res['bytes']} bytes) in the Obsidian vault\n"
+            f"Buka di Obsidian: {obs.open_uri(vault, res['path'])}")
+
+
+async def tool_obsidian_links(args: dict, ctx: ToolContext) -> str:
+    obs, vault = _vault()
+    res = obs.links(vault, str(args.get("path") or ""))
+    back = "\n".join(f"- {b['path']}" for b in res["backlinks"]) or "(none)"
+    out = "\n".join(f"- [[{o}]]" for o in res["outgoing"]) or "(none)"
+    return f"{res['path']}\nbacklinks:\n{back}\noutgoing links:\n{out}"
+
+
 def list_skills() -> list[dict[str, str]]:
     root = neovarch_home() / "skills"
     out = []
@@ -219,6 +259,67 @@ def list_skills() -> list[dict[str, str]]:
             desc = body[0][:160] if body else ""
         out.append({"name": skill_md.parent.name, "description": desc, "path": str(skill_md)})
     return out
+
+
+async def tool_report_search(args: dict, ctx: ToolContext) -> str:
+    import asyncio
+    from neovarch import report as rep
+    res = await asyncio.to_thread(rep.search_references, str(args.get("query") or ""),
+                                  int(args.get("limit") or 8), year_from=args.get("year_from"))
+    refs = res["references"]
+    rep.remember(refs)
+    if not refs:
+        return "no references found" + (f" (errors: {res['errors']})" if res["errors"] else "")
+    lines = [f"{len(refs)} real references (cite them as [@key]; only these keys are accepted by report_create):"]
+    for r in refs:
+        authors = ", ".join(r["authors"][:3]) + (" et al." if len(r["authors"]) > 3 else "")
+        lines.append(f"- @{r['key']}: {authors} ({r['year']}). {r['title']}. {r.get('venue') or ''}"
+                     f"{' doi:' + r['doi'] if r.get('doi') else ''}"
+                     + (f"\n  abstract: {r['abstract'][:300]}" if r.get("abstract") else ""))
+    if res["errors"]:
+        lines.append(f"(sources that failed: {', '.join(res['errors'])})")
+    return "\n".join(lines)
+
+
+async def tool_report_create(args: dict, ctx: ToolContext) -> str:
+    from neovarch import report as rep
+    body = str(args.get("body") or "")
+    keys = [str(k).lstrip("@") for k in (args.get("references") or [])]
+    keys = sorted(set(keys) | rep.cited_keys(body))
+    refs, missing = rep.recall(keys)
+    if missing:
+        return ("error: these keys were never returned by report_search, so they are not real references: "
+                + ", ".join(missing) + ". Search again and cite only returned keys.")
+    try:
+        res = rep.create_report(str(args.get("title") or ""), body, refs, author=str(args.get("author") or ""),
+                                institution=str(args.get("institution") or ""), style=str(args.get("style") or "apa"))
+    except rep.ReportError as exc:
+        return f"error: {exc}"
+    return (f"report written: {res['markdown']} with {res['references']} references ({res['bibtex']}). "
+            f"Cited: {', '.join(res['cited']) or 'none'}. Next: report_export to make .docx/.pdf.")
+
+
+async def tool_report_export(args: dict, ctx: ToolContext) -> str:
+    import asyncio
+    from neovarch import report as rep
+    vault = None
+    if args.get("save_to_vault"):
+        try:
+            from neovarch import obsidian
+            vault = str(obsidian.require_vault())
+        except Exception as exc:
+            return f"error: {exc}"
+    try:
+        res = await asyncio.to_thread(rep.export_report, str(args.get("path") or ""),
+                                      list(args.get("formats") or ["docx", "pdf"]),
+                                      style=args.get("style"), vault=vault)
+    except rep.ReportError as exc:
+        return f"error: {exc}"
+    lines = [f"{k}: {v}" for k, v in res["files"].items()]
+    if res.get("obsidian_uri"):
+        lines.append(f"Buka di Obsidian: {res['obsidian_uri']}")
+    lines += [f"warning: {w}" for w in res["warnings"]]
+    return "exported\n" + "\n".join(lines)
 
 
 TOOLS: dict[str, tuple[Callable[[dict, ToolContext], Awaitable[str]], dict]] = {
@@ -251,11 +352,59 @@ TOOLS: dict[str, tuple[Callable[[dict, ToolContext], Awaitable[str]], dict]] = {
     "skill": (tool_skill, {
         "description": "List installed skills (no name) or read one skill's instructions (name).",
         "parameters": {"type": "object", "properties": {"name": {"type": "string"}}}}),
+    "obsidian_search": (tool_obsidian_search, {
+        "description": "Search the user's Obsidian vault (memory) by words in the text, note filename and tags "
+                       "(#tag). Only works when an Obsidian vault is configured.",
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["query"]}}),
+    "obsidian_read": (tool_obsidian_read, {
+        "description": "Read one note from the Obsidian vault (path relative to the vault, or a note name).",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
+    "obsidian_write": (tool_obsidian_write, {
+        "description": "Create or append to a note in the Obsidian vault. mode: create | append | overwrite. "
+                       "Write markdown with [[wikilinks]] and #tags; existing frontmatter is kept. "
+                       "Paths are relative to the vault and can never leave it.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string"}, "content": {"type": "string"},
+            "mode": {"type": "string", "enum": ["create", "append", "overwrite"]},
+            "frontmatter": {"type": "object", "description": "optional YAML frontmatter keys to set"}},
+            "required": ["path", "content"]}}),
+    "report_search": (tool_report_search, {
+        "description": "Search real scholarly references (OpenAlex, Crossref, Semantic Scholar) for a report or thesis. "
+                       "Returns citation keys; cite them in markdown as [@key]. Never cite anything else.",
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string"}, "limit": {"type": "integer", "description": "per source, default 8"},
+            "year_from": {"type": "integer"}}, "required": ["query"]}}),
+    "report_create": (tool_report_create, {
+        "description": "Write a report/thesis as Pandoc Markdown + references.bib under ~/.neovarch/reports/<slug>/. "
+                       "body is markdown with chapters (# BAB I Pendahuluan ...) citing [@key] from report_search. "
+                       "Unknown keys are rejected.",
+        "parameters": {"type": "object", "properties": {
+            "title": {"type": "string"}, "body": {"type": "string"},
+            "references": {"type": "array", "items": {"type": "string"}, "description": "extra keys to list even if not cited"},
+            "author": {"type": "string"}, "institution": {"type": "string"},
+            "style": {"type": "string", "enum": ["apa", "ieee"]}}, "required": ["title", "body"]}}),
+    "report_export": (tool_report_export, {
+        "description": "Export a report.md to .docx (campus format: Times New Roman 12, 1.5 spacing, margins 4-3-3-3, "
+                       "table of contents, numbered chapters) and .pdf with Pandoc + citeproc. Optionally save a copy in the Obsidian vault.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "path to report.md"},
+            "formats": {"type": "array", "items": {"type": "string", "enum": ["docx", "pdf", "md"]}},
+            "style": {"type": "string", "enum": ["apa", "ieee"]},
+            "save_to_vault": {"type": "boolean"}}, "required": ["path"]}}),
+    "obsidian_links": (tool_obsidian_links, {
+        "description": "List the backlinks (notes that [[link]] to this one) and outgoing links of a vault note.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
 }
 
 
 def tool_schemas() -> list[dict[str, Any]]:
     return [{"type": "function", "function": {"name": n, **spec}} for n, (_, spec) in TOOLS.items()]
+
+
+def _vault_error():
+    from neovarch.obsidian import VaultError
+    return VaultError
 
 
 async def run_tool(name: str, args: dict, ctx: ToolContext) -> str:
@@ -266,6 +415,8 @@ async def run_tool(name: str, args: dict, ctx: ToolContext) -> str:
         return await entry[0](args, ctx)
     except ForeignPathError as exc:
         return f"refused: {exc}"
+    except _vault_error() as exc:
+        return f"error: {exc}"
     except FileNotFoundError as exc:
         return f"error: not found: {exc.filename or exc}"
     except Exception as exc:  # tools report errors to the model instead of crashing the turn

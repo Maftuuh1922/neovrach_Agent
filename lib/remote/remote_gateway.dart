@@ -454,6 +454,17 @@ class RemoteGateway {
     }
   }
 
+  /// `GET /api/update?platform=android` — the PC core checks GitHub Releases
+  /// (cached there) so the phone never calls GitHub itself. Never throws.
+  Future<Map<String, dynamic>> updateInfo() async {
+    try {
+      final j = await _json('GET', '/api/update', query: const {'platform': 'android'});
+      return j is Map ? Map<String, dynamic>.from(j) : const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   static const _kanban = '/api/plugins/kanban';
 
   Future<KanbanSnapshot> board() async => KanbanSnapshot.fromJson(Map<String, dynamic>.from(await _json('GET', '$_kanban/board') as Map));

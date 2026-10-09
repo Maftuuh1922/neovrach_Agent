@@ -16,7 +16,7 @@ from neovarch.tools import ToolContext, list_skills, run_tool, tool_schemas
 EmitFn = Callable[[str, dict[str, Any]], Any]
 
 
-def system_prompt(cfg: dict, cwd: Path) -> str:
+def system_prompt(cfg: dict, cwd: Path, query: str = "") -> str:
     parts = [cfgmod.soul_text().strip()]
     extra = str(cfgmod.get_path(cfg, "agent.system_prompt", "") or "").strip()
     if extra:
@@ -31,12 +31,31 @@ def system_prompt(cfg: dict, cwd: Path) -> str:
                 mem.append(f"## {p.stem}\n{text[:4000]}")
         if mem:
             parts.append("# Memory notes (from earlier sessions)\n" + "\n\n".join(mem))
+    parts.extend(_vault_prompt(cfg, query))
     skills = list_skills()
     if skills:
         parts.append("# Skills (read one with the `skill` tool before using it)\n"
                      + "\n".join(f"- {s['name']}: {s['description']}" for s in skills))
     parts.append(f"Current working directory: {cwd}\nDate: {time.strftime('%Y-%m-%d %H:%M %Z')}")
     return "\n\n".join(parts)
+
+
+def _vault_prompt(cfg: dict, query: str) -> list[str]:
+    from neovarch import obsidian
+    vault = obsidian.vault_path(cfg)
+    if vault is None or not vault.is_dir():
+        return []
+    out = [f"# Obsidian vault (long-term memory)\nThe user's Obsidian vault at {vault} is your long-term memory. "
+           "Use obsidian_search / obsidian_read to recall, obsidian_write to save durable facts as markdown notes "
+           "with [[wikilinks]] and #tags, and obsidian_links to follow backlinks. Never write outside the vault."]
+    try:
+        notes = obsidian.relevant_notes(vault, query) if query else []
+    except Exception:  # retrieval must never break a turn
+        notes = []
+    if notes:
+        out.append("# Relevant vault notes (keyword match for this message)\n"
+                   + "\n\n".join(f"## {n['path']}\n{n['content']}" for n in notes))
+    return out
 
 
 def _preview(args: dict) -> str:
@@ -77,17 +96,20 @@ class Agent:
         final_text = ""
         usage: dict[str, Any] = {}
         error = None
+        sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text)
         try:
             for _ in range(max_turns):
                 if self.interrupted:
                     error = "interrupted"
                     break
-                wire = [{"role": "system", "content": system_prompt(cfg, self.ctx.cwd)}] + [_wire(m) for m in messages]
+                wire = [{"role": "system", "content": sys_prompt}] + [_wire(m) for m in messages]
                 comp: Completion = await stream_chat(
                     base_url=endpoint["base_url"], api_key=endpoint["api_key"], model=endpoint["model"],
                     messages=wire, tools=tool_schemas(),
                     on_text=lambda t: self.emit("message.delta", {"text": t}),
                     on_reasoning=lambda t: self.emit("reasoning.delta", {"text": t}),
+                    extra_headers=endpoint.get("headers") or None,
+                    verify_ssl=endpoint.get("verify_ssl", True),
                 )
                 usage = comp.usage or usage
                 assistant: dict[str, Any] = {"role": "assistant", "content": comp.text, "ts": time.time()}

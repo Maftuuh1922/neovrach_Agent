@@ -56,19 +56,44 @@ jobs:
 
       - name: Unit tests (renderer, vitest)
         id: test_ui
-        continue-on-error: true
         working-directory: desktop/apps/desktop
         env:
           NODE_OPTIONS: --max-old-space-size=6144
-        run: npx vitest run --project ui --reporter=dot 2>&1 | tee ../../../vitest-ui.log; exit ${PIPESTATUS[0]}
+        # tests-quarantine.txt lists the files that already failed on v1.3.0; everything else gates.
+        run: |
+          excludes=$(grep -v '^#' tests-quarantine.txt | sed '/^$/d; s/^/--exclude /' | tr '\n' ' ')
+          npx vitest run --project ui --reporter=dot $excludes 2>&1 | tee ../../../vitest-ui.log; exit ${PIPESTATUS[0]}
         shell: bash
 
       - name: Unit tests (electron/main, vitest)
         id: test_electron
-        continue-on-error: true
+        if: always()
         working-directory: desktop/apps/desktop
-        run: npx vitest run --project electron --reporter=dot 2>&1 | tee ../../../vitest-electron.log; exit ${PIPESTATUS[0]}
+        run: |
+          excludes=$(grep -v '^#' tests-quarantine.txt | sed '/^$/d; s/^/--exclude /' | tr '\n' ' ')
+          npx vitest run --project electron --reporter=dot $excludes 2>&1 | tee ../../../vitest-electron.log; exit ${PIPESTATUS[0]}
         shell: bash
+
+  core:
+    name: Core (pytest) + brand check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install core + test deps
+        working-directory: core
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest pytest-asyncio
+          sudo apt-get update -q && sudo apt-get install -y -q pandoc
+      - name: pytest
+        working-directory: core
+        run: python -m pytest -q
+      - name: Brand check (/hermes/i must not grow; NOTICE/LICENSE exempt)
+        run: bash scripts/brand-check.sh
 
       - name: Test summary
         if: always()
@@ -136,6 +161,11 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
+
+      - name: Brand check on the built bundle (/hermes/i must not grow)
+        if: matrix.platform == 'linux'
+        working-directory: .
+        run: bash scripts/brand-check.sh
 
       - name: Package
         working-directory: desktop/apps/desktop

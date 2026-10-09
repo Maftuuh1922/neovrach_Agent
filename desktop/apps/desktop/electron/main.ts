@@ -394,6 +394,7 @@ import { createMediaProtocolHandler, MEDIA_PROTOCOL } from './media-protocol'
 import { fetchLocalMedia } from './media-range'
 import { createMinimizeToTray } from './minimize-to-tray'
 import { createRemoteController } from './neovarch-remote'
+import { createWallpaperStore, WALLPAPER_EXTENSIONS } from './neovarch-wallpaper'
 import {
   createNativeAccessTokenCoordinator,
   type NativeAccessTokenOptions,
@@ -13791,6 +13792,38 @@ ipcMain.handle('neovarch:remote:set-enabled', (_event, on) => neovarchRemote.set
 ipcMain.handle('neovarch:remote:rotate', () => neovarchRemote.rotate())
 ipcMain.handle('neovarch:remote:update', (_event, patch) => neovarchRemote.update(patch && typeof patch === 'object' ? patch : {}))
 ipcMain.handle('neovarch:remote:check', () => neovarchRemote.check())
+
+// Neovarch wallpaper (Settings ▸ Tampilan ▸ Latar belakang): the picked image is
+// copied into userData so it survives the original moving (neovarch-wallpaper.ts).
+const neovarchWallpaper = createWallpaperStore({ dir: path.join(app.getPath('userData'), 'wallpapers') })
+
+ipcMain.handle('neovarch:wallpaper:pick', async event => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+  const options = {
+    title: 'Pilih gambar latar belakang',
+    properties: ['openFile'] as Array<'openFile'>,
+    filters: [{ name: 'Gambar', extensions: WALLPAPER_EXTENSIONS }]
+  }
+  const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options)
+
+  if (result.canceled || !result.filePaths[0]) {
+    return { ok: false, canceled: true }
+  }
+
+  return neovarchWallpaper.importFile(result.filePaths[0])
+})
+ipcMain.handle('neovarch:wallpaper:import-file', (_event, filePath) => neovarchWallpaper.importFile(String(filePath ?? '')))
+ipcMain.handle('neovarch:wallpaper:import-bytes', (_event, data) =>
+  data instanceof Uint8Array || data instanceof ArrayBuffer
+    ? neovarchWallpaper.importBytes(new Uint8Array(data))
+    : { ok: false, error: 'Data gambar tidak valid.' }
+)
+ipcMain.handle('neovarch:wallpaper:read', (_event, name) => neovarchWallpaper.read(String(name ?? '')))
+ipcMain.handle('neovarch:wallpaper:clear', () => {
+  neovarchWallpaper.clear()
+
+  return true
+})
 
 function focusWindow(win) {
   if (!win || win.isDestroyed()) {

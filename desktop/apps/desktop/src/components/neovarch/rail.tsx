@@ -2,20 +2,23 @@ import { useStore } from '@nanostores/react'
 import { type ReactNode, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
-import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, MESSAGING_ROUTE, navigateToWorkspacePage } from '@/app/routes'
+import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, navigateToWorkspacePage } from '@/app/routes'
 import { openNeovarchKanban } from '@/components/neovarch/home'
+import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
+import { VAULT_ROUTE } from '@/components/neovarch/vault'
 import { Tip } from '@/components/ui/tooltip'
 import {
+  Brain,
   Clock,
   FileText,
   LayoutDashboard,
-  MessageCircle,
   MessageSquareText,
   Moon,
   Plus,
   QrCode,
   Settings,
   Sun,
+  Users,
   Zap
 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -32,11 +35,12 @@ export const NV_COPY = {
   home: 'Beranda',
   newChat: 'Obrolan baru',
   sessions: 'Sesi',
-  skills: 'Skill & kemampuan',
+  skills: 'Skill & alat',
   kanban: 'Tugas (Kanban)',
-  messaging: 'Bot & pesan',
   artifacts: 'Artefak',
   cron: 'Jadwal',
+  office: 'Kantor',
+  vault: 'Vault Obsidian',
   pairPhone: 'Pasangkan HP',
   settings: 'Pengaturan',
   toDark: 'Tema gelap',
@@ -109,6 +113,20 @@ export function NeovarchRail() {
 
   const middle: RailItem[] = [
     {
+      active: path.startsWith(OFFICE_ROUTE),
+      icon: <Users className={icon} />,
+      id: 'office',
+      label: NV_COPY.office,
+      onSelect: () => navigate(OFFICE_ROUTE)
+    },
+    {
+      active: path.startsWith(VAULT_ROUTE),
+      icon: <Brain className={icon} />,
+      id: 'vault',
+      label: NV_COPY.vault,
+      onSelect: () => navigate(VAULT_ROUTE)
+    },
+    {
       active: path.startsWith(CAPABILITIES_ROUTE),
       icon: <Zap className={icon} />,
       id: 'skills',
@@ -121,13 +139,6 @@ export function NeovarchRail() {
       id: 'kanban',
       label: NV_COPY.kanban,
       onSelect: () => void openNeovarchKanban(navigate)
-    },
-    {
-      active: path.startsWith(MESSAGING_ROUTE),
-      icon: <MessageCircle className={icon} />,
-      id: 'messaging',
-      label: NV_COPY.messaging,
-      onSelect: page(MESSAGING_ROUTE)
     },
     {
       active: path.startsWith(ARTIFACTS_ROUTE),

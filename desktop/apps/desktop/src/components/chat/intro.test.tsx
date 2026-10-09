@@ -4,10 +4,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider, useI18n } from '@/i18n'
 import type { I18nContextValue } from '@/i18n'
 
+import { neovarchGreeting } from '@/components/neovarch/home'
+
 import { Intro } from './intro'
 import stock from './intro-copy.jsonl?raw'
-
-const CJK_LOCALES = new Set(['zh', 'zh-hant', 'ja'])
 
 let i18n: I18nContextValue
 
@@ -29,63 +29,49 @@ function Fixture({ personality, seed = 0 }: { personality?: string; seed?: numbe
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
-it('translates every shipped stock body at the same personality and rotation position', async () => {
-  vi.spyOn(Math, 'random').mockReturnValue(0)
 
+it('keeps every shipped locale aligned with the stock intro copy per personality', async () => {
   const entries = stock
     .trim()
     .split('\n')
     .map(line => JSON.parse(line) as { personality: string; body: string })
 
-  const { container, rerender } = render(<Fixture />)
+  render(<Fixture />)
 
   for (const locale of ['zh', 'zh-hant', 'ja', 'fr', 'de', 'es'] as const) {
     await act(() => i18n.setLocale(locale))
-    const indices = new Map<string, number>()
 
     for (const personality of new Set(entries.map(entry => entry.personality))) {
       expect(i18n.t.intro.stock[personality]).toHaveLength(
         entries.filter(entry => entry.personality === personality).length
       )
     }
-
-    for (const entry of entries) {
-      const seed = indices.get(entry.personality) ?? 0
-      indices.set(entry.personality, seed + 1)
-      rerender(<Fixture personality={entry.personality} seed={seed} />)
-      const body = container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent
-      expect(body).toBeTruthy()
-      expect(body).not.toBe(entry.body)
-
-      if (CJK_LOCALES.has(locale)) {
-        expect(body).toMatch(/[\u3040-\u30ff\u3400-\u9fff]/)
-      }
-    }
   }
-
-  await act(() => i18n.setLocale('en'))
-  rerender(<Fixture personality={entries[0].personality} seed={0} />)
-  expect(container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent).toBe(entries[0].body)
 })
-it('localizes the custom-personality fallback without translating its user-supplied name', async () => {
-  vi.spyOn(Math, 'random').mockReturnValue(0)
-  const { container } = render(<Fixture personality="My Custom Voice" seed={4} />)
-  const english = container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent
-  await act(() => i18n.setLocale('zh'))
-  expect(container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent).not.toBe(english)
-  expect(container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent).toContain(
-    'My Custom Voice'
-  )
-  await act(() => i18n.setLocale('ja'))
-  expect(container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent).toContain(
-    'My Custom Voice'
-  )
 
-  for (const locale of ['fr', 'de', 'es'] as const) {
-    await act(() => i18n.setLocale(locale))
-    const body = container.querySelector('[data-slot="aui_intro"] > div > p:last-child')!.textContent
-    expect(body).not.toBe(english)
-    expect(body).toContain('My Custom Voice')
+it('renders the minimal Neovarch start screen: only the time-of-day greeting, for any personality', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 9, 8, 0, 0))
+
+  for (const personality of [undefined, 'none', 'My Custom Voice']) {
+    const { container, unmount } = render(<Fixture personality={personality} seed={3} />)
+    const intro = container.querySelector('[data-slot="aui_intro"]')!
+
+    expect(intro).toBeTruthy()
+    expect(intro.querySelector('h1')!.textContent).toBe(neovarchGreeting(new Date(2026, 9, 9, 8, 0, 0)))
+    expect(intro.querySelector('h1')!.textContent).toBe('Selamat pagi.')
+    // No intro body, cards or session index under the greeting.
+    expect(intro.querySelectorAll('p')).toHaveLength(0)
+    expect(intro.textContent).not.toContain('My Custom Voice')
+    unmount()
   }
+})
+
+it('picks the greeting by hour', () => {
+  expect(neovarchGreeting(new Date(2026, 0, 1, 6))).toBe('Selamat pagi.')
+  expect(neovarchGreeting(new Date(2026, 0, 1, 12))).toBe('Selamat siang.')
+  expect(neovarchGreeting(new Date(2026, 0, 1, 17))).toBe('Selamat sore.')
+  expect(neovarchGreeting(new Date(2026, 0, 1, 21))).toBe('Selamat malam.')
 })

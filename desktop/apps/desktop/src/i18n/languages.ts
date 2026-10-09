@@ -17,8 +17,9 @@ export const DEFAULT_LOCALE: BundledLocale = 'en'
 export const LOCALE_OPTIONS = [
   {
     id: 'en',
-    name: LOCALE_ENDONYMS.en,
-    englishName: 'English',
+    // Neovarch's base catalog is Indonesian over the upstream English strings.
+    name: 'Bahasa Indonesia',
+    englishName: 'Indonesian',
     configValue: 'en'
   },
   {

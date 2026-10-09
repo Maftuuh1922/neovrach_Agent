@@ -16,6 +16,8 @@ Design and wire protocol are inspired by [Hermes Agent](https://github.com/NousR
 | `neovarch/config.py` | `config.yaml` + `.env` (API keys), provider presets, endpoint resolution, `SOUL.md` |
 | `neovarch/llm.py` | streaming client for any OpenAI-compatible `/chat/completions` (text, reasoning, tool calls) |
 | `neovarch/tools.py` | `shell`, `read_file`, `write_file`, `edit_file`, `web_fetch`, `memory`, `skill`; dangerous commands go through approval |
+| `neovarch/obsidian.py` | Obsidian vault memory: `obsidian_search` / `obsidian_read` / `obsidian_write` / `obsidian_links`, keyword injection into the system prompt; every path must stay inside the vault |
+| `neovarch/office.py` | the Office: agents as "pegawai" derived from live/recent sessions and Kanban assignees, plus an activity feed |
 | `neovarch/store.py` | sessions (`sessions/<id>.json`) and the Kanban board (`kanban.json`) |
 | `neovarch/agent.py` | the loop: stream, run tools, repeat; emits events |
 | `neovarch/server.py` | `neovarch serve`: HTTP + WebSocket gateway for the desktop and phone |
@@ -52,9 +54,25 @@ neovarch --version
   desktop session-protocol level this core speaks).
 * REST: `/api/health`, `/api/status`, sessions, config, model info/options/set, skills, toolsets, profiles,
   Kanban (`/api/plugins/kanban/*`), a small read-only file browser (`/api/fs/*`).
-* Features of Hermes Agent the core does not implement (voice, image generation, OAuth providers, MCP, cron,
+* Features the core does not implement (voice, image generation, OAuth providers, MCP,
   webhooks, plugins, messaging platforms) answer with empty lists, so the desktop shows them empty instead of
   failing. Any other unknown call is answered with 404 / JSON-RPC `-32601` and logged to `logs/unhandled.log`.
+
+## Office, Obsidian memory and appearance
+
+* `GET /api/office` returns a snapshot: `agents[]` (name, role, status `idle` /
+  `working` / `waiting-approval`, `current_task`, `current_tool`, `last_activity`),
+  `feed[]` (tool calls, messages, approvals, Kanban moves; newest first), `counts`,
+  `kanban` and `vault` (`configured`, `connected`, `note_count`). Live updates: the
+  WebSocket event `office.update` on `/api/ws` (session_id `null`, sent to every
+  client) and the SSE stream `GET /api/office/events`. Same auth as every route,
+  so a paired phone can watch it. JSON-RPC: `office.snapshot`.
+* `memory.obsidian_vault` (`neovarch config set memory.obsidian_vault ~/Vault`)
+  turns on the vault tools and the vault section of the system prompt.
+  `GET /api/memory/obsidian` reports its status.
+* `appearance.accent` / `appearance.base` hold the colour chosen at first run.
+  `GET/PUT /api/appearance` returns `{accent, base, on_accent}`; a change is pushed
+  as the `appearance.changed` event so the phone can follow the PC.
 
 ## Data
 

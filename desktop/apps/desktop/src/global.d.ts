@@ -38,18 +38,36 @@ declare global {
     running: boolean
     starting: boolean
     port: number
-    addresses: { address: string; iface: string }[]
+    addresses: { address: string; iface: string; kind?: 'lan' | 'magicdns' | 'tailscale' }[]
     address: string | null
     url: string | null
     token: string | null
     pairingUri: string | null
+    altUrls?: string[]
+    tailscale?: { dnsName: string | null; ips: string[] } | null
     deviceName: string
     profile: string | null
     error: string | null
     logTail: string
   }
 
+  interface NeovarchWallpaperImport {
+    ok: boolean
+    canceled?: boolean
+    error?: string
+    name?: string
+  }
+
   interface Window {
+    /** Settings ▸ Tampilan ▸ Latar belakang: copies images into userData. Absent outside Electron. */
+    neovarchWallpaper?: {
+      pick: () => Promise<NeovarchWallpaperImport>
+      importFile: (filePath: string) => Promise<NeovarchWallpaperImport>
+      importBytes: (data: ArrayBuffer | Uint8Array) => Promise<NeovarchWallpaperImport>
+      read: (name: string) => Promise<{ dataUrl: string; mime: string } | null>
+      clear: () => Promise<boolean>
+      pathForFile: (file: File) => string
+    }
     hermesDesktop: {
       // Resolve a backend connection. Omit `profile` (or pass the primary) for
       // the window's backend; pass a named profile to lazily spawn/reuse that

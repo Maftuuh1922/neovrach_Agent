@@ -2,9 +2,8 @@
 
 Wire compatibility
 ------------------
-The Neovarch desktop is derived from Hermes Desktop and the phone remote was
-written against the same protocol, so this gateway speaks that wire format
-(designed by Hermes Agent, Nous Research), implemented from scratch here:
+The Neovarch desktop and the phone remote speak one wire format (see NOTICE
+for its origin); this gateway implements it from scratch:
 
 * readiness line on stdout: ``HERMES_BACKEND_READY port=<n>`` (the desktop
   waits for exactly this sentinel);
@@ -43,6 +42,10 @@ from neovarch import config as cfgmod
 from neovarch.agent import Agent, default_cwd
 from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
+from neovarch.office import Office
+from neovarch import cron as cronmod
+from neovarch import netinfo
+from neovarch.realtime import EventBus
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
@@ -167,6 +170,7 @@ class LiveSession:
         finally:
             self.approvals.pop(rid, None)
             self.gw.broadcast_event("approval.cancelled", self.id, {"request_ids": [rid]})
+        self.gw.office.observe("approval.responded", self.id, {"choice": str(choice or "deny"), "request_id": rid})
         return str(choice or "deny")
 
     def answer(self, rid: str | None, choice: str) -> bool:
@@ -230,16 +234,55 @@ class Gateway:
         self.live: dict[str, LiveSession] = {}
         self.started = time.time()
         self.port = 0
+        self.bus = EventBus()
+        self.kanban.on_event = lambda ev: self.broadcast_event("kanban.changed", None, ev)
+        self.office = Office(self)
+        self.cron = cronmod.CronStore()
+        self.scheduler = cronmod.Scheduler(
+            self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
+            tick=float(os.environ.get("NEOVARCH_CRON_TICK") or 5))
+
+    async def _cron_run(self, job: dict) -> tuple[str, str | None]:
+        """Run one scheduled job: a fresh session (source "cron") with the job's prompt."""
+        rec = self.store.create(source="cron", title=f"Jadwal: {job.get('name') or job['id']}",
+                                model=str(job.get("model") or ""))
+        live = self.open(rec)
+        errors: list[str] = []
+        emit = live.emit
+
+        def capture(kind: str, payload: dict) -> None:
+            if kind == "error" and payload.get("message"):
+                errors.append(str(payload["message"]))
+            emit(kind, payload)
+        live.emit = capture  # type: ignore[method-assign]
+        live.agent.emit = capture
+        self.broadcast_event("sessions.changed", None, {})
+        live.submit(str(job.get("prompt") or ""))
+        if live.task:
+            await live.task
+        live.emit = emit  # type: ignore[method-assign]
+        live.agent.emit = emit
+        return rec["id"], (errors[-1] if errors else None)
 
     # ---- plumbing --------------------------------------------------------
     def conns_for(self, sid: str | None) -> list[Conn]:
         return [c for c in self.conns if sid is None or sid in c.attached or not c.attached]
 
     def broadcast_event(self, kind: str, sid: str | None, payload: dict) -> None:
-        frame = {"jsonrpc": "2.0", "method": "event", "params": {"type": kind, "session_id": sid, "payload": payload}}
+        if kind != "office.update":
+            self.office.observe(kind, sid, payload)
+        if (kind == "tool.complete" and isinstance(payload, dict)
+                and str(payload.get("name") or "").startswith("obsidian_write")):
+            self.broadcast_event("vault.changed", None, {"tool": payload.get("name")})
+        ev = self.bus.publish(kind, sid, payload)
+        frame = {"jsonrpc": "2.0", "method": "event",
+                 "params": {"type": kind, "session_id": sid, "payload": payload, "seq": ev["seq"]}}
         for conn in list(self.conns):
             if sid is None or sid in conn.attached:
-                asyncio.create_task(conn.send(frame))
+                try:
+                    asyncio.get_running_loop().create_task(conn.send(frame))
+                except RuntimeError:  # no loop (sync caller outside the gateway)
+                    pass
 
     async def server_request(self, conn: Conn, method: str, params: dict, answer: asyncio.Future) -> None:
         rid = "srq-" + secrets.token_hex(6)
@@ -274,7 +317,19 @@ class Gateway:
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
         if method == "ping":
-            return {"pong": True}
+            return {"pong": True, "seq": self.bus.seq, "boot_id": self.bus.boot_id, "ts": time.time()}
+        if method == "events.replay":
+            sids = p.get("session_ids")
+            if isinstance(sids, list):
+                conn.attached.update(str(x) for x in sids)
+            try:
+                since = int(p.get("since") or 0)
+            except (TypeError, ValueError):
+                since = 0
+            return self.bus.replay(since, p.get("boot_id") or None,
+                                   [str(x) for x in sids] if isinstance(sids, list) else sorted(conn.attached))
+        if method == "network.addresses":
+            return netinfo.addresses(self.port)
         if method == "client.capabilities":
             conn.server_requests = bool(p.get("server_requests"))
             return {"ok": True, "server_requests": conn.server_requests}
@@ -347,7 +402,10 @@ class Gateway:
             cfg = cfgmod.load_config()
             cfgmod.set_path(cfg, str(p["key"]), p.get("value"))
             cfgmod.save_config(cfg)
+            self._config_changed(str(p["key"]))
             return {"ok": True}
+        if method == "office.snapshot":
+            return self.office.snapshot()
         if method == "commands.catalog":
             return {"commands": [{"name": "new", "description": "Start a new chat"},
                                  {"name": "model", "description": "Show the configured model"}], "skills": list_skills()}
@@ -377,12 +435,14 @@ class Gateway:
                     "source": "config", "free_tier_route": False, "profile": "default",
                     "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
         if method == "model.options":
-            info = self.model_info()
-            name = info["provider"] or "custom"
-            return {"model": info["model"], "provider": name, "providers": [{
-                "slug": name, "name": name, "models": [info["model"]] if info["model"] else [],
-                "total_models": 1 if info["model"] else 0, "is_current": True, "is_user_defined": True,
-                "api_url": info["base_url"] or None, "authenticated": info["configured"], "source": "config"}]}
+            from neovarch import providers
+            return providers.model_options(cfgmod.load_config(), bool(p.get("include_unconfigured")))
+        if method in ("model.set", "model.switch"):
+            from neovarch import providers
+            cfg = cfgmod.load_config()
+            res = providers.set_model(cfg, {"scope": "main", **p})
+            cfgmod.save_config(cfg)
+            return res
         # ---- features the Neovarch core does not have (yet): answer "off", never an error
         if method == "pet.info":
             return {"enabled": False}
@@ -406,6 +466,13 @@ class Gateway:
             return {"plugins": [], "user_count": 0, "bundled_count": 0, "ok": True}
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
+
+    def _config_changed(self, key: str = "") -> None:
+        if not key or key.startswith("memory"):
+            self.office.invalidate_vault()
+            self.office.schedule()
+        if not key or key.startswith("appearance"):
+            self.broadcast_event("appearance.changed", None, appearance_of(cfgmod.load_config()))
 
     def _live(self, p: dict) -> LiveSession:
         sid = str(p.get("session_id") or "")
@@ -443,6 +510,10 @@ def build_app(gw: Gateway) -> web.Application:
         if request.method == "OPTIONS":
             return web.Response(status=204, headers=_cors(request))
         if path.startswith("/api/") and path not in PUBLIC and not gw.auth.ok(request):
+            access = os.environ.get("NEOVARCH_ACCESS_LOG")
+            if access:
+                with open(access, "a", encoding="utf-8") as fh:
+                    fh.write(f"401 {request.method} {request.path}\n")
             return web.json_response({"detail": "Unauthorized"}, status=401, headers=_cors(request))
         try:
             resp = await handler(request)
@@ -452,10 +523,125 @@ def build_app(gw: Gateway) -> web.Application:
         except web.HTTPException as exc:
             resp = exc
         resp.headers.update(_cors(request))
+        access = os.environ.get("NEOVARCH_ACCESS_LOG")
+        if access and path.startswith("/api/"):
+            try:
+                with open(access, "a", encoding="utf-8") as fh:
+                    fh.write(f"{resp.status} {request.method} {request.path_qs}\n")
+            except OSError:
+                pass
         return resp
 
     app = web.Application(middlewares=[auth_mw], client_max_size=64 * 1024 * 1024)
     r = app.router
+
+    async def _start_cron(_app):
+        gw.scheduler.start()
+
+    async def _stop_cron(_app):
+        await gw.scheduler.stop()
+    app.on_startup.append(_start_cron)
+    app.on_cleanup.append(_stop_cron)
+
+    # ---- scheduled jobs (cron) ---------------------------------------------
+    def _job(jid: str):
+        job = gw.cron.get(jid)
+        if not job:
+            raise web.HTTPNotFound()
+        return job
+
+    def _job_404(jid: str):
+        return web.json_response({"detail": f"Jadwal {jid} tidak ditemukan."}, status=404)
+
+    async def cron_list(_):
+        return web.json_response([gw.cron.public(j) for j in gw.cron.list()])
+
+    async def cron_create(request):
+        try:
+            job = gw.cron.create(await _json(request))
+        except cronmod.ScheduleError as exc:
+            return web.json_response({"detail": str(exc)}, status=422)
+        gw.broadcast_event("cron.changed", None, {})
+        return web.json_response(gw.cron.public(job))
+
+    async def cron_get(request):
+        job = gw.cron.get(request.match_info["jid"])
+        return web.json_response(gw.cron.public(job)) if job else _job_404(request.match_info["jid"])
+
+    async def cron_update(request):
+        body = await _json(request)
+        updates = body.get("updates") if isinstance(body.get("updates"), dict) else body
+        safe = {k: v for k, v in updates.items() if not str(k).startswith("_")}
+        try:
+            job = gw.cron.update(request.match_info["jid"], safe)
+        except cronmod.ScheduleError as exc:
+            return web.json_response({"detail": str(exc)}, status=422)
+        if not job:
+            return _job_404(request.match_info["jid"])
+        gw.broadcast_event("cron.changed", None, {})
+        return web.json_response(gw.cron.public(job))
+
+    async def cron_delete(request):
+        ok = gw.cron.delete(request.match_info["jid"])
+        if not ok:
+            return _job_404(request.match_info["jid"])
+        gw.broadcast_event("cron.changed", None, {})
+        return web.json_response({"ok": True})
+
+    def _toggle(enabled: bool):
+        async def h(request):
+            job = gw.cron.update(request.match_info["jid"], {"enabled": enabled})
+            if not job:
+                return _job_404(request.match_info["jid"])
+            gw.broadcast_event("cron.changed", None, {})
+            return web.json_response(gw.cron.public(job))
+        return h
+
+    async def cron_trigger(request):
+        jid = request.match_info["jid"]
+        if not gw.cron.get(jid):
+            return _job_404(jid)
+        task = gw.scheduler.run_now(jid)
+        if task and request.query.get("wait", "1") != "0":
+            await asyncio.shield(task)
+        return web.json_response(gw.cron.public(gw.cron.get(jid) or {"id": jid}))
+
+    async def cron_runs(request):
+        jid = request.match_info["jid"]
+        if not gw.cron.get(jid):
+            return _job_404(jid)
+        try:
+            limit = max(1, min(int(request.query.get("limit") or 20), 50))
+        except ValueError:
+            limit = 20
+        rows = []
+        for sid in gw.cron.runs(jid)[:limit]:
+            rec = gw.store.load(sid)
+            if rec:
+                rows.append(summarize(rec))
+        return web.json_response({"runs": rows})
+
+    async def cron_targets(_):
+        return web.json_response({"targets": [{"id": "local", "name": "Lokal (sesi di PC ini)",
+                                                "home_env_var": None, "home_target_set": True}]})
+
+    async def update_check(request):
+        from neovarch import updates
+        return web.json_response(await updates.check(force=request.query.get("force") in ("1", "true"),
+                                                     platform=str(request.query.get("platform") or "")))
+
+    r.add_get("/api/update", update_check)
+    r.add_get("/api/cron/jobs", cron_list)
+    r.add_post("/api/cron/jobs", cron_create)
+    r.add_get("/api/cron/jobs/{jid}", cron_get)
+    r.add_put("/api/cron/jobs/{jid}", cron_update)
+    r.add_patch("/api/cron/jobs/{jid}", cron_update)
+    r.add_delete("/api/cron/jobs/{jid}", cron_delete)
+    r.add_post("/api/cron/jobs/{jid}/pause", _toggle(False))
+    r.add_post("/api/cron/jobs/{jid}/resume", _toggle(True))
+    r.add_post("/api/cron/jobs/{jid}/trigger", cron_trigger)
+    r.add_get("/api/cron/jobs/{jid}/runs", cron_runs)
+    r.add_get("/api/cron/delivery-targets", cron_targets)
 
     async def health(_):
         return web.json_response({"ok": True, "status": "ok", "product": "neovarch", "version": __version__})
@@ -480,7 +666,25 @@ def build_app(gw: Gateway) -> web.Application:
         gw.conns.add(conn)
         await conn.send({"jsonrpc": "2.0", "method": "event", "params": {
             "type": "gateway.ready", "session_id": None,
-            "payload": {"product": "neovarch", "version": __version__, "skin": None}}})
+            "payload": {"product": "neovarch", "version": __version__, "skin": None,
+                        "boot_id": gw.bus.boot_id, "seq": gw.bus.seq}}})
+        # ?since=<seq>&boot_id=<id>: replay global events missed while offline
+        # (session events come back through events.replay / session.resume).
+        if "since" in request.query:
+            try:
+                since = int(request.query.get("since") or 0)
+            except ValueError:
+                since = 0
+            rep = gw.bus.replay(since, request.query.get("boot_id") or None, [])
+            if rep["resync"]:
+                await conn.send({"jsonrpc": "2.0", "method": "event", "params": {
+                    "type": "resync.required", "session_id": None,
+                    "payload": {"reason": rep.get("reason"), "boot_id": rep["boot_id"], "seq": rep["seq"]}}})
+            else:
+                for ev in rep["events"]:
+                    await conn.send({"jsonrpc": "2.0", "method": "event", "params": {
+                        "type": ev["type"], "session_id": None, "payload": ev["payload"],
+                        "seq": ev["seq"], "replayed": True}})
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -543,6 +747,7 @@ def build_app(gw: Gateway) -> web.Application:
         if isinstance(data, dict):
             cfg = cfgmod._merge(cfg, data)
             cfgmod.save_config(cfg)
+            gw._config_changed()
         return web.json_response({"ok": True})
 
     async def config_defaults(_):
@@ -551,34 +756,183 @@ def build_app(gw: Gateway) -> web.Application:
     async def model_info(_):
         return web.json_response(gw.model_info())
 
-    async def model_options(_):
-        cfg = cfgmod.load_config()
-        info = gw.model_info()
-        providers = [{"name": n, "base_url": s.get("base_url", ""), "models": [s.get("model")] if s.get("model") else []}
-                     for n, s in cfgmod.provider_entries(cfg).items()]
-        return web.json_response({"current": info, "providers": providers,
-                                  "models": [{"id": info["model"], "provider": info["provider"]}] if info["model"] else []})
+    async def model_options(request):
+        from neovarch import providers
+        inc = request.query.get("include_unconfigured") in ("1", "true")
+        return web.json_response(providers.model_options(cfgmod.load_config(), inc))
 
     async def model_set(request):
+        from neovarch import providers
         body = await _json(request)
         cfg = cfgmod.load_config()
-        if body.get("model"):
-            cfgmod.set_path(cfg, "model.default", body["model"])
-        if body.get("provider"):
-            cfgmod.set_path(cfg, "model.provider", body["provider"])
+        try:
+            res = providers.set_model(cfg, body)
+        except providers.EndpointError as exc:
+            return web.json_response({"ok": False, "detail": str(exc), "message": str(exc)}, status=422)
         cfgmod.save_config(cfg)
-        return web.json_response({"ok": True, **gw.model_info()})
+        gw.broadcast_event("model.changed", None, {"provider": res.get("provider"), "model": res.get("model")})
+        return web.json_response(res)
+
+    async def model_recommended(request):
+        from neovarch import providers
+        prov = request.query.get("provider") or ""
+        cfg = cfgmod.load_config()
+        model = ""
+        if prov in cfgmod.PRESETS:
+            model = cfgmod.PRESETS[prov]["model"]
+        elif prov.startswith("custom:"):
+            spec = providers.find_endpoint(cfg, prov.split(":", 1)[1]) or {}
+            model = str(spec.get("model") or (spec.get("models") or [""])[0])
+        return web.json_response({"provider": prov, "model": model, "free_tier": None})
+
+    async def model_auxiliary(_):
+        info = gw.model_info()
+        return web.json_response({"main": {"model": info["model"], "provider": info["provider"]}, "tasks": []})
+
+    # ---- providers / custom endpoints --------------------------------------
+    async def custom_endpoints_get(_):
+        from neovarch import providers
+        return web.json_response(providers.endpoints_response(cfgmod.load_config()))
+
+    async def custom_endpoints_save(request):
+        from neovarch import providers
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        try:
+            eid = providers.save_endpoint(cfg, body)
+        except providers.EndpointError as exc:
+            return web.json_response({"ok": False, "detail": str(exc), "message": str(exc)}, status=422)
+        cfgmod.save_config(cfg)
+        gw.broadcast_event("model.changed", None, {})
+        return web.json_response(providers.endpoints_response(cfg, eid))
+
+    async def custom_endpoints_validate(request):
+        from neovarch import providers
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        key = str(body.get("api_key") or "")
+        headers_raw = body.get("headers")
+        insecure = bool(body.get("allow_insecure_tls"))
+        existing = providers.find_endpoint(cfg, providers.slugify(body.get("id") or body.get("name") or ""))
+        if existing is not None:
+            key = key or cfgmod.secret(str(existing.get("key_env") or ""))
+            if headers_raw is None:
+                headers_raw = cfgmod.endpoint_headers(existing)
+        try:
+            headers = providers.parse_headers(headers_raw)
+        except providers.EndpointError as exc:
+            return web.json_response({"ok": False, "reachable": False, "message": str(exc), "models": []})
+        return web.json_response(await providers.probe(str(body.get("base_url") or ""), key, headers, insecure))
+
+    async def custom_endpoint_delete(request):
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        providers.delete_endpoint(cfg, request.match_info["eid"])
+        cfgmod.save_config(cfg)
+        return web.json_response(providers.endpoints_response(cfg))
+
+    async def custom_endpoint_activate(request):
+        from neovarch import providers
+        cfg = cfgmod.load_config()
+        spec = providers.find_endpoint(cfg, request.match_info["eid"])
+        if spec is None:
+            return web.json_response({"ok": False, "detail": "endpoint tidak ditemukan"}, status=404)
+        providers.activate(cfg, f"custom:{request.match_info['eid']}", str(spec.get("model") or ""))
+        cfgmod.save_config(cfg)
+        gw.broadcast_event("model.changed", None, {})
+        return web.json_response({"ok": True, "provider": f"custom:{request.match_info['eid']}",
+                                  "model": str(spec.get("model") or "")})
+
+    async def providers_validate(request):
+        from neovarch import providers
+        body = await _json(request)
+        key, value = str(body.get("key") or ""), str(body.get("value") or "")
+        slug = providers.preset_for_env(key)
+        if not slug:
+            return web.json_response({"ok": True, "reachable": False, "message": "Disimpan tanpa uji koneksi."})
+        if not value:
+            return web.json_response({"ok": False, "reachable": False, "message": "API key kosong."})
+        return web.json_response(await providers.probe(cfgmod.PRESETS[slug]["base_url"], value))
+
+    async def env_get(_):
+        from neovarch import providers
+        return web.json_response(providers.env_vars())
+
+    async def env_put(request):
+        body = await _json(request)
+        key = str(body.get("key") or "")
+        if not key or not key.replace("_", "").isalnum():
+            return web.json_response({"ok": False, "detail": "nama variabel tidak valid"}, status=422)
+        cfgmod.write_env_value(key, str(body.get("value") or ""))
+        gw.broadcast_event("model.changed", None, {})
+        return web.json_response({"ok": True})
+
+    async def env_delete(request):
+        body = await _json(request)
+        key = str(body.get("key") or request.query.get("key") or "")
+        if key:
+            cfgmod.write_env_value(key, "")
+        return web.json_response({"ok": True})
+
+    async def env_reveal(request):
+        body = await _json(request)
+        key = str(body.get("key") or "")
+        return web.json_response({"key": key, "value": cfgmod.read_env_file().get(key, "")})
+
+    async def config_schema(_):
+        return web.json_response(config_schema_payload())
 
     async def skills(_):
-        return web.json_response({"skills": list_skills()})
+        # The renderer expects SkillInfo[]
+        return web.json_response([{"name": s["name"], "description": s["description"], "category": "neovarch",
+                                   "enabled": True, "provenance": "agent", "path": s["path"]} for s in list_skills()])
+
+    async def skill_content(request):
+        name = request.query.get("name") or ""
+        for s in list_skills():
+            if s["name"] == name:
+                return web.json_response({"name": name, "path": s["path"],
+                                          "content": Path(s["path"]).read_text(encoding="utf-8", errors="replace")})
+        return web.json_response({"name": name, "path": "", "content": ""})
 
     async def tools(_):
-        return web.json_response({"toolsets": [{"name": "core", "enabled": True,
-                                                "tools": [t["function"]["name"] for t in tool_schemas()]}]})
+        # The renderer expects ToolsetInfo[]
+        return web.json_response([{"name": "core", "label": "Neovarch core", "description": "Shell, file, web, memori, skill",
+                                   "enabled": True, "configured": True,
+                                   "tools": [t["function"]["name"] for t in tool_schemas()]}])
 
     async def profiles(_):
-        return web.json_response({"profiles": [{"name": "default", "active": True, "path": str(neovarch_home())}],
+        info = gw.model_info()
+        return web.json_response({"profiles": [{"name": "default", "display_name": "Neovarch", "active": True,
+                                                "is_default": True, "has_env": cfgmod.env_path().exists(),
+                                                "model": info["model"] or None, "provider": info["provider"] or None,
+                                                "skill_count": len(list_skills()), "path": str(neovarch_home())}],
                                   "active": "default"})
+
+    async def sessions_search(request):
+        q = (request.query.get("q") or "").strip().lower()
+        results = []
+        if q:
+            for summary in gw.store.list(limit=500):
+                rec = gw.store.load(summary["id"]) or {}
+                for m in rec.get("messages", []):
+                    text = m.get("content") if isinstance(m.get("content"), str) else ""
+                    if text and q in text.lower():
+                        i = text.lower().index(q)
+                        results.append({**summary, "session_id": summary["id"], "snippet": text[max(0, i - 60):i + 100],
+                                        "role": m.get("role")})
+                        break
+                if len(results) >= 50:
+                    break
+        return web.json_response({"results": results})
+
+    async def sessions_sidebar(request):
+        try:
+            limit = int(request.query.get("recents_limit") or request.query.get("recentsLimit") or 50)
+        except ValueError:
+            limit = 50
+        empty = {"sessions": []}
+        return web.json_response({"recents": {"sessions": gw.store.list(limit=limit)}, "cron": empty, "messaging": empty})
 
     async def empty_list(request):
         key = request.path.rstrip("/").rsplit("/", 1)[-1]
@@ -587,14 +941,76 @@ def build_app(gw: Gateway) -> web.Application:
     async def kanban_board(_):
         return web.json_response(gw.kanban.board())
 
+    async def kanban_boards(_):
+        total = len(gw.kanban.board()["tasks"])
+        return web.json_response({"current": "default", "boards": [{"slug": "default", "name": "Tugas", "is_current": True,
+                                                                   "total": total, "description": None}]})
+
+    async def kanban_task_get(request):
+        d = gw.kanban.detail(request.match_info["tid"])
+        return web.json_response(d) if d else web.json_response({"detail": "tugas tidak ditemukan"}, status=404)
+
+    async def kanban_task_delete(request):
+        return web.json_response({"ok": gw.kanban.delete(request.match_info["tid"])})
+
+    async def kanban_task_log(_):
+        return web.json_response({"exists": False, "size_bytes": 0, "content": "", "truncated": False})
+
+    async def kanban_bulk(request):
+        b = await _json(request)
+        results = []
+        for tid in b.get("ids") or []:
+            ok = bool(gw.kanban.update(str(tid), {k: v for k, v in b.items() if k in ("status", "assignee", "priority")}))
+            results.append({"id": tid, "ok": ok})
+        return web.json_response({"results": results})
+
+    async def kanban_profiles(_):
+        return web.json_response({"profiles": [{"name": "default", "is_default": True, "description": "Agen Neovarch",
+                                                "description_auto": False}]})
+
+    async def kanban_projects(_):
+        return web.json_response({"projects": []})
+
+    async def kanban_orchestration(_):
+        return web.json_response({"orchestrator_profile": "", "default_assignee": "", "auto_decompose": False,
+                                  "resolved_orchestrator_profile": "default", "resolved_default_assignee": "default"})
+
+    async def kanban_events(request):
+        ws = web.WebSocketResponse(heartbeat=25)
+        await ws.prepare(request)
+        try:
+            since = int(request.query.get("since") or 0)
+        except ValueError:
+            since = 0
+        try:
+            first = True
+            while not ws.closed:
+                evs, cursor = gw.kanban.events_since(since)
+                if evs or first:
+                    await ws.send_json({"cursor": cursor, "events": evs})
+                    since, first = max(since, cursor), False
+                await asyncio.sleep(0.5)
+        except (ConnectionResetError, RuntimeError, asyncio.CancelledError):
+            pass
+        return ws
+
     async def kanban_create(request):
         b = await _json(request)
         if not b.get("title"):
             return web.json_response({"detail": "title required"}, status=422)
-        return web.json_response(gw.kanban.create(str(b["title"]), str(b.get("body") or ""), b.get("assignee"), b.get("priority")))
+        task = gw.kanban.create(str(b["title"]), str(b.get("body") or ""), b.get("assignee"), b.get("priority"))
+        gw.office.observe("task.created", None, task)
+        return web.json_response({**task, "task": task})
 
     async def kanban_patch(request):
-        t = gw.kanban.update(request.match_info["tid"], await _json(request))
+        tid = request.match_info["tid"]
+        before = next((t for t in gw.kanban.board()["tasks"] if t["id"] == tid), None)
+        t = gw.kanban.update(tid, await _json(request))
+        if t:
+            if before and before.get("status") != t.get("status"):
+                gw.office.observe("task.moved", None, {**t, "from": before.get("status"), "to": t.get("status")})
+            else:
+                gw.office.observe("task.updated", None, t)
         return web.json_response(t) if t else web.json_response({"detail": "not found"}, status=404)
 
     async def kanban_comment(request):
@@ -621,6 +1037,177 @@ def build_app(gw: Gateway) -> web.Application:
     async def fs_default(_):
         return web.json_response({"path": str(default_cwd())})
 
+    async def office_get(_):
+        return web.json_response(gw.office.snapshot())
+
+    async def office_events(request):
+        """Server-Sent Events: one `office.update` per change (plus the current snapshot first)."""
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache",
+                                           "X-Accel-Buffering": "no", **_cors(request)})
+        await resp.prepare(request)
+        q = gw.office.subscribe()
+        try:
+            snap = gw.office.snapshot()
+            while True:
+                data = json.dumps(snap, ensure_ascii=False, default=str)
+                await resp.write(f"event: office.update\ndata: {data}\n\n".encode())
+                while True:
+                    try:
+                        snap = await asyncio.wait_for(q.get(), 25)
+                        break
+                    except asyncio.TimeoutError:
+                        await resp.write(b": keep-alive\n\n")
+        except (ConnectionResetError, asyncio.CancelledError, RuntimeError, asyncio.TimeoutError):
+            pass
+        finally:
+            gw.office.unsubscribe(q)
+        return resp
+
+    async def events_sse(request):
+        """Server-Sent Events: every gateway event with `id: <seq>`; resumes from
+        Last-Event-ID / ?since=; `event: resync` when the gap cannot be replayed."""
+        types = {t for t in (request.query.get("types") or "").split(",") if t}
+        sessions = {t for t in (request.query.get("session") or "").split(",") if t}
+
+        def wanted(ev: dict) -> bool:
+            if types and not any(ev["type"] == t or ev["type"].startswith(t.rstrip("*")) for t in types):
+                return False
+            return not sessions or ev["session_id"] is None or ev["session_id"] in sessions
+
+        def frame(ev: dict) -> bytes:
+            body = json.dumps({"type": ev["type"], "session_id": ev["session_id"], "payload": ev["payload"],
+                               "seq": ev["seq"]}, ensure_ascii=False, default=str)
+            return f"id: {ev['seq']}\nevent: {ev['type']}\ndata: {body}\n\n".encode()
+
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache",
+                                           "X-Accel-Buffering": "no", **_cors(request)})
+        await resp.prepare(request)
+        q = gw.bus.subscribe()
+        try:
+            hello = {"boot_id": gw.bus.boot_id, "seq": gw.bus.seq, "version": __version__}
+            await resp.write(f"retry: 1000\nevent: hello\ndata: {json.dumps(hello)}\n\n".encode())
+            last = request.headers.get("Last-Event-ID") or request.query.get("since")
+            if last not in (None, ""):
+                try:
+                    since = int(str(last))
+                except ValueError:
+                    since = -1
+                rep = gw.bus.replay(since, request.query.get("boot_id") or None) if since >= 0 else {"resync": True}
+                if rep["resync"]:
+                    await resp.write(f"event: resync\ndata: {json.dumps({'reason': rep.get('reason', 'bad-cursor'), 'seq': gw.bus.seq, 'boot_id': gw.bus.boot_id})}\n\n".encode())
+                else:
+                    for ev in rep["events"]:
+                        if wanted(ev):
+                            await resp.write(frame(ev))
+            while True:
+                try:
+                    ev = await asyncio.wait_for(q.get(), 15)
+                except asyncio.TimeoutError:
+                    await resp.write(b": keep-alive\n\n")
+                    continue
+                if ev.get("type") == "resync" and "seq" not in ev:
+                    await resp.write(f"event: resync\ndata: {json.dumps({'reason': ev.get('reason'), 'seq': gw.bus.seq, 'boot_id': gw.bus.boot_id})}\n\n".encode())
+                elif wanted(ev):
+                    await resp.write(frame(ev))
+        except (ConnectionResetError, asyncio.CancelledError, RuntimeError):
+            pass
+        finally:
+            gw.bus.unsubscribe(q)
+        return resp
+
+    async def events_replay(request):
+        try:
+            since = int(request.query.get("since") or 0)
+        except ValueError:
+            since = 0
+        sessions = [t for t in (request.query.get("session") or "").split(",") if t] or None
+        return web.json_response(gw.bus.replay(since, request.query.get("boot_id") or None, sessions), dumps=lambda o: json.dumps(o, default=str))
+
+    async def network_addresses(_):
+        return web.json_response(await asyncio.to_thread(netinfo.addresses, gw.port))
+
+    async def obsidian_status(_):
+        from neovarch import obsidian
+        return web.json_response(obsidian.status())
+
+    async def appearance_get(_):
+        return web.json_response(appearance_of(cfgmod.load_config()))
+
+    async def appearance_put(request):
+        body = await _json(request)
+        cfg = cfgmod.load_config()
+        try:
+            new = normalize_appearance({**appearance_of(cfg), **{k: v for k, v in body.items() if k in ("accent", "base")}})
+        except ValueError as exc:
+            return web.json_response({"detail": str(exc)}, status=422)
+        cfgmod.set_path(cfg, "appearance", {"accent": new["accent"], "base": new["base"]})
+        cfgmod.save_config(cfg)
+        gw._config_changed("appearance")
+        return web.json_response(new)
+
+    r.add_get("/api/office", office_get)
+    r.add_get("/api/office/events", office_events)
+    r.add_get("/api/events", events_sse)
+    r.add_get("/api/events/replay", events_replay)
+    r.add_get("/api/network/addresses", network_addresses)
+    r.add_get("/api/memory/obsidian", obsidian_status)
+
+    # ---- Obsidian vault viewer (desktop page, phone read-only) ---------------
+    def _vault_or_error():
+        from neovarch import obsidian
+        try:
+            return obsidian.require_vault(), None
+        except obsidian.VaultError as exc:
+            return None, str(exc)
+
+    async def vault_tree(_):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"configured": False, "tree": None, "detail": err})
+        return web.json_response({"configured": True, "vault": vault.name, "path": str(vault), "tree": obsidian.tree(vault)})
+
+    async def vault_note(request):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"detail": err}, status=409)
+        rel = request.query.get("path") or ""
+        try:
+            note = obsidian.read_note(vault, rel)
+            lk = obsidian.links(vault, note["path"])
+        except obsidian.VaultError as exc:
+            return web.json_response({"detail": str(exc)}, status=400)
+        except FileNotFoundError:
+            return web.json_response({"detail": f"Catatan {rel} tidak ditemukan."}, status=404)
+        # outgoing links resolved to note paths so the viewer can make them clickable
+        g = {n["title"].lower(): n["id"] for n in obsidian.graph(vault)["nodes"] if n["exists"]}
+        out = [{"target": t, "path": g.get(t.rsplit("/", 1)[-1].lower())} for t in lk["outgoing"]]
+        return web.json_response({**note, "backlinks": lk["backlinks"], "outgoing": out,
+                                  "open_uri": obsidian.open_uri(vault, note["path"])})
+
+    async def vault_graph(_):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"configured": False, "nodes": [], "edges": []})
+        return web.json_response({"configured": True, **obsidian.graph(vault)})
+
+    async def vault_search(request):
+        from neovarch import obsidian
+        vault, err = _vault_or_error()
+        if err:
+            return web.json_response({"results": []})
+        q = request.query.get("q") or ""
+        return web.json_response({"results": obsidian.search(vault, q, 30) if q.strip() else []})
+
+    r.add_get("/api/obsidian/tree", vault_tree)
+    r.add_get("/api/obsidian/note", vault_note)
+    r.add_get("/api/obsidian/graph", vault_graph)
+    r.add_get("/api/obsidian/search", vault_search)
+    r.add_get("/api/appearance", appearance_get)
+    r.add_put("/api/appearance", appearance_put)
+    r.add_post("/api/appearance", appearance_put)
     r.add_get("/api/health", health)
     r.add_get("/api/health/idle", health)
     r.add_get("/api/status", status)
@@ -638,12 +1225,41 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/model/info", model_info)
     r.add_get("/api/model/options", model_options)
     r.add_post("/api/model/set", model_set)
+    r.add_get("/api/model/recommended-default", model_recommended)
+    r.add_get("/api/model/auxiliary", model_auxiliary)
+    r.add_get("/api/config/schema", config_schema)
+    r.add_get("/api/providers/custom-endpoints", custom_endpoints_get)
+    r.add_post("/api/providers/custom-endpoints", custom_endpoints_save)
+    r.add_post("/api/providers/custom-endpoints/validate", custom_endpoints_validate)
+    r.add_post("/api/providers/custom-endpoints/{eid}/activate", custom_endpoint_activate)
+    r.add_delete("/api/providers/custom-endpoints/{eid}", custom_endpoint_delete)
+    r.add_post("/api/providers/validate", providers_validate)
+    r.add_get("/api/env", env_get)
+    r.add_put("/api/env", env_put)
+    r.add_post("/api/env", env_put)
+    r.add_delete("/api/env", env_delete)
+    r.add_post("/api/env/reveal", env_reveal)
     r.add_get("/api/skills", skills)
+    r.add_get("/api/skills/content", skill_content)
+    r.add_get("/api/sessions/search", sessions_search)
+    r.add_get("/api/profiles/sessions/sidebar", sessions_sidebar)
     r.add_get("/api/tools/toolsets", tools)
     r.add_get("/api/profiles", profiles)
-    for p in ("/api/cron/jobs", "/api/mcp/servers", "/api/webhooks", "/api/agents", "/api/plugins"):
-        r.add_get(p, empty_list)
+    async def cron_jobs(_):
+        return web.json_response([])
+
+    r.add_get("/api/cron/jobs", cron_jobs)
     r.add_get("/api/plugins/kanban/board", kanban_board)
+    r.add_get("/api/plugins/kanban/boards", kanban_boards)
+    r.add_get("/api/plugins/kanban/profiles", kanban_profiles)
+    r.add_get("/api/plugins/kanban/projects", kanban_projects)
+    r.add_get("/api/plugins/kanban/orchestration", kanban_orchestration)
+    r.add_put("/api/plugins/kanban/orchestration", kanban_orchestration)
+    r.add_get("/api/plugins/kanban/events", kanban_events)
+    r.add_post("/api/plugins/kanban/tasks/bulk", kanban_bulk)
+    r.add_get("/api/plugins/kanban/tasks/{tid}", kanban_task_get)
+    r.add_delete("/api/plugins/kanban/tasks/{tid}", kanban_task_delete)
+    r.add_get("/api/plugins/kanban/tasks/{tid}/log", kanban_task_log)
     r.add_post("/api/plugins/kanban/tasks", kanban_create)
     r.add_patch("/api/plugins/kanban/tasks/{tid}", kanban_patch)
     r.add_post("/api/plugins/kanban/tasks/{tid}/comments", kanban_comment)
@@ -681,7 +1297,67 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/fs/list", fs_list)
     r.add_get("/api/fs/read", fs_read)
     r.add_get("/api/fs/default", fs_default)
+    r.add_get("/api/fs/default-cwd", fs_default)
+    # Last: quiet answers for every other route the desktop calls (never 404/500).
+    from neovarch import compat
+    compat.install(r, _log_unhandled)
     return app
+
+
+def normalize_appearance(a: dict) -> dict:
+    accent = str(a.get("accent") or "#EE1C1C").strip()
+    if not accent.startswith("#"):
+        accent = "#" + accent
+    if len(accent) == 4:
+        accent = "#" + "".join(c * 2 for c in accent[1:])
+    try:
+        int(accent[1:], 16)
+    except ValueError:
+        raise ValueError("accent must be a hex colour like #EE1C1C") from None
+    if len(accent) != 7:
+        raise ValueError("accent must be a hex colour like #EE1C1C")
+    base = str(a.get("base") or "dark").lower()
+    if base not in ("dark", "light"):
+        raise ValueError("base must be dark or light")
+    accent = accent.upper()
+    r, g, b = (int(accent[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+    lum = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    # white text while it keeps >= 4:1 contrast (the brand red stays white-on-red),
+    # otherwise whichever of white/black has the higher WCAG contrast
+    white, black = 1.05 / (lum + 0.05), (lum + 0.05) / 0.05
+    on = "#FFFFFF" if white >= 4.0 or white >= black else "#000000"
+    return {"accent": accent, "base": base, "on_accent": on}
+
+
+def appearance_of(cfg: dict) -> dict:
+    try:
+        return normalize_appearance(cfgmod.get_path(cfg, "appearance", {}) or {})
+    except ValueError:
+        return normalize_appearance({})
+
+
+def config_schema_payload() -> dict:
+    """The config fields the Neovarch core actually reads (Settings renders these)."""
+    from neovarch import providers
+    prov_opts = [""] + list(cfgmod.PRESETS) + ["custom"]
+    try:
+        prov_opts += [f"custom:{e['id']}" for e in providers.endpoints_response(cfgmod.load_config())["endpoints"]]
+    except Exception:
+        pass
+    return {"category_order": ["model", "chat", "safety", "advanced"], "fields": {
+        "model.default": {"category": "model", "type": "string", "description": "ID model yang dipakai obrolan baru."},
+        "model.provider": {"category": "model", "type": "select", "options": prov_opts,
+                           "description": "Penyedia model (preset, custom, atau custom:<endpoint>)."},
+        "model.base_url": {"category": "model", "type": "string", "clearable": True,
+                           "description": "URL OpenAI-compatible untuk provider custom."},
+        "model.context_length": {"category": "model", "type": "number", "description": "Panjang konteks model (token)."},
+        "model_context_length": {"category": "model", "type": "number", "description": "Panjang konteks model (token)."},
+        "approvals.mode": {"category": "safety", "type": "select", "options": ["ask", "off"],
+                           "description": "ask = tanya sebelum perintah berbahaya; off = jalankan tanpa bertanya."},
+        "agent.max_turns": {"category": "advanced", "type": "number", "description": "Batas panggilan model per giliran."},
+        "agent.system_prompt": {"category": "chat", "type": "text", "description": "Instruksi tambahan setelah SOUL.md."},
+    }}
 
 
 def _cors(request: web.Request) -> dict:
@@ -731,7 +1407,7 @@ def serve(host: str, port: int, *, isolated: bool = False) -> int:
             raise SystemExit(98)
         sockets = getattr(site._server, "sockets", None) or []
         gw.port = sockets[0].getsockname()[1] if sockets else port
-        # The desktop waits for this exact sentinel (wire-compatible with Hermes Desktop).
+        # The desktop waits for this exact sentinel (legacy wire name, kept for compatibility).
         print(f"HERMES_BACKEND_READY port={gw.port}", flush=True)
         print(f"Neovarch gateway listening on {host}:{gw.port} (home {neovarch_home()})", flush=True)
         await asyncio.Event().wait()

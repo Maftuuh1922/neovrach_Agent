@@ -16,6 +16,11 @@ Shape (all keys optional)::
     agent:
       max_turns: 30
       system_prompt: ""             # extra instructions appended to SOUL.md
+    memory:
+      obsidian_vault: ""            # folder of an Obsidian vault used as long-term memory
+    appearance:
+      accent: "#EE1C1C"             # accent colour chosen at first run (desktop + phone)
+      base: dark                    # dark | light
 
 API keys live in ``.env`` (KEY=value lines), never in config.yaml.
 """
@@ -45,6 +50,8 @@ DEFAULTS: dict[str, Any] = {
     "custom_providers": [],
     "approvals": {"mode": "ask"},
     "agent": {"max_turns": 30, "system_prompt": ""},
+    "memory": {"obsidian_vault": ""},
+    "appearance": {"accent": "#EE1C1C", "base": "dark"},
 }
 
 DEFAULT_SOUL = """You are Neovarch Agent, an AI agent from NeovarchLabs that works on the user's own computer.
@@ -149,9 +156,27 @@ def provider_entries(cfg: dict) -> dict[str, dict]:
         if isinstance(spec, dict):
             entries[str(name)] = spec
     for spec in cfg.get("custom_providers") or []:
-        if isinstance(spec, dict) and spec.get("name"):
-            entries[str(spec["name"])] = spec
+        if isinstance(spec, dict) and (spec.get("id") or spec.get("name")):
+            entries[str(spec.get("id") or spec["name"])] = spec
+            if spec.get("name") and str(spec["name"]) not in entries:
+                entries[str(spec["name"])] = spec
     return entries
+
+
+def endpoint_headers(spec: dict) -> dict[str, str]:
+    """Custom HTTP headers of an endpoint. Values live in .env (they can be secrets)."""
+    import json as _json
+    env = str(spec.get("headers_env") or "")
+    raw = secret(env) if env else ""
+    out: dict[str, str] = {}
+    if raw:
+        try:
+            data = _json.loads(raw)
+            if isinstance(data, dict):
+                out = {str(k): str(v) for k, v in data.items()}
+        except ValueError:
+            pass
+    return out
 
 
 def resolve_endpoint(cfg: dict) -> dict[str, str]:
@@ -179,6 +204,8 @@ def resolve_endpoint(cfg: dict) -> dict[str, str]:
         "api_key": api_key,
         "model": str(model_cfg.get("default") or spec.get("model") or ""),
         "provider": provider or "custom",
+        "headers": endpoint_headers(spec) if spec else {},
+        "verify_ssl": not bool(spec.get("allow_insecure_tls")) if spec else True,
     }
 
 
