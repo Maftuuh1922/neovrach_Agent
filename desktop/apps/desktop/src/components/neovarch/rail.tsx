@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { type ReactNode, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
 import { ARTIFACTS_ROUTE, CAPABILITIES_ROUTE, CRON_ROUTE, navigateToWorkspacePage } from '@/app/routes'
@@ -22,12 +22,11 @@ import {
   Zap
 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
-import { setSidebarOpen } from '@/store/layout'
+import { $sidebarOpen, toggleSidebarOpen } from '@/store/layout'
 import { requestFreshSession } from '@/store/profile'
 import { useTheme } from '@/themes/context'
 
 import { HaloMark } from './halo-mark'
-import { $nvSessionsOpen, toggleNvSessions } from './layout-store'
 
 export const NV_RAIL_WIDTH = 60
 
@@ -80,13 +79,10 @@ function RailButton({ item }: { item: RailItem }) {
 export function NeovarchRail() {
   const navigate = useNavigate()
   const location = useLocation()
-  const sessionsOpen = useStore($nvSessionsOpen)
+  // One session list: the chat's own sidebar (search, pins, groups, Kanban).
+  // The separate rail drawer duplicated it and was removed.
+  const sessionsOpen = useStore($sidebarOpen)
 
-  // Neovarch has no Hermes-style always-on session sidebar: the list is the
-  // rail-opened panel, so the inherited sidebar pane is folded on launch.
-  useEffect(() => {
-    setSidebarOpen(false)
-  }, [])
   const { renderedMode, setMode } = useTheme()
   const path = location.pathname
   const page = (to: string) => () => navigateToWorkspacePage(navigate, to)
@@ -107,7 +103,7 @@ export function NeovarchRail() {
       icon: <MessageSquareText className={icon} />,
       id: 'sessions',
       label: NV_COPY.sessions,
-      onSelect: () => toggleNvSessions()
+      onSelect: () => toggleSidebarOpen()
     }
   ]
 

@@ -7,15 +7,18 @@ import type {
   SkillInfo,
   StarmapGraph
 } from '@/types/hermes'
+import { asArray } from '@/lib/as-array'
 import type { ActionResponse } from '@/types/hermes'
 
 import { capabilityScoped, hermesApi, type ProfileScope, profileScoped } from './client'
 
-export function getSkills(profile?: ProfileScope): Promise<SkillInfo[]> {
-  return window.hermesDesktop.api<SkillInfo[]>({
+export async function getSkills(profile?: ProfileScope): Promise<SkillInfo[]> {
+  const raw = await window.hermesDesktop.api<unknown>({
     ...capabilityScoped(profile),
     path: '/api/skills'
   })
+
+  return asArray<SkillInfo>(raw, 'skills')
 }
 
 /** Raw SKILL.md text (frontmatter included) for ANY skill — bundled, hub, or
@@ -99,11 +102,13 @@ const HUB_REQUEST_TIMEOUT_MS = 45_000
 /** The full built-in optional-skills catalog (local checkout scan — fast),
  *  with per-profile installed flags. Feeds the Capabilities Skills list's
  *  "available to install" rows. */
-export function getOfficialSkills(profile?: ProfileScope): Promise<{ skills: OfficialSkillInfo[] }> {
-  return window.hermesDesktop.api<{ skills: OfficialSkillInfo[] }>({
+export async function getOfficialSkills(profile?: ProfileScope): Promise<{ skills: OfficialSkillInfo[] }> {
+  const raw = await window.hermesDesktop.api<unknown>({
     ...capabilityScoped(profile),
     path: '/api/skills/hub/official'
   })
+
+  return { ...(raw && typeof raw === 'object' ? raw : {}), skills: asArray<OfficialSkillInfo>(raw, 'skills') }
 }
 
 export function getSkillHubSources(profile?: null | string): Promise<SkillHubSourcesResponse> {
