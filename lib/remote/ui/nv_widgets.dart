@@ -500,7 +500,7 @@ class NvNavBar extends StatefulWidget {
   /// Horizontal room kept between the magnified label and the lens rim.
   static const lensPadding = 11.0;
 
-  static TextStyle labelStyle([Color? color]) => NV.monoLabel(size: 9.5, color: color);
+  static TextStyle labelStyle([Color? color]) => NV.monoLabel(size: 9.5, color: color).copyWith(shadows: NV.glassTextShadows);
 
   @override
   State<NvNavBar> createState() => _NvNavBarState();
@@ -880,7 +880,7 @@ ImageFilter nvGlassFilter(double sigma) => ImageFilter.compose(
 /// Liquid glass surface: backdrop blur + saturation, a translucent
 /// accent-tinted fill, a hairline and a specular rim. No drop shadow.
 class NvGlass extends StatelessWidget {
-  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true, this.backdrop = true});
+  const NvGlass({super.key, required this.child, this.radius = NV.rCard, this.padding = EdgeInsets.zero, this.blur, this.tint, this.border = true, this.borderRadius, this.rim = true, this.backdrop = true, this.style});
   final Widget child;
   final double radius;
   final BorderRadius? borderRadius;
@@ -893,28 +893,36 @@ class NvGlass extends StatelessWidget {
   /// False: no BackdropFilter (tint + rim only) — for small glass over an
   /// already-blurred, soft backdrop, so a screen doesn't stack many blurs.
   final bool backdrop;
+  /// Glass style override (previews); null = the app-wide [NV.glassStyle].
+  final NvGlassStyle? style;
   @override
   Widget build(BuildContext context) {
     final br = borderRadius ?? BorderRadius.circular(radius);
+    final st = style ?? NV.glassStyle;
+    // Tanpa efek: the caller's tint is made opaque; others keep it.
+    final fill = st == NvGlassStyle.tanpa
+        ? NV.glassFill(st)
+        : (st == NvGlassStyle.reguler || tint == null ? (tint ?? NV.glassFill(st)) : Color.lerp(tint, NV.glassFill(st), 0.6)!);
     final inner = CustomPaint(
-      foregroundPainter: rim ? NvGlassRimPainter(borderRadius: br, rim: NV.glassRim) : null,
+      foregroundPainter: rim ? NvGlassRimPainter(borderRadius: br, rim: NV.glassRimFor(st)) : null,
       child: DecoratedBox(
         key: const ValueKey('nv-glass'),
         decoration: BoxDecoration(
-          color: tint ?? NV.glass,
+          color: fill,
           borderRadius: br,
           border: border ? Border.all(color: NV.glassBorder) : null,
         ),
         child: Padding(padding: padding, child: child),
       ),
     );
-    if (!backdrop) return ClipRRect(borderRadius: br, child: inner);
+    final scale = NV.glassSigmaScale(st);
+    if (!backdrop || scale == 0) return ClipRRect(borderRadius: br, child: inner);
     return ClipRRect(
       borderRadius: br,
       child: ValueListenableBuilder<double>(
         valueListenable: NV.glassSigma,
         child: inner,
-        builder: (context, sigma, inner) => BackdropFilter(filter: nvGlassFilter(blur ?? sigma), child: inner!),
+        builder: (context, sigma, inner) => BackdropFilter(filter: nvGlassFilter((blur ?? sigma) * scale), child: inner!),
       ),
     );
   }
@@ -992,7 +1000,7 @@ class NvGlassSegmented extends StatelessWidget {
                       child: Center(
                         child: AnimatedDefaultTextStyle(
                           duration: dur,
-                          style: NV.monoLabel(size: 10, color: i == index ? NV.text : NV.muted),
+                          style: NV.monoLabel(size: 10, color: i == index ? NV.text : NV.muted).copyWith(shadows: NV.glassTextShadows),
                           child: Text(labels[i].toUpperCase()),
                         ),
                       ),
@@ -1025,7 +1033,7 @@ class NvGlassChip extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (icon != null) ...[Icon(icon, size: 16, color: c), const SizedBox(width: 8)],
-          Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10, color: NV.text))),
+          Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: NV.monoLabel(size: 10, color: NV.text).copyWith(shadows: NV.glassTextShadows))),
           const SizedBox(width: 6),
           Icon(CupertinoIcons.chevron_right, size: 13, color: NV.muted),
         ]),

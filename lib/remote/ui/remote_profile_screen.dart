@@ -2,10 +2,12 @@
 // profile / friends feature from the social branch). Below: the phone's
 // appearance — the whole Tampilan section that used to live on the PC tab
 // (accent, custom colour, Gelap/Terang/Sistem, Latar belakang + sliders,
-// Ikuti tema PC) plus the launcher icon picker.
+// Ikuti tema PC) plus Warna dari wallpaper, Gaya kaca and the launcher icon
+// picker.
 import 'package:flutter/material.dart';
 
 import 'app_icon_panel.dart';
+import 'glass_style_picker.dart';
 import 'nv_widgets.dart';
 import 'profile_header_slot.dart';
 import 'remote_pc_screen.dart' show AppearancePanel;
@@ -23,6 +25,10 @@ class RemoteProfileScreen extends StatelessWidget {
             Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ProfileHeaderSlot()),
             NvSection('tampilan'),
             AppearancePanel(),
+            SizedBox(height: 12),
+            WallpaperColorsPanel(),
+            NvSection('gaya kaca'),
+            GlassStylePicker(),
             NvSection('ikon aplikasi'),
             AppIconPanel(),
           ],

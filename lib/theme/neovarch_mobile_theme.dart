@@ -111,6 +111,26 @@ class NvPalette {
   }
 }
 
+/// "Gaya kaca" — liquid glass variants. The names are the stored / synced
+/// values (same names as GlassStyle in the chat-glass branch).
+enum NvGlassStyle {
+  reguler,
+  bening,
+  gelap,
+  warna,
+  tanpa;
+
+  String get label => switch (this) {
+        NvGlassStyle.reguler => 'Reguler',
+        NvGlassStyle.bening => 'Bening',
+        NvGlassStyle.gelap => 'Gelap',
+        NvGlassStyle.warna => 'Warna',
+        NvGlassStyle.tanpa => 'Tanpa efek',
+      };
+
+  static NvGlassStyle parse(String? s) => NvGlassStyle.values.firstWhere((v) => v.name == s, orElse: () => NvGlassStyle.reguler);
+}
+
 /// Design tokens. Colours read the current [NvPalette] (set by the app from
 /// the PC appearance or the local override); radii and fonts are fixed.
 abstract final class NV {
@@ -132,16 +152,61 @@ abstract final class NV {
   static Color get ok => text; // connected / online
   static Color get warn => muted; // connecting / waiting
 
+  /// "Gaya kaca" applied app-wide (set by AppearanceController).
+  static NvGlassStyle glassStyle = NvGlassStyle.reguler;
+
   /// Liquid glass: translucent, accent-tinted fill over a strong backdrop
   /// blur; the bright rim / specular edge is painted by `NvGlass`.
-  static Color get glass => Color.lerp(palette.surface, palette.accent, palette.dark ? 0.10 : 0.06)!.withValues(alpha: palette.dark ? 0.55 : 0.62);
+  /// Every tint is derived from the accent (wallpaper-derived when that is
+  /// on) — no fixed cream/amber surfaces. Values follow
+  /// /workspace/work/liquid-glass-spec.md §5.2 (emulation presets).
+  static Color get glass => glassFill(glassStyle);
+  static Color glassFill(NvGlassStyle st, {bool nav = false}) {
+    final d = palette.dark;
+    final a = palette.accent;
+    return switch (st) {
+      NvGlassStyle.reguler => Color.lerp(palette.surface, a, nav ? (d ? 0.16 : 0.10) : (d ? 0.10 : 0.06))!
+          .withValues(alpha: nav ? (d ? 0.50 : 0.58) : (d ? 0.55 : 0.62)),
+      // Clear: nearly no fill (spec: white α .04–.06) + a light dimming so
+      // labels keep their contrast over bright wallpapers.
+      NvGlassStyle.bening => Color.lerp(const Color(0xFF000000), a, 0.10)!.withValues(alpha: d ? 0.16 : 0.10),
+      // Dark smoked glass, neutral taken from the accent hue.
+      NvGlassStyle.gelap => Color.lerp(const Color(0xFF0B0B0D), a, 0.08)!.withValues(alpha: 0.68),
+      // Tinted: the accent tone-mapped toward the surface.
+      NvGlassStyle.warna => Color.lerp(a, palette.surface, d ? 0.45 : 0.35)!.withValues(alpha: 0.58),
+      // Reduce transparency: an opaque surface in the mode colour.
+      NvGlassStyle.tanpa => Color.lerp(palette.surface, a, 0.05)!.withValues(alpha: 0.96),
+    };
+  }
+
+  /// Backdrop blur multiplier per style (0 = no BackdropFilter).
+  static double glassSigmaScale(NvGlassStyle st) => switch (st) {
+        NvGlassStyle.reguler => 1.0,
+        NvGlassStyle.bening => 0.3,
+        NvGlassStyle.gelap => 1.15,
+        NvGlassStyle.warna => 1.0,
+        NvGlassStyle.tanpa => 0.0,
+      };
+
   static Color get glassBorder => palette.text.withValues(alpha: palette.dark ? 0.10 : 0.12);
   /// Specular rim colour (top-left highlight of a glass edge).
-  static Color get glassRim => const Color(0xFFFFFFFF).withValues(alpha: palette.dark ? 0.32 : 0.85);
+  static Color get glassRim => glassRimFor(glassStyle);
+  static Color glassRimFor(NvGlassStyle st) => switch (st) {
+        NvGlassStyle.bening => const Color(0xFFFFFFFF).withValues(alpha: palette.dark ? 0.55 : 0.95),
+        NvGlassStyle.gelap => const Color(0xFFFFFFFF).withValues(alpha: 0.30),
+        NvGlassStyle.tanpa => palette.text.withValues(alpha: 0.16),
+        _ => const Color(0xFFFFFFFF).withValues(alpha: palette.dark ? 0.32 : 0.85),
+      };
+  /// Text on glass: a faint shadow only where the glass is clear.
+  static List<Shadow> get glassTextShadows => glassStyle == NvGlassStyle.bening
+      ? [Shadow(color: const Color(0xFF000000).withValues(alpha: palette.dark ? 0.55 : 0.35), blurRadius: 3, offset: const Offset(0, 1))]
+      : const [];
   /// Tab bar glass: a touch more accent so the bar reads as tinted glass.
-  static Color get navGlass => Color.lerp(palette.surface, palette.accent, palette.dark ? 0.16 : 0.10)!.withValues(alpha: palette.dark ? 0.50 : 0.58);
+  static Color get navGlass => glassFill(glassStyle, nav: true);
   /// Clear lens on the active tab.
-  static Color get lensFill => Color.lerp(const Color(0xFFFFFFFF), palette.accent, palette.dark ? 0.35 : 0.12)!.withValues(alpha: palette.dark ? 0.10 : 0.16);
+  static Color get lensFill => glassStyle == NvGlassStyle.tanpa
+      ? Color.lerp(palette.surface, palette.accent, 0.18)!
+      : Color.lerp(const Color(0xFFFFFFFF), palette.accent, palette.dark ? 0.35 : 0.12)!.withValues(alpha: palette.dark ? 0.10 : 0.16);
   static const glassBlur = 22.0;
   /// Live glass blur strength ("Kekuatan kaca"); [NvGlass] listens to it.
   static final glassSigma = ValueNotifier<double>(glassBlur);

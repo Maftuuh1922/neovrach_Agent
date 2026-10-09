@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # wallpaper → accent (QuantizerCelebi + Score); version pinned by the Flutter SDK
+  material_color_utilities: any
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

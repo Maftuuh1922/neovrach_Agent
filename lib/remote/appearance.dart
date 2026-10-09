@@ -2,11 +2,14 @@
 // dark/light, from `GET /api/appearance` and the `appearance.changed` push)
 // unless the user set a local override on this phone. The last PC look is
 // cached so the app starts in it before the socket is up.
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/neovarch_mobile_theme.dart';
+import 'wallpaper_palette.dart';
 
 /// Accent presets. The first six match the desktop theme picker; the rest
 /// are phone extras. Every one tints the whole UI (surfaces, glass, nav,
@@ -102,6 +105,9 @@ class AppearanceController extends ChangeNotifier {
   static const _kBgTint = 'nv.bg.tint';
   static const _kBgSat = 'nv.bg.saturation';
   static const _kGlass = 'nv.glass.blur';
+  static const _kGlassStyle = 'nv.glass.style';
+  static const _kWallColors = 'nv.bg.autoColor';
+  static const _kWallSwatches = 'nv.bg.swatches';
 
   /// Resolved boot colours, read natively by MainActivity (window background
   /// before Flutter draws) so a cold start opens straight in this look.
@@ -121,6 +127,24 @@ class AppearanceController extends ChangeNotifier {
 
   /// Background image + glass strength (no palette change, no cross-fade).
   NvBackground background = const NvBackground();
+
+  /// "Gaya kaca" (stored by name: reguler, bening, gelap, warna, tanpa).
+  NvGlassStyle glassStyle = NvGlassStyle.reguler;
+
+  /// "Warna dari wallpaper": the accent follows the background image.
+  /// On by default; a manual accent pick turns it off.
+  bool wallpaperColors = true;
+  /// Suggested accents extracted from the current wallpaper (3–5).
+  List<Color> wallpaperSwatches = const [];
+
+  /// Extracts the palette of a background (swappable in tests).
+  static Future<WallpaperPalette?> Function(NvBackground b, bool dark) paletteLoader = _loadPalette;
+  static Future<WallpaperPalette?> _loadPalette(NvBackground b, bool dark) async {
+    // widget tests: no real image decoding (it would leave timers pending)
+    if (const bool.fromEnvironment('dart.vm.product') == false && Platform.environment.containsKey('FLUTTER_TEST')) return null;
+    final img = imageForSource(b.source);
+    return img == null ? null : extractWallpaperPalette(img, dark: dark);
+  }
 
   /// Called right before the palette changes, while the old frame is still
   /// on screen (the app snapshots it to cross-fade into the new look).
@@ -167,11 +191,58 @@ class AppearanceController extends ChangeNotifier {
       glass: _prefs.getDouble(_kGlass) ?? d.glass,
     );
     NV.glassSigma.value = background.glass;
+    glassStyle = NvGlassStyle.parse(_prefs.getString(_kGlassStyle));
+    NV.glassStyle = glassStyle;
+    wallpaperColors = _prefs.getBool(_kWallColors) ?? true;
+    wallpaperSwatches = [for (final h in _prefs.getStringList(_kWallSwatches) ?? const <String>[]) ?parseHexColor(h)];
   }
+
+  void setGlassStyle(NvGlassStyle s) {
+    if (s == glassStyle) return;
+    onBeforeChange?.call();
+    glassStyle = s;
+    NV.glassStyle = s;
+    _prefs.setString(_kGlassStyle, s.name);
+    revision++;
+    notifyListeners();
+  }
+
+  /// Turns "Warna dari wallpaper" on/off; on = re-extract from the current image.
+  Future<void> setWallpaperColors(bool v) async {
+    wallpaperColors = v;
+    await _prefs.setBool(_kWallColors, v);
+    notifyListeners();
+    if (v) await refreshWallpaperPalette();
+  }
+
+  /// Extracts the wallpaper palette and, with [wallpaperColors] on, uses its
+  /// seed as the accent.
+  Future<void> refreshWallpaperPalette() async {
+    if (!background.active) return;
+    final src = background.source;
+    final p = await paletteLoader(background, dark);
+    if (p == null || background.source != src) return;
+    applyWallpaperPalette(p);
+  }
+
+  /// Stores the swatches; with [wallpaperColors] on, the seed becomes the accent.
+  void applyWallpaperPalette(WallpaperPalette p) {
+    wallpaperSwatches = p.swatches;
+    _prefs.setStringList(_kWallSwatches, [for (final c in p.swatches) hexOf(c)]);
+    if (wallpaperColors) {
+      _setLocalAccent(p.seed);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// A suggested wallpaper swatch picked by the user (keeps the toggle on).
+  void pickWallpaperSwatch(Color c) => _setLocalAccent(c);
 
   /// Live background change (sliders, picker); persisted at once.
   void setBackground(NvBackground b) {
     if (b == background) return;
+    final newImage = b.source != background.source;
     background = b;
     NV.glassSigma.value = b.glass;
     _prefs
@@ -182,6 +253,15 @@ class AppearanceController extends ChangeNotifier {
       ..setDouble(_kBgSat, b.saturation)
       ..setDouble(_kGlass, b.glass);
     notifyListeners();
+    if (newImage) {
+      if (b.active) {
+        // a newly chosen wallpaper: colours from it (unless turned off)
+        refreshWallpaperPalette();
+      } else {
+        wallpaperSwatches = const [];
+        _prefs.remove(_kWallSwatches);
+      }
+    }
   }
 
   /// "Reset": flat background, default sliders and glass strength.
@@ -208,6 +288,13 @@ class AppearanceController extends ChangeNotifier {
     pcAccent = c;
     pcDark = '${a['base'] ?? 'dark'}' != 'light';
     pcOnAccent = parseHexColor('${a['on_accent'] ?? ''}');
+    // optional "Gaya kaca" from the PC theme (same names as on the phone)
+    final gs = a['glass_style'];
+    if (gs is String && followPc) {
+      glassStyle = NvGlassStyle.parse(gs);
+      NV.glassStyle = glassStyle;
+      _prefs.setString(_kGlassStyle, glassStyle.name);
+    }
     _prefs.setString(_kPcAccent, hexOf(c));
     _prefs.setString(_kPcBase, pcDark ? 'dark' : 'light');
     _apply();
@@ -226,9 +313,27 @@ class AppearanceController extends ChangeNotifier {
     _apply();
   }
 
-  /// Local override (turns following the PC off).
+  void _setLocalAccent(Color c) {
+    localAccent = c.withAlpha(255);
+    followPc = false;
+    _prefs
+      ..setBool(_kFollow, false)
+      ..setString(_kAccent, hexOf(localAccent))
+      ..setString(_kBase, localMode.name);
+    _apply();
+    notifyListeners();
+  }
+
+  /// Local override (turns following the PC off). A manual accent also
+  /// turns "Warna dari wallpaper" off.
   void setLocal({Color? accent, bool? dark, NvBrightnessMode? mode}) {
-    if (accent != null) localAccent = accent.withAlpha(255);
+    if (accent != null) {
+      localAccent = accent.withAlpha(255);
+      if (wallpaperColors && background.active) {
+        wallpaperColors = false;
+        _prefs.setBool(_kWallColors, false);
+      }
+    }
     if (mode != null) {
       localMode = mode;
     } else if (dark != null) {

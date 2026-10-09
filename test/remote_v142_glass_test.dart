@@ -20,6 +20,8 @@ import 'package:neovarch_agent/remote/remote_gateway.dart';
 import 'package:neovarch_agent/remote/remote_transcript.dart';
 import 'package:neovarch_agent/remote/saved_desktops.dart';
 import 'package:neovarch_agent/remote/ui/app_icon_panel.dart';
+import 'package:neovarch_agent/remote/ui/glass_style_picker.dart';
+import 'package:neovarch_agent/remote/wallpaper_palette.dart';
 import 'package:neovarch_agent/remote/ui/nv_glass_text.dart';
 import 'package:neovarch_agent/remote/ui/nv_widgets.dart';
 import 'package:neovarch_agent/remote/ui/profile_header_slot.dart';
@@ -69,6 +71,7 @@ void main() {
   });
   tearDown(() {
     NV.palette = NvPalette.red;
+    NV.glassStyle = NvGlassStyle.reguler;
     app.previewTab = 0;
     previewKantorSegment = kantorSegOffice;
   });
@@ -406,5 +409,138 @@ void main() {
       expect(find.byType(ImageFiltered), findsNothing);
     });
   });
-}
 
+  group('Gaya kaca', () {
+    test('per-style fill opacity and blur', () {
+      NV.palette = NvPalette.red;
+      expect(NV.glassFill(NvGlassStyle.reguler).a, closeTo(0.55, 0.01));
+      expect(NV.glassFill(NvGlassStyle.bening).a, lessThan(0.2));
+      expect(NV.glassFill(NvGlassStyle.gelap).a, closeTo(0.68, 0.01));
+      expect(NV.glassFill(NvGlassStyle.warna).a, closeTo(0.58, 0.01));
+      expect(NV.glassFill(NvGlassStyle.tanpa).a, greaterThan(0.9));
+      expect(NV.glassSigmaScale(NvGlassStyle.reguler), 1);
+      expect(NV.glassSigmaScale(NvGlassStyle.bening), lessThan(0.5));
+      expect(NV.glassSigmaScale(NvGlassStyle.gelap), greaterThan(1));
+      expect(NV.glassSigmaScale(NvGlassStyle.tanpa), 0);
+      // Warna is tinted by the accent; Gelap is darker than Reguler
+      NV.palette = NvPalette.from(const Color(0xFF2563EB), Brightness.dark);
+      final w = NV.glassFill(NvGlassStyle.warna);
+      expect(w.b, greaterThan(w.r));
+      expect(HSLColor.fromColor(NV.glassFill(NvGlassStyle.gelap)).lightness, lessThan(HSLColor.fromColor(NV.glassFill(NvGlassStyle.reguler)).lightness));
+      // Bening adds a text shadow for legibility, the others don't
+      NV.glassStyle = NvGlassStyle.bening;
+      expect(NV.glassTextShadows, isNotEmpty);
+      NV.glassStyle = NvGlassStyle.reguler;
+      expect(NV.glassTextShadows, isEmpty);
+    });
+
+    for (final st in NvGlassStyle.values) {
+      testWidgets('chat in ${st.name}: nav ${st == NvGlassStyle.tanpa ? 'has no' : 'has a'} BackdropFilter, style persisted', (tester) async {
+        final look = await pump(tester, const RemoteShell());
+        look.setGlassStyle(st);
+        await settle(tester, 4);
+        expect(prefs.getString('nv.glass.style') ?? 'reguler', st.name);
+        expect(NV.glassStyle, st);
+        final blur = find.descendant(of: navBar, matching: find.byType(BackdropFilter));
+        expect(blur, st == NvGlassStyle.tanpa ? findsNothing : findsOneWidget);
+        final fill = tester.widget<DecoratedBox>(find.descendant(of: navBar, matching: find.byKey(const ValueKey('nv-glass'))).first);
+        expect((fill.decoration as BoxDecoration).color!.a, closeTo(NV.glassFill(st, nav: true).a, st == NvGlassStyle.reguler ? 0.001 : 0.25));
+        if (st == NvGlassStyle.tanpa) {
+          expect(find.byKey(const ValueKey('nv-glass-text-solid')), findsOneWidget);
+          expect(find.byType(BackdropFilter), findsNothing);
+        }
+        // survives a restart
+        expect(AppearanceController(prefs).glassStyle, st);
+      });
+    }
+
+    testWidgets('picker: 4 effects + Tanpa efek under Aksesibilitas; tap switches app-wide', (tester) async {
+      final look = await pump(tester, const Scaffold(body: SingleChildScrollView(child: GlassStylePicker())));
+      for (final st in NvGlassStyle.values) {
+        expect(find.byKey(ValueKey('glass-preview-${st.name}')), findsOneWidget);
+      }
+      expect(find.text('AKSESIBILITAS'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('glass-style-gelap')));
+      await settle(tester, 2);
+      expect(look.glassStyle, NvGlassStyle.gelap);
+      // previews render their own style regardless of the app-wide one
+      expect(find.descendant(of: find.byKey(const ValueKey('glass-preview-tanpa')), matching: find.byType(BackdropFilter)), findsNothing);
+      expect(find.descendant(of: find.byKey(const ValueKey('glass-preview-bening')), matching: find.byType(BackdropFilter)), findsOneWidget);
+    });
+
+    testWidgets('accessibility on: Tanpa efek is recommended', (tester) async {
+      await pump(tester, const Scaffold(body: SingleChildScrollView(child: GlassStylePicker())), reduce: true);
+      expect(find.textContaining('Disarankan: Tanpa efek'), findsOneWidget);
+    });
+
+    test('PC theme sync carries the glass style', () {
+      final look = AppearanceController(prefs, systemBrightness: Brightness.dark);
+      look.applyPc({'accent': '#2563EB', 'base': 'dark', 'glass_style': 'bening'});
+      expect(look.glassStyle, NvGlassStyle.bening);
+    });
+  });
+
+  group('Warna dari wallpaper', () {
+    List<int> solid(int argb, [int n = 128 * 72]) => List<int>.filled(n, argb);
+
+    test('solid blue image -> blue accent; greyscale -> Monokrom', () async {
+      final blue = await paletteFromPixels(solid(0xFF1D4ED8));
+      final h = HSLColor.fromColor(blue.seed);
+      expect(h.hue, inInclusiveRange(200, 250));
+      expect(h.saturation, greaterThan(0.4));
+      expect(blue.monochrome, isFalse);
+      expect(blue.swatches.length, inInclusiveRange(1, 5));
+      final grey = await paletteFromPixels([for (var i = 0; i < 128 * 72; i++) 0xFF000000 | ((i % 256) * 0x010101)]);
+      expect(grey.monochrome, isTrue);
+      expect(grey.seed, monochromeAccent);
+    });
+
+    test('several colours -> 3–5 swatches; seed toned for dark vs light', () async {
+      final px = [...solid(0xFF1D4ED8, 4000), ...solid(0xFFDC2626, 3000), ...solid(0xFF16A34A, 2000), ...solid(0xFF7C3AED, 1500)];
+      final d = await paletteFromPixels(px, dark: true);
+      final l = await paletteFromPixels(px, dark: false);
+      expect(d.swatches.length, inInclusiveRange(3, 5));
+      expect(HSLColor.fromColor(d.seed).lightness, greaterThan(HSLColor.fromColor(l.seed).lightness));
+    });
+
+    test('chosen wallpaper sets the accent; manual accent turns it off; launcher icon follows', () async {
+      AppearanceController.paletteLoader = (b, dark) => paletteFromPixels(solid(0xFF1D4ED8), dark: dark);
+      addTearDown(() => AppearanceController.paletteLoader = (b, dark) async => null);
+      final look = AppearanceController(prefs, systemBrightness: Brightness.dark);
+      final icon = AppIconController(prefs, channel: (m, a) async => null);
+      await icon.setFollowAccent(true, look.accent);
+      look.addListener(() => icon.onAccent(look.accent));
+      expect(look.wallpaperColors, isTrue);
+      look.setBackground(look.background.copyWith(source: 'asset:assets/art/feat-remote.webp'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      for (var i = 0; i < 20 && look.wallpaperSwatches.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(HSLColor.fromColor(look.accent).hue, inInclusiveRange(200, 250));
+      expect(look.followPc, isFalse);
+      expect(prefs.getStringList('nv.bg.swatches'), isNotEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(icon.current, 'biru');
+      // manual accent: toggle off
+      look.setLocal(accent: const Color(0xFF16A34A));
+      expect(look.wallpaperColors, isFalse);
+      expect(prefs.getBool('nv.bg.autoColor'), isFalse);
+      // persisted
+      final again = AppearanceController(prefs, systemBrightness: Brightness.dark);
+      expect(again.wallpaperColors, isFalse);
+      expect(again.wallpaperSwatches, isNotEmpty);
+    });
+
+    testWidgets('panel: toggle + suggested swatches; tapping a swatch sets the accent', (tester) async {
+      prefs.setString('nv.bg.source', 'asset:assets/art/feat-remote.webp');
+      prefs.setStringList('nv.bg.swatches', ['#3B82F6', '#A855F7', '#22C55E']);
+      final look = await pump(tester, const Scaffold(body: SingleChildScrollView(child: WallpaperColorsPanel())));
+      expect(find.byKey(const ValueKey('wallpaper-colors')), findsOneWidget);
+      expect(find.byKey(const ValueKey('wallpaper-swatch-#A855F7')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('wallpaper-swatch-#A855F7')));
+      await settle(tester, 2);
+      expect(look.accent.toARGB32(), const Color(0xFFA855F7).toARGB32());
+      expect(look.wallpaperColors, isTrue); // a suggestion keeps it on
+    });
+  });
+}

@@ -109,6 +109,12 @@ class NvGlassTextState extends State<NvGlassText> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
+    // "Tanpa efek" (reduce transparency): plain solid text, no glass.
+    if (NV.glassStyle == NvGlassStyle.tanpa) {
+      return RepaintBoundary(
+          key: const ValueKey('nv-glass-text-solid'), child: Text(widget.text, textAlign: widget.textAlign, style: widget.style.copyWith(color: NV.text)));
+    }
+    final clear = NV.glassStyle == NvGlassStyle.bening;
     final dark = NV.palette.dark;
     final accent = NV.red;
     final base = widget.style.copyWith(color: null, foreground: null, shadows: null);
@@ -122,7 +128,7 @@ class NvGlassTextState extends State<NvGlassText> with SingleTickerProviderState
     final rimHi = Colors.white.withValues(alpha: dark ? 0.95 : 1.0);
     final rimLo = dark ? Colors.white.withValues(alpha: 0.12) : NV.text.withValues(alpha: 0.30);
     final shade = (dark ? Colors.black : NV.text).withValues(alpha: dark ? 0.30 : 0.22);
-    final halo = dark ? Colors.black.withValues(alpha: 0.38) : Colors.white.withValues(alpha: 0.75);
+    final halo = dark ? Colors.black.withValues(alpha: clear ? 0.55 : 0.38) : Colors.white.withValues(alpha: 0.75);
 
     final scaler = MediaQuery.textScalerOf(context);
     Widget layer(TextStyle s) => ExcludeSemantics(child: RichText(textAlign: widget.textAlign, textScaler: scaler, text: TextSpan(text: widget.text, style: s)));
