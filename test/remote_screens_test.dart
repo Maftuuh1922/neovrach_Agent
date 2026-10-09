@@ -670,7 +670,9 @@ void main() {
       testWidgets('48 Profil GitHub · $mode', (tester) async {
         await look();
         app.previewTab = 3;
-        await run(tester, '48_profil_github_$mode', () => const RemoteShell(), extra: [githubPublicProvider.overrideWith((ref) => gh)]);
+        // no pending approval, so the approval banner doesn't cover the settings
+        final r = _controller(prefs)..debugApprovals = [];
+        await run(tester, '48_profil_github_$mode', () => const RemoteShell(), remote: r, extra: [githubPublicProvider.overrideWith((ref) => gh)]);
       });
 
       testWidgets('49 model switcher · $mode', (tester) async {

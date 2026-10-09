@@ -139,18 +139,29 @@ class NvAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final img = socialAvatarProvider(url);
+    // The initial is always painted underneath, so the circle never shows up
+    // blank while the photo loads or when it can't be fetched (offline).
+    final initial = Text(name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+        style: TextStyle(color: NV.onRed, fontWeight: FontWeight.w600, fontSize: size * 0.4));
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: NV.red,
-        image: img == null ? null : DecorationImage(image: img, fit: BoxFit.cover, onError: (_, _) {}),
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: NV.red),
       alignment: Alignment.center,
       child: img == null
-          ? Text(name.isEmpty ? '?' : name[0].toUpperCase(), style: TextStyle(color: NV.onRed, fontWeight: FontWeight.w600, fontSize: size * 0.4))
-          : null,
+          ? initial
+          : Stack(fit: StackFit.expand, alignment: Alignment.center, children: [
+              Center(child: initial),
+              ClipOval(
+                child: Image(
+                  image: img,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  frameBuilder: (_, child, frame, sync) => sync || frame != null ? child : const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ]),
     );
   }
 }
