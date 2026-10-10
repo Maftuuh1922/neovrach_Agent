@@ -12,6 +12,7 @@ import '../data/device_tools.dart';
 import '../data/gateway_client.dart';
 import '../models/models.dart';
 import 'attachments.dart';
+import 'company_models.dart';
 import 'models_api.dart';
 import 'office_models.dart';
 import 'pairing.dart';
@@ -46,6 +47,33 @@ class RemoteController extends ChangeNotifier {
 
   /// Bumped on `vault.changed` so an open vault screen re-reads its note.
   int vaultRevision = 0;
+
+  /// Bumped on `company.changed` so the Perusahaan screen re-reads.
+  int companyRevision = 0;
+
+  /// Widget-test harness only: Perusahaan data without a gateway.
+  CompanyApi? debugCompanyApi;
+  CompanyApi? get companyApi => debugCompanyApi ?? gateway;
+
+  /// Whether the paired core answers `company.*`: null until checked (or
+  /// unknown after a network error), false on an older core (-32601), where
+  /// the Kantor tab hides its Perusahaan segment.
+  bool? companySupported;
+
+  /// Asks the PC once per connection whether it has the Perusahaan RPCs.
+  Future<void> probeCompany() async {
+    final api = companyApi;
+    if (api == null || (debugCompanyApi == null && !connected)) return;
+    try {
+      await api.companyCall('snapshot');
+      if (companyApi != api) return;
+      companySupported = true;
+    } catch (e) {
+      if (companyApi != api) return;
+      if (isCompanyUnsupported(e)) companySupported = false;
+    }
+    notifyListeners();
+  }
 
   // social: GitHub friends & profile, read through the PC (no phone login)
   SocialProfile? socialProfile;
@@ -223,6 +251,7 @@ class RemoteController extends ChangeNotifier {
     models = null;
     modelsError = null;
     modelsUnsupported = false;
+    companySupported = null;
     composer = null;
     selectedSkills.clear();
     reasoningEffort = null;
@@ -300,6 +329,10 @@ class RemoteController extends ChangeNotifier {
       case 'vault.changed':
         vaultRevision++;
         notifyListeners();
+      case 'company.changed':
+        companyRevision++;
+        companySupported = true;
+        notifyListeners();
       case 'social.changed':
         if (socialProfile != null || socialFriends != null || socialError != null) unawaited(refreshSocial());
       case 'attachment.notice':
@@ -353,7 +386,7 @@ class RemoteController extends ChangeNotifier {
 
   /// Snapshots after (re)connecting; from here on the PC pushes changes.
   Future<void> refreshAll() async {
-    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer(), refreshModels()]);
+    await Future.wait([loadSessions(), refreshStatus(), refreshBoard(), refreshOffice(), _loadAppearance(), refreshComposer(), refreshModels(), probeCompany()]);
   }
 
   // ------------------------------------------------------------- composer --
@@ -567,7 +600,7 @@ class RemoteController extends ChangeNotifier {
   Future<String?> send(String text) async {
     final t = text.trim();
     final g = gateway;
-    final ready = pendingAttachments.where((a) => a.state == AttachState.done && a.remote != null).toList();
+    final ready = pendingAttachments.where((a) => a.state == AttachState.done && (a.remote?.id ?? '').isNotEmpty).toList();
     if ((t.isEmpty && ready.isEmpty) || g == null) return null;
     if (!connected) return 'Belum terhubung ke PC.';
     if (pendingAttachments.any((a) => a.state == AttachState.uploading)) return 'Tunggu lampiran selesai diunggah.';

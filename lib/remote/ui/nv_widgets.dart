@@ -1006,7 +1006,11 @@ class NvGlassSegmented extends StatelessWidget {
                         child: AnimatedDefaultTextStyle(
                           duration: dur,
                           style: NV.monoLabel(size: 10, color: i == index ? NV.text : NV.muted).copyWith(shadows: NV.glassTextShadows),
-                          child: Text(labels[i].toUpperCase()),
+                          // five labels on a narrow phone shrink instead of clipping
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: FittedBox(fit: BoxFit.scaleDown, child: Text(labels[i].toUpperCase(), maxLines: 1)),
+                          ),
                         ),
                       ),
                     ),

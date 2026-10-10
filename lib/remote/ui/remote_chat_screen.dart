@@ -143,6 +143,24 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
     if (near != _atBottom || near) setState(() => _atBottom = near);
   }
 
+  /// The list's extent changed without a scroll and without a new transcript
+  /// state: the window/viewport resized (MIUI after the photo picker or the
+  /// keyboard), a reasoning block folded, an image in a bubble loaded. While
+  /// following, stay on the newest message instead of leaving the end of the
+  /// reply under the composer and nav bar (1.4.5 report).
+  bool _onMetrics(ScrollMetricsNotification n) {
+    if (n.depth != 0 || _settling || !_scroll.hasClients) return false;
+    final near = _near;
+    if (_follow && !near) {
+      _scrollToEnd();
+    } else if (near != _atBottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _atBottom = near);
+      });
+    }
+    return false;
+  }
+
   void _jumpToLatest() {
     _follow = true;
     _unread = 0;
@@ -434,7 +452,9 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
               ? const CenterLoader(label: 'membuka sesi di PC…')
               : msgs.isEmpty
                   ? _empty(context, r)
-                  : BackdropGroup(child: ListView.builder(
+                  : NotificationListener<ScrollMetricsNotification>(
+                    onNotification: _onMetrics,
+                    child: BackdropGroup(child: ListView.builder(
                       controller: _scroll,
                       padding: EdgeInsets.fromLTRB(16, 16, 16, 12 + _dockH),
                       itemCount: msgs.length,
@@ -468,7 +488,7 @@ class _RemoteChatScreenState extends ConsumerState<RemoteChatScreen> {
                                 ),
                         );
                       },
-                    )),
+                    ))),
             ),
             if (msgs.isNotEmpty && !r.opening)
               Positioned(

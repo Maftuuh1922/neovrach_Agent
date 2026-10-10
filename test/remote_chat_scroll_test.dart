@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:neovarch_agent/models/models.dart';
 import 'package:neovarch_agent/remote/appearance.dart';
+import 'package:neovarch_agent/remote/attachments.dart';
 import 'package:neovarch_agent/remote/remote_controller.dart';
 import 'package:neovarch_agent/remote/remote_gateway.dart' show RemoteStatus;
 import 'package:neovarch_agent/remote/remote_transcript.dart';
@@ -30,6 +31,9 @@ final _shotsDir = Platform.environment['NV_SHOTS_DIR'] ?? 'build/screenshots/cha
 
 const _para = 'Saya cek log build-nya dulu, lalu jalankan tes yang terkait. Kalau ada yang merah, '
     'saya perbaiki satu per satu dan laporkan hasilnya di sini supaya kamu bisa meninjau perubahan sebelum digabung.';
+
+final _png = Uint8List.fromList(base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
 
 List<ChatMsg> _history(int pairs) => [
       for (var i = 0; i < pairs; i++) ...[
@@ -219,5 +223,76 @@ void main() {
     expect(fabOpacity(tester), 0);
     expect(find.byKey(const ValueKey('chat-unread-badge')), findsNothing);
     expect(find.descendant(of: find.byType(GlassAgentTurn).last, matching: find.textContaining('Balasan baru kedua', findRichText: true)), findsOneWidget);
+  });
+
+  testWidgets('sending a photo then a reasoning reply: the reply ends above the composer (MIUI report)', (tester) async {
+    await phone(tester);
+    final r = controller();
+    await tester.pumpWidget(host(r));
+    await settle(tester);
+    // a picked photo grows the dock (thumbnail strip) …
+    r.pendingAttachments.add(PendingAttachment(localId: 'att0', name: 'foto.jpg', mime: 'image/jpeg', bytes: _png)
+      ..state = AttachState.done
+      ..remote = const RemoteAttachment(id: 'a1b2c3d4e5f6', name: 'foto.jpg', mime: 'image/jpeg', size: 70, kind: 'image'));
+    poke(r);
+    await settle(tester);
+    expect(atBottom(tester), isTrue);
+    // … send: the strip goes away, the turn shows the photo, the agent thinks then answers
+    r.pendingAttachments.clear();
+    r.transcript.messages.add(ChatMsg(id: 'u-img', role: 'user', content: 'ini', ts: 7000,
+        attachments: [const RemoteAttachment(id: 'a1b2c3d4e5f6', name: 'foto.jpg', mime: 'image/jpeg', size: 70, kind: 'image').toJson()]));
+    final live = ChatMsg(id: 'a-img', role: 'assistant', content: '', ts: 7001)..streaming = true;
+    r.transcript.messages.add(live);
+    poke(r);
+    await settle(tester);
+    for (var i = 0; i < 4; i++) {
+      live.reasoning += 'Menimbang gambar, langkah $i. ';
+      poke(r);
+      await settle(tester);
+    }
+    for (var i = 0; i < 4; i++) {
+      live.content += 'Bagian $i. $_para\n\n';
+      poke(r);
+      await settle(tester);
+      expect(atBottom(tester), isTrue, reason: 'chunk $i');
+    }
+    live.streaming = false;
+    poke(r);
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 1));
+    await settle(tester);
+    expect(atBottom(tester), isTrue);
+    expect(fabOpacity(tester), 0);
+    final last = tester.getRect(find.byType(GlassAgentTurn).last);
+    expect(last.bottom, lessThanOrEqualTo(tester.getRect(find.byKey(const ValueKey('chat-composer-dock'))).top));
+  });
+
+  testWidgets('the window shrinking under a following chat (MIUI after the picker) keeps the newest reply in view', (tester) async {
+    await phone(tester);
+    final r = controller();
+    await tester.pumpWidget(host(r));
+    await settle(tester);
+    expect(atBottom(tester), isTrue);
+    // no new message, no scroll: only the viewport gets shorter, then taller
+    tester.view.physicalSize = const Size(1080, 1900);
+    await settle(tester);
+    expect(atBottom(tester), isTrue, reason: 'shorter viewport');
+    expect(fabOpacity(tester), 0);
+    var last = tester.getRect(find.byType(GlassAgentTurn).last);
+    expect(last.bottom, lessThanOrEqualTo(tester.getRect(find.byKey(const ValueKey('chat-composer-dock'))).top));
+    tester.view.physicalSize = const Size(1080, 2400);
+    await settle(tester);
+    expect(atBottom(tester), isTrue, reason: 'restored viewport');
+    last = tester.getRect(find.byType(GlassAgentTurn).last);
+    expect(last.bottom, lessThanOrEqualTo(tester.getRect(find.byKey(const ValueKey('chat-composer-dock'))).top));
+
+    // a reader who scrolled up is not pulled down by a resize
+    await tester.drag(find.byType(ListView), const Offset(0, 900));
+    await settle(tester);
+    final reading = pos(tester).pixels;
+    tester.view.physicalSize = const Size(1080, 1900);
+    await settle(tester);
+    expect(pos(tester).pixels, closeTo(reading, 0.5));
+    expect(fabOpacity(tester), 1);
   });
 }
