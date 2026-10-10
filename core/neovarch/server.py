@@ -1643,6 +1643,15 @@ def build_app(gw: Gateway) -> web.Application:
         from neovarch import obsidian
         return web.json_response(obsidian.status())
 
+    async def obsidian_configure(request):
+        from neovarch import obsidian
+        body = await _json(request)
+        try:
+            res = obsidian.configure(str(body.get("path") or ""), body.get("enabled", True) is not False)
+        except obsidian.VaultError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+        return web.json_response({"ok": True, **res})
+
     async def appearance_get(_):
         return web.json_response(appearance_of(cfgmod.load_config()))
 
@@ -1865,6 +1874,8 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/events/replay", events_replay)
     r.add_get("/api/network/addresses", network_addresses)
     r.add_get("/api/memory/obsidian", obsidian_status)
+    r.add_post("/api/memory/obsidian", obsidian_configure)
+    r.add_put("/api/memory/obsidian", obsidian_configure)
 
     # ---- Obsidian vault viewer (desktop page, phone read-only) ---------------
     def _vault_or_error():
