@@ -416,3 +416,25 @@ def test_heatmap_shape():
     assert hm["start"] == "2025-10-10" and hm["end"] == "2026-10-09"
     assert hm["counts"][0] == 7 and hm["counts"][-1] == 2 and hm["streak"] == 2 and hm["github"] is None
     assert hm["total"] == 10 and hm["max"] == 7
+
+
+async def test_client_id_build_default_and_override(gh, monkeypatch):
+    """A build-time default client ID (passed by the desktop) works with no setup;
+    the manual field in Profil & Teman overrides it and clearing it falls back."""
+    monkeypatch.delenv("NEOVARCH_GITHUB_CLIENT_ID", raising=False)
+    monkeypatch.setenv("NEOVARCH_GITHUB_CLIENT_ID_DEFAULT", "Iv1.testclientid")
+    gw, c = await _client()
+    try:
+        st = await (await c.get("/api/social/status", headers=H)).json()
+        assert st["client_id_configured"] is True and st["client_id_source"] == "default"
+        assert st["settings"]["github_client_id"] == ""  # the default is not echoed into the override field
+        r = await (await c.post("/api/social/login", headers=H)).json()
+        assert r["user_code"] == "ABCD-1234"
+        saved = await (await c.put("/api/social/settings", json={"github_client_id": "Iv1.myownclient"}, headers=H)).json()
+        assert saved["github_client_id"] == "Iv1.myownclient" and saved["github_client_id_source"] == "config"
+        assert gw.social.client_id() == "Iv1.myownclient"
+        cleared = await (await c.put("/api/social/settings", json={"github_client_id": ""}, headers=H)).json()
+        assert cleared["github_client_id"] == "" and cleared["github_client_id_source"] == "default"
+        assert gw.social.client_id() == "Iv1.testclientid"
+    finally:
+        await c.close()

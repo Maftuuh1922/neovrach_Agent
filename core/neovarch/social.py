@@ -72,6 +72,27 @@ EXT_LANG = {
 PATH_KEYS = ("path", "file", "file_path", "filename", "target", "notebook_path")
 
 
+# Built-in GitHub OAuth App client ID (device flow). A client ID is public, so it
+# may live in the repo; leave empty to rely on the build-time default the desktop
+# passes in NEOVARCH_GITHUB_CLIENT_ID_DEFAULT (CI secret/variable).
+DEFAULT_GITHUB_CLIENT_ID = ""
+
+
+def resolve_client_id() -> tuple[str, str]:
+    """(client_id, source): the user's override in config.yaml wins, then the
+    NEOVARCH_GITHUB_CLIENT_ID env, then the build-time / built-in default."""
+    raw = str(cfgmod.get_path(cfgmod.load_config(), "social.github_client_id", "") or "").strip()
+    if raw:
+        return raw, "config"
+    env = str(os.environ.get("NEOVARCH_GITHUB_CLIENT_ID") or "").strip()
+    if env:
+        return env, "env"
+    baked = str(os.environ.get("NEOVARCH_GITHUB_CLIENT_ID_DEFAULT") or DEFAULT_GITHUB_CLIENT_ID or "").strip()
+    if baked:
+        return baked, "default"
+    return "", "none"
+
+
 class SocialError(Exception):
     def __init__(self, message: str, status: int = 400, code: str = "error"):
         super().__init__(message)
@@ -452,12 +473,18 @@ class Social:
     def settings(self) -> dict:
         raw = cfgmod.get_path(cfgmod.load_config(), "social", {}) or {}
         out = {**DEFAULTS, **{k: bool(raw[k]) for k in DEFAULTS if k in raw}}
-        out["github_client_id"] = self.client_id()
+        cid, source = resolve_client_id()
+        # Only the user's own override is echoed back into the editable field;
+        # a built-in default stays out of it (the field is an advanced override).
+        out["github_client_id"] = cid if source == "config" else ""
+        out["github_client_id_source"] = source
         return out
 
     def client_id(self) -> str:
-        raw = cfgmod.get_path(cfgmod.load_config(), "social.github_client_id", "") or ""
-        return str(os.environ.get("NEOVARCH_GITHUB_CLIENT_ID") or raw or "").strip()
+        return resolve_client_id()[0]
+
+    def client_id_source(self) -> str:
+        return resolve_client_id()[1]
 
     def save_settings(self, body: dict) -> dict:
         cfg = cfgmod.load_config()
@@ -902,7 +929,7 @@ class Social:
     def overview(self) -> dict:
         st = self.state()
         return {"signed_in": bool(self.token()), "login": st.get("login") if self.token() else None,
-                "client_id_configured": bool(self.client_id()), "login_flow": self.public_login(),
+                "client_id_configured": bool(self.client_id()), "client_id_source": self.client_id_source(), "login_flow": self.public_login(),
                 "token_storage": self.tokens.backend, "settings": self.settings(),
                 "rate": self.gh.rate, "backoff_until": self.gh.backoff_until or None,
                 "gist_id": st.get("gist_id"), "gist_url": st.get("gist_url"),
