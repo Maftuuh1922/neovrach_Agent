@@ -24,10 +24,8 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
-  Activity,
   AppWindow,
   Archive,
-  BarChart3,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -53,7 +51,6 @@ import {
   Settings,
   Settings2,
   SlidersHorizontal,
-  Starmap,
   Sun,
   Users,
   Wrench,
@@ -102,12 +99,10 @@ import {
   CAPABILITIES_ROUTE,
   COMMAND_CENTER_ROUTE,
   CRON_ROUTE,
-  MESSAGING_ROUTE,
   navigateToWorkspacePage,
   NEW_CHAT_ROUTE,
   PROFILES_ROUTE,
-  SETTINGS_ROUTE,
-  STARMAP_ROUTE
+  SETTINGS_ROUTE
 } from '../routes'
 import { SECTIONS } from '../settings/constants'
 import { type SettingsSearchEntry, settingsSearchTargetQuery } from '../settings/settings-search'
@@ -889,13 +884,6 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             run: go(CAPABILITIES_ROUTE)
           },
           {
-            action: 'nav.messaging',
-            icon: MessageCircle,
-            id: 'nav-messaging',
-            label: cc.nav.messaging.title,
-            run: go(MESSAGING_ROUTE)
-          },
-          {
             action: 'nav.artifacts',
             icon: Package,
             id: 'nav-artifacts',
@@ -910,15 +898,8 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             label: t.shell.statusbar.cron,
             run: go(CRON_ROUTE)
           },
-          { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
-          { action: 'nav.agents', icon: Cpu, id: 'nav-agents', label: t.agents.title, run: go(AGENTS_ROUTE) },
-          {
-            icon: Starmap,
-            id: 'nav-starmap',
-            keywords: ['star map', 'memory', 'memories', 'skills', 'graph', 'learning', 'constellation'],
-            label: t.starmap.title,
-            run: go(STARMAP_ROUTE)
-          }
+          // Profiles / Agents rows removed: the Neovarch core has one profile and
+          // no agent-profile manager, so those pages only showed stubs.
         ]
       },
       projectGroup,
@@ -960,20 +941,6 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             keywords: ['import', 'claude', 'codex', 'conversation'],
             label: t.sessionImport.action,
             run: go(SESSION_IMPORT_ROUTE)
-          },
-          {
-            icon: Activity,
-            id: 'cc-system',
-            keywords: ['command center', 'system', 'status', 'logs'],
-            label: cc.sections.system,
-            run: go(`${COMMAND_CENTER_ROUTE}?section=system`)
-          },
-          {
-            icon: BarChart3,
-            id: 'cc-usage',
-            keywords: ['command center', 'usage', 'tokens', 'cost'],
-            label: cc.sections.usage,
-            run: go(`${COMMAND_CENTER_ROUTE}?section=usage`)
           },
           {
             icon: RefreshCw,
@@ -1026,20 +993,6 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             keywords: ['appearance', 'color mode', 'brightness', 'dark', 'light', 'system'],
             label: cc.changeColorMode,
             to: 'color-mode'
-          },
-          {
-            icon: PawPrint,
-            id: 'appearance-pets',
-            keywords: ['pet', 'petdex', 'mascot', 'pets', '/pet', 'paw'],
-            label: cc.pets.title,
-            to: 'pets'
-          },
-          {
-            icon: Egg,
-            id: 'appearance-generate-pet',
-            keywords: ['pet', 'generate', 'create', 'make', 'new pet', 'mascot', 'hatch', 'ai'],
-            label: cc.generatePet.title,
-            run: () => openPetGenerate()
           }
         ]
       },

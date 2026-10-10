@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react'
 import { type ComponentType, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 
-import { codiconIcon } from '@/components/ui/codicon'
 import { Tip } from '@/components/ui/tooltip'
 import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
@@ -17,6 +16,7 @@ import {
   Info,
   Keyboard,
   KeyRound,
+  LogIn,
   QrCode,
   RefreshCw,
   Settings2,
@@ -68,23 +68,36 @@ import { resolveSettingsSubpage, settingsSubpageIcon, settingsSubpages } from '.
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
 import { vaultOwnerKey, VaultSettings } from './vault-settings'
 
-const SETTINGS_VIEWS: readonly SettingsViewId[] = [
-  ...SECTIONS.map(s => `config:${s.id}` as SettingsViewId),
-  'providers',
+// Hermes-legacy pages the Neovarch core does not back (voice/TTS, messaging
+// gateways, billing/usage analytics, credential vault, plugin manager) are left
+// out: a deep link to one falls back to Settings → Model instead of a page
+// that only errors or spins.
+export const NEOVARCH_HIDDEN_SETTINGS: ReadonlySet<string> = new Set([
+  'config:voice',
   'gateway',
-  // Legacy alias: the Connections page merged into Gateways. Kept in the enum
-  // so saved `?tab=connections` deep links still resolve (redirected below).
   'connections',
-  'keybinds',
-  'keys',
   'vault',
-  'notifications',
-  'remote',
   'billing',
-  'sessions',
-  'plugins',
-  'about'
-]
+  'plugins'
+])
+
+const SETTINGS_VIEWS: readonly SettingsViewId[] = (
+  [
+    ...SECTIONS.map(s => `config:${s.id}` as SettingsViewId),
+    'providers',
+    'gateway',
+    'connections',
+    'keybinds',
+    'keys',
+    'vault',
+    'notifications',
+    'remote',
+    'billing',
+    'sessions',
+    'plugins',
+    'about'
+  ] as SettingsViewId[]
+).filter(view => !NEOVARCH_HIDDEN_SETTINGS.has(view))
 
 // Pages that take nothing but the resolved sub-page.
 const SUBPAGE_VIEWS: Partial<Record<SettingsViewId, ComponentType<{ subpage?: string }>>> = {
@@ -162,7 +175,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
   }, [activeView, setActiveView])
   // Providers subnav (Accounts vs API keys) lives in its own param so each
   // sub-view is deep-linkable and survives a refresh.
-  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'accounts')
+  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'keys')
   const [keysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
   const [billingView] = useRouteEnumParam<BillingSubView>('bview', BILLING_VIEWS, 'overview')
   const billingState = useBillingState()
@@ -196,7 +209,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
   )
 
   const openProviderView = useCallback(
-    (view: ProviderView) => openSubView('providers', 'pview', view, 'accounts'),
+    (view: ProviderView) => openSubView('providers', 'pview', view, 'keys'),
     [openSubView]
   )
 
@@ -319,11 +332,11 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             active: activeView === 'providers',
             children: [
               {
-                active: activeView === 'providers' && providerView === 'accounts',
-                icon: codiconIcon('account'),
-                id: 'pview:accounts',
+                active: activeView === 'providers' && providerView === 'github',
+                icon: LogIn,
+                id: 'pview:github',
                 label: t.settings.nav.providerAccounts,
-                onSelect: () => openProviderView('accounts')
+                onSelect: () => openProviderView('github')
               },
               {
                 active: activeView === 'providers' && providerView === 'keys',
@@ -423,7 +436,9 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             onSelect: () => setActiveView('about')
           }
         ] as OverlayNavGroup[]
-      ).map(group => {
+      )
+        .filter(group => !NEOVARCH_HIDDEN_SETTINGS.has(group.id))
+        .map(group => {
         const view = group.id as SettingsViewId
         const children = settingsSubpages(view)
 

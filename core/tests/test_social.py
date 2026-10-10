@@ -241,9 +241,14 @@ async def test_client_id_from_env(gh, monkeypatch):
 def _seed_sessions(gw):
     rec = gw.store.create(source="desktop", cwd="/home/aku/proyek-keren")
     now = time.time()
+    # "today" but outside the 10-minute "coding now" window (stays on today's date
+    # when the test runs shortly after local midnight)
+    lt = time.localtime(now)
+    midnight = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+    today = max(now - 3600, midnight + 1)
     rec["messages"] = [
-        {"role": "user", "content": "bikin api", "ts": now - 3600},
-        {"role": "assistant", "content": None, "ts": now - 3500, "tool_calls": [
+        {"role": "user", "content": "bikin api", "ts": today},
+        {"role": "assistant", "content": None, "ts": today + 1, "tool_calls": [
             {"id": "1", "type": "function", "function": {"name": "write_file", "arguments": json.dumps({"path": "app/main.py"})}},
             {"id": "2", "type": "function", "function": {"name": "edit_file", "arguments": json.dumps({"path": "web/App.tsx"})}},
             {"id": "3", "type": "function", "function": {"name": "shell", "arguments": json.dumps({"command": "pytest"})}}]},

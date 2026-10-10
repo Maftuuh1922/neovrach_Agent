@@ -110,7 +110,7 @@ export function CapabilitiesView({
     <PanelEmpty
       action={
         <Button onClick={() => void refreshCapabilities()} size="sm">
-          {t.skills.refresh}
+          Coba lagi
         </Button>
       }
       description={skillsError instanceof Error ? skillsError.message : undefined}

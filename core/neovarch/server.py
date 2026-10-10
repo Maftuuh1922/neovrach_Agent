@@ -39,22 +39,29 @@ from aiohttp import WSMsgType, web
 
 from neovarch import PRODUCT, __version__
 from neovarch import config as cfgmod
+from neovarch import session_settings
 from neovarch.agent import Agent, default_cwd
 from neovarch.paths import neovarch_home
 from neovarch.store import Kanban, SessionStore, summarize
 from neovarch.office import Office
+from neovarch.company import CompanyError
+from neovarch.company_runtime import CompanyRuntime
+from neovarch import uploads as upmod
 from neovarch import cron as cronmod
 from neovarch import netinfo
 from neovarch.realtime import EventBus
-from neovarch import uploads as upmod
 from neovarch import models as modelsmod
 from neovarch import router9
 from neovarch.tools import ToolContext, list_skills, tool_schemas
 
 APPROVAL_TIMEOUT_S = 300
+COMPANY_RPC_CODES = {"invalid": -32602, "not_found": -32004, "conflict": -32009}
+COMPANY_HTTP = {"invalid": 400, "not_found": 404, "conflict": 409}
 
 
 def _log_unhandled(kind: str, what: str) -> None:
+    from neovarch.logs import log
+    log.info("unhandled %s %s", kind, what)
     try:
         with (neovarch_home() / "logs" / "unhandled.log").open("a", encoding="utf-8") as fh:
             fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {kind} {what}\n")
@@ -147,7 +154,8 @@ class LiveSession:
         self.task: asyncio.Task | None = None
         self.status = "idle"
         self.approvals: dict[str, dict] = {}
-        self.ctx = ToolContext(cwd=Path(rec.get("cwd") or default_cwd()), approve=self.approve)
+        self.ctx = ToolContext(cwd=Path(rec.get("cwd") or default_cwd()), approve=self.approve,
+                               office=getattr(gw, "office_status", None))
         self.agent = Agent(rec, gw.store, self.ctx, self.emit)
         self.last_text = ""
         # Desktop composers stage images with image.attach* before prompt.submit;
@@ -191,10 +199,14 @@ class LiveSession:
         async def run():
             self.status = "running"
             self.gw.broadcast_event("session.status", self.id, {"status": "running"})
+            from neovarch.logs import log
+            log.info("turn start session=%s model=%s", self.id, self.info().get("model"))
             try:
                 await self.gw.ensure_router(self.id)
                 await self.agent.run_turn(text, attachments or None)
+                log.info("turn done session=%s", self.id)
             except Exception as exc:  # report, keep the gateway alive
+                log.exception("turn failed session=%s", self.id)
                 traceback.print_exc()
                 self.emit("error", {"message": f"{type(exc).__name__}: {exc}"})
                 self.emit("message.complete", {"text": "", "error": str(exc)})
@@ -202,12 +214,25 @@ class LiveSession:
                 self.status = "idle"
                 self.gw.broadcast_event("session.status", self.id, {"status": "idle"})
                 self.gw.broadcast_event("sessions.changed", None, {})
+                queued = self.rec.get("queued") or []
+                if queued:  # a message steered in while the turn ran
+                    self.submit(queued.pop(0))
         self.task = asyncio.create_task(run())
 
     def info(self) -> dict:
+        cfg = cfgmod.load_config()
+        ep = session_settings.effective_endpoint(cfg, self.rec)
         return {"title": self.rec.get("title") or "", "running": self.status == "running",
-                **{k: v for k, v in modelsmod.agent_model(cfgmod.load_config(), "session:" + self.id).items()
-                   if k in ("model", "provider")},
+                # The model this session's next turn uses (its own pick, else the
+                # Kantor per-agent model, else the default) — never a stale name.
+                **({"model": ep["model"], "provider": ep["provider"]}
+                   if (self.rec.get("model_override") or {}).get("model") or (self.rec.get("model_override") or {}).get("provider")
+                   else {k: v for k, v in modelsmod.agent_model(cfg, "session:" + self.id).items()
+                         if k in ("model", "provider")}),
+                "reasoning_effort": session_settings.effective_effort(cfg, self.rec),
+                # What the provider request really carries ('' = omitted).
+                "reasoning_effort_wire": session_settings.wire_effort(
+                    session_settings.effective_effort(cfg, self.rec)) or "",
                 "cwd": str(self.ctx.cwd), "status": self.status,
                 # Version of the desktop session protocol this core speaks; the
                 # desktop warns "backend out of date" below its required level.
@@ -220,8 +245,12 @@ def to_ui_messages(rec: dict) -> list[dict]:
         role = m.get("role")
         if role not in ("user", "assistant", "tool"):
             continue
-        item: dict[str, Any] = {"id": f"{rec['id']}:{i}", "role": role, "content": m.get("content") or "",
-                                "text": m.get("content") or "", "timestamp": m.get("ts")}
+        # row_id: the message's durable 1-based position in the stored
+        # transcript (messages are append-only), used by the timeline and
+        # the around-window history reads.
+        item: dict[str, Any] = {"id": f"{rec['id']}:{i}", "row_id": i + 1, "role": role,
+                                "content": m.get("content") or "", "text": m.get("content") or "",
+                                "timestamp": m.get("ts")}
         if m.get("tool_calls"):
             item["tool_calls"] = m["tool_calls"]
         if role == "tool":
@@ -238,6 +267,7 @@ def to_ui_messages(rec: dict) -> list[dict]:
 class Gateway:
     def __init__(self, isolated: bool):
         self.store = SessionStore()
+        self.uploads = upmod.UploadStore()
         self.kanban = Kanban()
         self.auth = Auth(isolated)
         self.conns: set[Conn] = set()
@@ -253,6 +283,7 @@ class Gateway:
         self.catalog = modelsmod.ModelCatalog()
         self.router = router9.Router9(on_status=lambda st: self.broadcast_event("router.status", None, st),
                                       on_models=lambda _ids: self._models_stale())
+        self.company = CompanyRuntime(self)
         self.cron = cronmod.CronStore()
         self.scheduler = cronmod.Scheduler(
             self.cron, self._cron_run, lambda: self.broadcast_event("cron.changed", None, {}),
@@ -287,6 +318,10 @@ class Gateway:
     def broadcast_event(self, kind: str, sid: str | None, payload: dict) -> None:
         if kind != "office.update":
             self.office.observe(kind, sid, payload)
+            try:
+                self.company.observe(kind, sid, payload)
+            except Exception:  # cost capture must never break event delivery
+                traceback.print_exc()
         social = self.__dict__.get("social")
         if social is not None:
             social.observe(kind, sid, payload)
@@ -324,7 +359,16 @@ class Gateway:
         if not live:
             live = LiveSession(self, rec)
             self.live[rec["id"]] = live
+            self.company.bind_session(live)
         return live
+
+    def office_status(self) -> dict:
+        """Kantor snapshot plus the active model (the agent's office_status tool)."""
+        try:
+            company = self.company.summary()
+        except Exception:
+            company = None
+        return {**self.office.snapshot(), "model": self.model_info(), "company": company}
 
     def model_info(self) -> dict:
         cfg = cfgmod.load_config()
@@ -454,11 +498,14 @@ class Gateway:
         except modelsmod.ModelError as exc:
             raise RpcError(-32602, str(exc)) from None
 
-    async def model_options(self, session_id: str = "", include_unconfigured: bool = False,
-                            refresh: bool = False) -> dict:
-        """`model.options` for the composer picker: 9Router's live list first."""
+    async def model_options(self, p: dict) -> dict:
+        """Picker catalog (``model.options``): 9Router's live list first.
+        ``session_id`` makes the current row that session's own pick (else its
+        Kantor per-agent model); ``refresh`` re-probes 9Router and custom
+        endpoints and prunes dead ids."""
         from neovarch import providers
         cfg = cfgmod.load_config()
+        refresh = p.get("refresh") in (True, "1", "true")
         try:
             await router9.ensure_ready(self.router, cfg) if refresh else None
             if await self.catalog.fetch(cfg, force=refresh):
@@ -467,20 +514,38 @@ class Gateway:
         except Exception:  # noqa: BLE001 - an offline router still lists the default
             pass
         cfg = cfgmod.load_config()
-        out = providers.model_options(cfg, include_unconfigured)
-        if session_id:
-            am = modelsmod.agent_model(cfg, session_id)
-            out["model"], out["provider"] = am["model"], am["provider"]
-            for prov in out["providers"]:
-                prov["is_current"] = prov["slug"] == am["provider"]
-                if prov["is_current"] and am["model"] not in prov["models"]:
-                    prov["models"] = [am["model"], *prov["models"]]
-                    prov["total_models"] = len(prov["models"])
-        r9 = next((pv for pv in out["providers"] if pv["slug"] == router9.PROVIDER), None)
+        if refresh:
+            try:
+                pruned = await providers.refresh_models(cfg)
+            except Exception:  # an unreachable endpoint must not break the picker
+                pruned = {}
+            if pruned:
+                cfgmod.save_config(cfg)
+        sid = str(p.get("session_id") or "")
+        rec = self.live[sid].rec if sid in self.live else (self.store.find(sid) if sid else None)
+        override = (rec or {}).get("model_override") or {}
+        ep = session_settings.effective_endpoint(cfg, rec) if rec and (override.get("model") or override.get("provider")) else None
+        res = providers.model_options(cfg, bool(p.get("include_unconfigured")), ep)
+        if sid and ep is None:
+            am = modelsmod.agent_model(cfg, sid)
+            if am.get("source") == "agent":
+                res["scope"] = "session"
+                res["model"], res["provider"] = am["model"], am["provider"]
+                for prov in res["providers"]:
+                    prov["is_current"] = prov["slug"] == am["provider"]
+                    if prov["is_current"] and am["model"] not in prov["models"]:
+                        prov["models"] = [am["model"], *prov["models"]]
+                        prov["total_models"] = len(prov["models"])
+        if rec is not None:
+            res["reasoning_effort"] = session_settings.effective_effort(cfg, rec)
+            res.setdefault("scope", "session" if rec.get("model_override") else "default")
+            if rec.get("model_override"):
+                res["scope"] = "session"
+        r9 = next((pv for pv in res["providers"] if pv["slug"] == router9.PROVIDER), None)
         if r9 is not None:
             r9["free_models"] = [m for m in r9["models"] if m.split("/", 1)[0] in router9.FREE_ALIASES]
             r9["status"] = self.router.status(cfg)
-        return out
+        return res
 
     # ---- JSON-RPC ----------------------------------------------------------
     async def rpc(self, conn: Conn, method: str, p: dict) -> Any:
@@ -510,10 +575,14 @@ class Gateway:
             cwd = p.get("cwd") or str(default_cwd())
             rec = self.store.create(source=str(p.get("source") or "desktop"), cwd=cwd,
                                     model=self.model_info()["model"])
-            if str(p.get("model") or "").strip():
-                # The composer's pick for a new chat = that agent's own model.
-                self.set_agent_model(rec["id"], str(p["model"]), p.get("provider") or None, quiet=True)
-                rec["model"] = str(p["model"]).strip()
+            # The composer's pick for a new chat rides on session.create.
+            if p.get("model") or p.get("provider"):
+                rec["model_override"] = {"model": str(p.get("model") or ""), "provider": str(p.get("provider") or "")}
+            if session_settings.normalize_effort(p.get("reasoning_effort")):
+                rec["reasoning_effort"] = session_settings.normalize_effort(p.get("reasoning_effort"))
+            if rec.get("model_override") or rec.get("reasoning_effort"):
+                rec["model"] = session_settings.effective_endpoint(cfgmod.load_config(), rec)["model"]
+                self.store.save(rec)
             live = self.open(rec)
             conn.attached.add(live.id)
             self.broadcast_event("sessions.changed", None, {})
@@ -566,7 +635,8 @@ class Gateway:
             if atts:
                 res["attachments"] = [upmod.public(a) for a in atts]
                 cfg = cfgmod.load_config()
-                if any(a["kind"] == "image" for a in atts) and not upmod.supports_vision(cfg, cfgmod.resolve_endpoint(cfg)):
+                ep = session_settings.effective_endpoint(cfg, live.rec)
+                if any(a["kind"] == "image" for a in atts) and not upmod.supports_vision(cfg, ep):
                     res["notice"] = upmod.VISION_NOTICE
             return res
         if method in ("image.attach", "image.attach_bytes", "file.attach", "image.detach",
@@ -584,14 +654,8 @@ class Gateway:
             cfg = cfgmod.load_config()
             key = p.get("key")
             return {"value": cfgmod.get_path(cfg, key) if key else cfg, "config": cfg}
-        if method == "config.set" and str(p.get("key") or "") == "model" and isinstance(p.get("value"), str):
-            return self.switch_model_command(str(p["value"]), str(p.get("session_id") or ""))
         if method == "config.set":
-            cfg = cfgmod.load_config()
-            cfgmod.set_path(cfg, str(p["key"]), p.get("value"))
-            cfgmod.save_config(cfg)
-            self._config_changed(str(p["key"]))
-            return {"ok": True}
+            return self._config_set(p)
         if method == "office.snapshot":
             return self.office.snapshot()
         if method == "router.status":
@@ -624,6 +688,11 @@ class Gateway:
                 return self.set_agent_model(str(p.get("agent_id") or ""), p.get("model"), p.get("provider"))
             except modelsmod.ModelError as exc:
                 raise RpcError(-32602, str(exc)) from None
+        if method.startswith("company."):
+            try:
+                return await self.company.call(method, p)
+            except CompanyError as exc:
+                raise RpcError(COMPANY_RPC_CODES.get(exc.code, -32602), str(exc)) from None
         if method == "commands.catalog":
             return {"commands": [{"name": "new", "description": "Start a new chat"},
                                  {"name": "model", "description": "Show the configured model"}], "skills": list_skills()}
@@ -653,8 +722,7 @@ class Gateway:
                     "source": "config", "free_tier_route": False, "profile": "default",
                     "error": None if info["configured"] else "No model provider configured. Run `neovarch setup`."}
         if method == "model.options":
-            return await self.model_options(str(p.get("session_id") or ""), bool(p.get("include_unconfigured")),
-                                            bool(p.get("refresh")))
+            return await self.model_options(p)
         if method in ("model.set", "model.switch"):
             from neovarch import providers
             cfg = cfgmod.load_config()
@@ -683,8 +751,85 @@ class Gateway:
             return {"ok": True, "logged_in": False}
         if method == "plugins.manage":
             return {"plugins": [], "user_count": 0, "bundled_count": 0, "ok": True}
+        from neovarch import rpc_extra
+        res = await rpc_extra.handle(self, method, p)
+        if res is not rpc_extra.NOT_HANDLED:
+            return res
         _log_unhandled("rpc", method + " " + json.dumps(p)[:300])
         raise RpcError(-32601, f"method not implemented in the Neovarch core: {method}")
+
+    def _config_set(self, p: dict) -> dict:
+        """``config.set``: composer model/reasoning picks plus plain dotted keys."""
+        key = str(p.get("key") or "")
+        value = p.get("value")
+        sid = str(p.get("session_id") or "")
+        live = self.live.get(sid) if sid else None
+        if live is None and sid:
+            rec = self.store.find(sid)
+            live = self.open(rec) if rec else None
+        if key == "model":
+            from neovarch import providers
+            model, provider, session_only = session_settings.parse_model_value(value)
+            if not model and not provider:
+                raise RpcError(-32602, "model is required")
+            cfg = cfgmod.load_config()
+            explicit_global = any(str(x).strip() in ("--global", "-g") for x in str(value or "").split())
+            if live is not None and not session_only and not explicit_global:
+                # The composer's pick for an open chat belongs to that chat (the
+                # desktop's documented contract); Settings → Model is the door
+                # for the default. Persist only when asked to or when there is
+                # no working default yet (the first-ever pick).
+                persist = bool(cfgmod.get_path(cfg, "model.persist_switch_by_default", False))
+                session_only = not persist and bool(cfgmod.resolve_endpoint(cfg)["base_url"])
+            if not provider and live is not None:
+                provider = session_settings.effective_endpoint(cfg, live.rec)["provider"]
+            if session_only and live is not None:
+                live.rec["model_override"] = {"model": model, "provider": provider}
+                ep = session_settings.effective_endpoint(cfg, live.rec)
+            else:
+                try:
+                    res = providers.set_model(cfg, {"model": model, "provider": provider})
+                except providers.EndpointError as exc:
+                    raise RpcError(-32602, str(exc))
+                cfgmod.save_config(cfg)
+                if live is not None:
+                    live.rec.pop("model_override", None)
+                ep = cfgmod.resolve_endpoint(cfg)
+                provider = res.get("provider") or provider
+            if live is not None:
+                live.rec["model"] = ep["model"]
+                self.store.save(live.rec)
+                self.broadcast_event("session.info", live.id, live.info())
+            if not (session_only and live is not None):  # the default moved
+                self.broadcast_event("model.changed", None, {"provider": ep["provider"], "model": ep["model"]})
+            return {"ok": True, "value": ep["model"], "model": ep["model"], "provider": ep["provider"],
+                    "deferred": False, "scope": "session" if session_only and live is not None else "global"}
+        if key == "reasoning":
+            word = str(value or "").strip().lower()
+            cfg = cfgmod.load_config()
+            if word in session_settings.DISPLAY_WORDS:
+                cfgmod.set_path(cfg, "display.show_reasoning", session_settings.DISPLAY_WORDS[word])
+                cfgmod.save_config(cfg)
+                return {"ok": True, "value": word}
+            level = session_settings.normalize_effort(word)
+            if level is None:
+                raise RpcError(-32602, f"unknown reasoning level: {value}")
+            if live is not None and str(p.get("scope") or "") != "global":
+                live.rec["reasoning_effort"] = level
+                self.store.save(live.rec)
+                self.broadcast_event("session.info", live.id, live.info())
+            else:
+                cfgmod.set_path(cfg, "agent.reasoning_effort", level)
+                cfgmod.save_config(cfg)
+            return {"ok": True, "value": level}
+        if not key:
+            raise RpcError(-32602, "key is required")
+        cfg = cfgmod.load_config()
+        cfgmod.set_path(cfg, key, value)
+        session_settings.repair_config(cfg)
+        cfgmod.save_config(cfg)
+        self._config_changed(key)
+        return {"ok": True, "value": value}
 
     def _config_changed(self, key: str = "") -> None:
         if not key or key.startswith("memory"):
@@ -694,13 +839,15 @@ class Gateway:
             self.broadcast_event("appearance.changed", None, appearance_of(cfgmod.load_config()))
 
     def _resolve_attachments(self, raw: Any) -> list[dict]:
+        """``prompt.submit {attachments: [id | {id}]}`` -> stored upload metadata."""
         out: list[dict] = []
         for item in raw if isinstance(raw, list) else []:
             uid = item.get("id") if isinstance(item, dict) else item
             meta = self.uploads.get(str(uid or ""))
             if not meta:
                 raise RpcError(-32602, f"lampiran tidak ditemukan: {uid}")
-            out.append(meta)
+            if meta["id"] not in {m["id"] for m in out}:
+                out.append(meta)
         return out
 
     def _attach_rpc(self, method: str, p: dict) -> dict:
@@ -853,11 +1000,13 @@ def build_app(gw: Gateway) -> web.Application:
     async def _start_cron(_app):
         gw.scheduler.start()
         gw.social.start()
+        gw.company.start()
         if os.environ.get("NEOVARCH_9ROUTER_SUPERVISE", "1") not in ("0", "false", "off"):
             gw.router.start_supervisor()
 
     async def _stop_cron(_app):
         await gw.scheduler.stop()
+        await gw.company.stop()
         await gw.social.stop()
         await gw.router.close()
     app.on_startup.append(_start_cron)
@@ -1041,6 +1190,43 @@ def build_app(gw: Gateway) -> web.Application:
             return web.json_response({"detail": "not found"}, status=404)
         return web.json_response({"session_id": rec["id"], "messages": to_ui_messages(rec)})
 
+    def _int(q, key: str, default: int, lo: int = 0, hi: int = 10**9) -> int:
+        try:
+            return max(lo, min(int(q.get(key) or default), hi))
+        except (TypeError, ValueError):
+            return default
+
+    async def session_timeline(request):
+        """User prompts of a stored chat (the thread's jump marks), paged by row id."""
+        rec = gw.store.find(request.match_info["sid"])
+        if not rec:
+            return web.json_response({"detail": "not found"}, status=404)
+        after = _int(request.query, "after_row_id", 0)
+        limit = _int(request.query, "limit", 500, 1, 2000)
+        marks = [{"row_id": m["row_id"], "preview": " ".join(str(m["content"]).split())[:160],
+                  "timestamp": m.get("timestamp")}
+                 for m in to_ui_messages(rec) if m["role"] == "user" and m["row_id"] > after]
+        page, more = marks[:limit], len(marks) > limit
+        return web.json_response({"session_id": rec["id"], "entries": page,
+                                  "pagination": {"next_cursor": page[-1]["row_id"] if page else None,
+                                                 "has_more": more}})
+
+    async def session_messages_around(request):
+        """A bounded page of a stored chat centred on ``row_id``."""
+        rec = gw.store.find(request.match_info["sid"])
+        if not rec:
+            return web.json_response({"detail": "not found"}, status=404)
+        rows = to_ui_messages(rec)
+        limit = _int(request.query, "limit", 120, 1, 500)
+        row_id = _int(request.query, "row_id", 0)
+        idx = next((i for i, m in enumerate(rows) if m["row_id"] >= row_id), max(len(rows) - 1, 0))
+        start = max(0, min(idx - limit // 2, len(rows) - limit))
+        page = rows[start:start + limit]
+        return web.json_response({"session_id": rec["id"], "messages": page,
+                                  "pagination": {"limit": limit, "offset": start, "returned": len(page),
+                                                 "order": "oldest", "has_older": start > 0,
+                                                 "has_newer": start + len(page) < len(rows)}})
+
     async def session_delete(request):
         ok = gw.store.delete(request.match_info["sid"])
         gw.live.pop(request.match_info["sid"], None)
@@ -1077,9 +1263,10 @@ def build_app(gw: Gateway) -> web.Application:
         return web.json_response(gw.model_info())
 
     async def model_options(request):
-        inc = request.query.get("include_unconfigured") in ("1", "true")
-        return web.json_response(await gw.model_options(request.query.get("session_id") or "", inc,
-                                                        request.query.get("refresh") in ("1", "true")))
+        q = request.query
+        return web.json_response(await gw.model_options({
+            "include_unconfigured": q.get("include_unconfigured") in ("1", "true"),
+            "refresh": q.get("refresh") in ("1", "true"), "session_id": q.get("session_id") or ""}))
 
     async def model_set(request):
         from neovarch import providers
@@ -1142,7 +1329,12 @@ def build_app(gw: Gateway) -> web.Application:
             headers = providers.parse_headers(headers_raw)
         except providers.EndpointError as exc:
             return web.json_response({"ok": False, "reachable": False, "message": str(exc), "models": []})
-        return web.json_response(await providers.probe(str(body.get("base_url") or ""), key, headers, insecure))
+        res = await providers.probe(str(body.get("base_url") or ""), key, headers, insecure)
+        if existing is not None and res.get("ok") and res.get("models") and existing.get("discover_models", True):
+            # A successful probe of a saved endpoint prunes ids it no longer serves.
+            res["pruned"] = providers.apply_discovered(existing, res["models"])
+            cfgmod.save_config(cfg)
+        return web.json_response(res)
 
     async def custom_endpoint_delete(request):
         from neovarch import providers
@@ -1205,7 +1397,8 @@ def build_app(gw: Gateway) -> web.Application:
     async def skills(_):
         # The renderer expects SkillInfo[]
         return web.json_response([{"name": s["name"], "description": s["description"], "category": "neovarch",
-                                   "enabled": True, "provenance": "agent", "path": s["path"]} for s in list_skills()])
+                                   "enabled": s["enabled"], "provenance": "agent", "path": s["path"]}
+                                  for s in list_skills(include_disabled=True)])
 
     async def skill_content(request):
         name = request.query.get("name") or ""
@@ -1608,14 +1801,25 @@ def build_app(gw: Gateway) -> web.Application:
             return _bad(exc)
 
     async def agent_model_put_h(request):
+        aid = request.match_info["aid"]
+        if aid.startswith("company:") or aid == "pc":
+            # A Perusahaan desk (that agent's own model) / the PC desk (the default model).
+            return await agent_model_put(request)
         body = await _json(request)
         if "model" not in body:
             return _bad(ValueError("model wajib ada (null untuk kembali ke model global)"))
+        if isinstance(body.get("model"), str) and not body["model"].strip():
+            return web.json_response({"ok": False, "detail": "model wajib diisi (null untuk kembali ke model global)"},
+                                     status=422)
+        sid = aid.split(":", 1)[1] if aid.startswith("session:") else ""
+        if sid and not (sid in gw.live or gw.store.find(sid)):
+            return web.json_response({"ok": False, "detail": f"agen tidak ditemukan: {aid}"}, status=404)
         try:
-            return web.json_response(gw.set_agent_model(request.match_info["aid"], body.get("model"),
-                                                        body.get("provider")))
+            res = gw.set_agent_model(aid, body.get("model"), body.get("provider"))
         except modelsmod.ModelError as exc:
             return _bad(exc)
+        # A chat desk's pick is that agent's only (never the PC default).
+        return web.json_response({**res, "scope": "session" if res.get("source") == "agent" else "default"})
 
     async def agent_model_delete_h(request):
         try:
@@ -1638,6 +1842,24 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_delete("/api/agents/{aid}/model", agent_model_delete_h)
 
     r.add_get("/api/office", office_get)
+
+    async def company_get(_):
+        return web.json_response(await gw.company.call("company.snapshot", {}))
+
+    async def company_post(request):
+        try:
+            body = await request.json() if request.can_read_body else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return web.json_response({"error": "invalid JSON"}, status=400)
+        try:
+            return web.json_response(await gw.company.call("company." + request.match_info["method"],
+                                                           body if isinstance(body, dict) else {}))
+        except CompanyError as exc:
+            return web.json_response({"error": str(exc), "code": exc.code, **exc.data},
+                                     status=COMPANY_HTTP.get(exc.code, 400))
+
+    r.add_get("/api/company", company_get)
+    r.add_post("/api/company/{method:[a-z_.]+}", company_post)
     r.add_get("/api/office/events", office_events)
     r.add_get("/api/events", events_sse)
     r.add_get("/api/events/replay", events_replay)
@@ -1697,6 +1919,86 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/obsidian/note", vault_note)
     r.add_get("/api/obsidian/graph", vault_graph)
     r.add_get("/api/obsidian/search", vault_search)
+    async def account_get(_):
+        from neovarch import account
+        return web.json_response(await account.status())
+
+    async def account_connect(request):
+        from neovarch import account
+        res = await account.connect(str((await _json(request)).get("token") or ""))
+        return web.json_response(res)
+
+    async def account_disconnect(_):
+        from neovarch import account
+        return web.json_response(account.disconnect())
+
+    async def logs_get(request):
+        from neovarch import logs as logmod
+        return web.json_response(logmod.read(request.query))
+
+    from neovarch import skills_admin
+
+    async def skills_toggle(request):
+        body = await _json(request)
+        return web.json_response(skills_admin.set_enabled(str(body.get("name") or ""), bool(body.get("enabled"))))
+
+    async def learning_node_get(request):
+        return web.json_response(skills_admin.node(request.query.get("id") or ""))
+
+    async def learning_node_put(request):
+        body = await _json(request)
+        return web.json_response(skills_admin.edit(str(body.get("id") or ""), str(body.get("content") or "")))
+
+    async def learning_node_delete(request):
+        return web.json_response(skills_admin.archive(str((await _json(request)).get("id") or "")))
+
+    async def memory_get(_):
+        return web.json_response(skills_admin.memory_status())
+
+    async def memory_reset(request):
+        return web.json_response(skills_admin.memory_reset(str((await _json(request)).get("target") or "all")))
+
+    async def agent_model_put(request):
+        """Kantor popover: switch one desk's model. A chat desk
+        (``session:<id>``) gets a chat-only pick; any other desk (the PC
+        itself) changes the default model."""
+        body = await _json(request)
+        model, provider = str(body.get("model") or "").strip(), str(body.get("provider") or "").strip()
+        if not model:
+            return web.json_response({"ok": False, "detail": "model wajib diisi"}, status=422)
+        aid = request.match_info["aid"]
+        if aid.startswith("company:"):
+            # A Perusahaan desk: the pick belongs to that agent (never the PC default).
+            try:
+                a = await gw.company.call("company.agent.save", {"id": int(aid.split(":", 1)[1] or 0),
+                                                                 "model": model, "provider": provider})
+            except (CompanyError, ValueError) as exc:
+                code = getattr(exc, "code", "invalid")
+                return web.json_response({"ok": False, "detail": str(exc)}, status=404 if code == "not_found" else 422)
+            gw.office.schedule()
+            return web.json_response({"ok": True, "model": a["model"], "provider": a.get("provider") or "",
+                                      "scope": "agent", "agent_id": aid})
+        sid = aid.split(":", 1)[1] if aid.startswith("session:") else ""
+        if sid and not (sid in gw.live or gw.store.find(sid)):
+            return web.json_response({"ok": False, "detail": f"agen tidak ditemukan: {aid}"}, status=404)
+        value = model + (f" --provider {provider}" if provider else "") + (" --session" if sid else " --global")
+        try:
+            res = gw._config_set({"session_id": sid, "key": "model", "value": value})
+        except RpcError as exc:
+            return web.json_response({"ok": False, "detail": exc.message}, status=422)
+        gw.office.schedule()
+        return web.json_response({**res, "agent_id": aid})
+
+    r.add_put("/api/skills/toggle", skills_toggle)
+    r.add_get("/api/learning/node", learning_node_get)
+    r.add_put("/api/learning/node", learning_node_put)
+    r.add_delete("/api/learning/node", learning_node_delete)
+    r.add_get("/api/memory", memory_get)
+    r.add_post("/api/memory/reset", memory_reset)
+    r.add_get("/api/logs", logs_get)
+    r.add_get("/api/account/github", account_get)
+    r.add_post("/api/account/github", account_connect)
+    r.add_delete("/api/account/github", account_disconnect)
     r.add_get("/api/appearance", appearance_get)
     r.add_put("/api/appearance", appearance_put)
     r.add_post("/api/appearance", appearance_put)
@@ -1708,6 +2010,8 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/profiles/sessions", sessions_list)
     r.add_get("/api/sessions/{sid}", session_get)
     r.add_get("/api/sessions/{sid}/messages", session_messages)
+    r.add_get("/api/sessions/{sid}/messages/around", session_messages_around)
+    r.add_get("/api/sessions/{sid}/timeline", session_timeline)
     r.add_delete("/api/sessions/{sid}", session_delete)
     r.add_patch("/api/sessions/{sid}", session_patch)
     r.add_get("/api/config", config_get)
@@ -1791,6 +2095,7 @@ def build_app(gw: Gateway) -> web.Application:
     r.add_get("/api/fs/default", fs_default)
     r.add_get("/api/fs/default-cwd", fs_default)
     # Last: quiet answers for every other route the desktop calls (never 404/500).
+    # Chat attachments (/api/uploads) are registered above, before this fallback.
     from neovarch import compat
     compat.install(r, _log_unhandled)
     return app
@@ -1899,6 +2204,8 @@ def serve(host: str, port: int, *, isolated: bool = False) -> int:
             raise SystemExit(98)
         sockets = getattr(site._server, "sockets", None) or []
         gw.port = sockets[0].getsockname()[1] if sockets else port
+        from neovarch import logs as logmod
+        logmod.setup().info("gateway listening on %s:%s (version %s)", host, gw.port, __version__)
         # The desktop waits for this exact sentinel (legacy wire name, kept for compatibility).
         print(f"HERMES_BACKEND_READY port={gw.port}", flush=True)
         print(f"Neovarch gateway listening on {host}:{gw.port} (home {neovarch_home()})", flush=True)

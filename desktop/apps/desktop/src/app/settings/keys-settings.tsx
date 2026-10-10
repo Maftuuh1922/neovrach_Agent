@@ -7,7 +7,7 @@ import { $settingsRequestProfile } from '@/store/settings-scope'
 import { CredentialKeyCard, credentialPlaceholder, credentialRowLabel } from './credential-key-ui'
 import { useEnvCredentials } from './env-credentials'
 import { asText } from './helpers'
-import { SettingsContent, SettingsSkeleton } from './primitives'
+import { SettingsContent, SettingsLoadError, SettingsSkeleton } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
@@ -39,7 +39,7 @@ export function KeysSettings({ view }: KeysSettingsProps) {
   // path — request-shaped so the API helpers never see a primary-targeting
   // null).
   const scopeProfile = useStore($settingsRequestProfile)
-  const { rowProps, vars } = useEnvCredentials(scopeProfile)
+  const { loadError, reload, rowProps, vars } = useEnvCredentials(scopeProfile)
   const [openKey, setOpenKey] = useState<null | string>(null)
 
   useEffect(() => {
@@ -76,6 +76,10 @@ export function KeysSettings({ view }: KeysSettingsProps) {
     param: 'key',
     ready: deepLinkReady
   })
+
+  if (!vars && loadError) {
+    return <SettingsLoadError error={loadError} onRetry={reload} title="Kunci API belum bisa dimuat" />
+  }
 
   if (!vars) {
     return <SettingsSkeleton sections={[{ rows: 5 }]} />

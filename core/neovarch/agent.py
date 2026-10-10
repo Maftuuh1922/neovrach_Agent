@@ -9,15 +9,84 @@ from pathlib import Path
 from typing import Any, Callable
 
 from neovarch import config as cfgmod
+from neovarch import session_settings
 from neovarch.llm import Completion, LLMError, stream_chat
 from neovarch.store import SessionStore
 from neovarch.tools import ToolContext, list_skills, run_tool, tool_schemas
+from neovarch.logs import log as _log
 
 EmitFn = Callable[[str, dict[str, Any]], Any]
 
 
-def system_prompt(cfg: dict, cwd: Path, query: str = "") -> str:
-    parts = [cfgmod.soul_text().strip()]
+# What the agent knows about the app it lives in. Without it a question like
+# "can you see the Kantor?" sent the agent grepping app.asar and site-packages.
+APP_KNOWLEDGE = """# About the Neovarch app you are running in
+You are the agent inside Neovarch Agent: a desktop app (Windows/Linux) plus a phone remote app. The desktop
+talks to this core (the `neovarch serve` gateway). Its pages, from the left rail:
+- Obrolan / Sesi: chats with you; the session list has search, pinned chats and grouping.
+- Kantor (Office): a 3D office where each running or recent chat and each Kanban task is an agent "employee"
+  at a desk (status working / waiting-approval / idle, current task, model), with a live activity feed and a garden.
+- Kanban: the task board (todo, ready, running, blocked, done) shared with the Kantor.
+- Catatan / Obsidian: the user's Obsidian vault (tree, notes, backlinks, graph); it is also your long-term memory.
+- Skill: installed skills (folders with SKILL.md under ~/.neovarch/skills).
+- Artefak, Jadwal (cron jobs), Pasangkan HP (pair the phone remote by QR), Pengaturan (model, providers,
+  custom OpenAI-compatible endpoints, appearance, security/approvals, memory).
+How to answer questions about the app:
+- Answer from this description directly. Call `office_status` to see the live Kantor (agents, status, tasks,
+  active model); never search the filesystem, the app bundle (app.asar) or Python site-packages to learn
+  what the app has.
+- Use tools only when the request needs them. For exploration, stop and answer after at most 5 tool calls
+  unless the task clearly needs more; prefer narrow commands with a short timeout over broad greps."""
+
+
+def persona_prompt(session_id: str | None, office: dict | None) -> str:
+    """Who this chat is in the Kantor: the desk the session sits at.
+
+    Every chat is a pegawai in the Kantor (name derived from the session id).
+    Without this the agent answered "lagi apa kamu?" with a generic
+    "Saya Neovarch Agent... standby" instead of its own desk and task."""
+    if not session_id:
+        return ""
+    from neovarch.office import staff_name
+    agents = (office or {}).get("agents") or []
+    desk = next((a for a in agents if isinstance(a, dict) and
+                 (a.get("session_id") == session_id or a.get("id") == f"session:{session_id}")), None)
+    name = str((desk or {}).get("name") or staff_name(session_id))
+    role = str((desk or {}).get("role") or "Agen")
+    status_word = {"working": "sedang bekerja (giliran ini)", "waiting-approval": "menunggu persetujuan pengguna",
+                   "idle": "santai di meja"}.get(str((desk or {}).get("status") or "working"), "di meja")
+    lines = [f"# Identitasmu di Kantor\nKamu adalah **{name}**, pegawai Kantor Neovarch ({role}). "
+             f"Obrolan ini adalah mejamu; di Kantor kamu tampil sebagai {name}. Saat ditanya siapa kamu, sedang apa, "
+             f"atau \"lagi apa\", jawab sebagai {name} secara natural dan pakai data nyata di bawah ini "
+             "(jangan jawab generik seperti \"Saya Neovarch Agent, standby\")."]
+    if desk:
+        if desk.get("title"):
+            lines.append(f"- Judul obrolan: {desk['title']}")
+        lines.append(f"- Status: {status_word}")
+        if desk.get("current_task"):
+            lines.append(f"- Tugas saat ini: {desk['current_task']}")
+        if desk.get("current_tool"):
+            lines.append(f"- Tool yang sedang dipakai: {desk['current_tool']}")
+        if desk.get("model"):
+            lines.append(f"- Model: {desk['model']}")
+        if desk.get("last_activity_text"):
+            lines.append(f"- Aktivitas terakhir: {desk['last_activity_text']}")
+    counts = (office or {}).get("counts") or {}
+    others = [a for a in agents if isinstance(a, dict) and a is not desk][:6]
+    if counts or others:
+        lines.append(f"- Kantor sekarang: {counts.get('working', 0)} bekerja, "
+                     f"{counts.get('waiting-approval', 0)} menunggu, {counts.get('idle', 0)} santai")
+        for a in others:
+            task = f" — {a['current_task']}" if a.get("current_task") else ""
+            lines.append(f"  - rekan {a.get('name')}: {a.get('status')}{task}")
+    lines.append("Untuk detail terbaru panggil `office_status`.")
+    return "\n".join(lines)
+
+
+def system_prompt(cfg: dict, cwd: Path, query: str = "", persona: str = "") -> str:
+    parts = [cfgmod.soul_text().strip(), APP_KNOWLEDGE]
+    if persona:
+        parts.append(persona)
     extra = str(cfgmod.get_path(cfg, "agent.system_prompt", "") or "").strip()
     if extra:
         parts.append(extra)
@@ -80,7 +149,14 @@ class Agent:
         from neovarch import uploads
         cfg = cfgmod.load_config()
         from neovarch import models as modelsmod
-        endpoint = modelsmod.endpoint_for(cfg, "session:" + str(self.rec.get("id") or ""))
+        override = self.rec.get("model_override") or {}
+        if override.get("model") or override.get("provider"):
+            # The chat's own pick (composer session pick / Perusahaan agent model) wins.
+            endpoint = session_settings.effective_endpoint(cfg, self.rec)
+        else:
+            endpoint = modelsmod.endpoint_for(cfg, "session:" + str(self.rec.get("id") or ""))
+        self._effort = session_settings.wire_effort(session_settings.effective_effort(cfg, self.rec))
+        self._skipped_notice = False
         vision = uploads.supports_vision(cfg, endpoint)
         self.ctx.approvals_mode = str(cfgmod.get_path(cfg, "approvals.mode", "ask") or "ask")
         max_turns = int(cfgmod.get_path(cfg, "agent.max_turns", 30) or 30)
@@ -95,7 +171,7 @@ class Agent:
         if not self.rec.get("title"):
             first = user_text.strip().splitlines()[0][:60] if user_text.strip() else ""
             if not first and attachments:
-                first = "Lampiran: " + ", ".join(a.get("name", "") for a in attachments)[:50]
+                first = ("Lampiran: " + ", ".join(a.get("name", "") for a in attachments))[:60]
             self.rec["title"] = first
             if self.rec["title"]:
                 self.emit("session.title", {"title": self.rec["title"]})
@@ -107,8 +183,27 @@ class Agent:
         final_text = ""
         usage: dict[str, Any] = {}
         error = None
-        sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text)
-        pinned = modelsmod.agent_model(cfg, "session:" + str(self.rec.get("id") or "x"))["source"] == "agent"
+        persona = ""
+        company_persona = getattr(self.ctx, "persona", None)
+        if company_persona is not None:  # a Perusahaan agent: name, title, ticket, goal ancestry
+            try:
+                persona = company_persona()
+            except Exception:  # a persona glitch must never break a turn
+                persona = ""
+        if not persona:
+            try:
+                persona = persona_prompt(self.rec.get("id"), self.ctx.office() if self.ctx.office else None)
+            except Exception:  # the Kantor must never break a turn
+                persona = persona_prompt(self.rec.get("id"), None)
+        if "@kantor" in user_text.lower() and self.ctx.office is not None:
+            try:  # `@kantor` attaches the live Kantor state to this turn
+                from neovarch.tools import office_summary
+                persona += "\n\n# Kantor saat ini (diminta lewat @kantor)\n" + office_summary(self.ctx.office())
+            except Exception:
+                pass
+        sys_prompt = system_prompt(cfg, self.ctx.cwd, user_text, persona)
+        pinned = bool(override.get("model") or override.get("provider")) or \
+            modelsmod.agent_model(cfg, "session:" + str(self.rec.get("id") or "x"))["source"] == "agent"
         # The endpoint this turn really uses: a free 9Router model that is cooling down
         # after a rate limit is skipped up front, unless the agent pinned it.
         active = dict(endpoint)
@@ -149,6 +244,7 @@ class Agent:
                     t0 = time.monotonic()
                     result = await run_tool(call.name, args, self.ctx) if not self.interrupted else "interrupted"
                     dur = time.monotonic() - t0
+                    _log.info("tool %s session=%s %.2fs", call.name, self.rec.get("id"), dur)
                     messages.append({"role": "tool", "tool_call_id": call.id, "name": call.name,
                                      "content": result, "ts": time.time()})
                     self.store.save(self.rec)
@@ -161,6 +257,7 @@ class Agent:
         except LLMError as exc:
             error = _explain(str(exc), active, self.tried)
         if error and error != "interrupted":
+            _log.warning("turn error session=%s model=%s: %s", self.rec.get("id"), endpoint.get("model"), error)
             self.emit("error", {"message": error})
         elapsed = max(time.monotonic() - started, 1e-6)
         out_tokens = int(usage.get("completion_tokens") or 0)
@@ -194,9 +291,10 @@ class Agent:
 
         return await stream_chat(
             base_url=endpoint["base_url"], api_key=endpoint["api_key"], model=endpoint["model"],
-            messages=wire, tools=tool_schemas(), on_text=on_text, on_reasoning=on_reasoning,
+            messages=wire, tools=tool_schemas(self.ctx), on_text=on_text, on_reasoning=on_reasoning,
             extra_headers=endpoint.get("headers") or None,
             verify_ssl=endpoint.get("verify_ssl", True),
+            reasoning_effort=getattr(self, "_effort", None),
         )
 
     async def _complete(self, active: dict, wire: list[dict], pinned: bool) -> Completion:
@@ -209,6 +307,7 @@ class Agent:
         try:
             comp = await self._stream(active, wire, started)
             router9.clear_limited(active["model"])
+            self._note_reasoning_skipped(comp)
             return comp
         except LLMError as exc:
             first = exc
@@ -241,11 +340,20 @@ class Agent:
                 self.tried.append(cand)
                 continue
             router9.clear_limited(cand)
+            self._note_reasoning_skipped(comp)
             if not announced[0]:  # tool calls only, no text streamed
                 announce()
             active["model"] = cand
             return comp
         raise last
+
+    def _note_reasoning_skipped(self, comp: Completion) -> None:
+        if getattr(comp, "reasoning_skipped", False):
+            self._effort = None  # the model rejected it; do not resend this turn
+            if not getattr(self, "_skipped_notice", False):
+                self._skipped_notice = True
+                self.emit("status", {"kind": "notice", "text": "Model ini tidak mendukung tingkat penalaran; "
+                                                                "dikirim tanpa pengaturan itu."})
 
     def _announce_fallback(self, limited: str, used: str, reason: str, status: int | None) -> None:
         from neovarch import router9

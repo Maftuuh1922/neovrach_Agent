@@ -2,21 +2,22 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { buildRendererLoadErrorPage, loadRendererLoadErrorPage } from './renderer-load-error-page'
+import { buildRendererLoadErrorPage, loadRendererLoadErrorPage, neovarchRepairCommand } from './renderer-load-error-page'
 
 test('error page names the failure and carries a Reload button', () => {
   const html = buildRendererLoadErrorPage({
     errorCode: -6,
     errorDescription: 'The desktop renderer bundle is incomplete after the last update (2 missing file(s)).',
     missingAssets: ['assets/app-C0ffee.js', 'assets/shiki-block-DeadBeef.js'],
-    repairHint: 'hermes desktop --force-build'
+    repairHint: neovarchRepairCommand('linux')
   })
 
   assert.match(html, /incomplete after the last update \(2 missing file\(s\)\)/)
   assert.match(html, /-6/)
   assert.match(html, /assets\/app-C0ffee\.js/)
   assert.match(html, /assets\/shiki-block-DeadBeef\.js/)
-  assert.match(html, /hermes desktop --force-build/)
+  assert.match(html, /scripts\/install\.sh \| sh/)
+  assert.doesNotMatch(html, /hermes/i)
   assert.match(html, /location\.reload\(\)/)
 })
 
@@ -83,4 +84,10 @@ test('loadRendererLoadErrorPage loads a data: URL and swallows loadURL rejection
   }
 
   await assert.doesNotReject(() => loadRendererLoadErrorPage(rejectingWin))
+})
+
+test('the repair command is Neovarch\'s installer on every platform, never a Hermes command', () => {
+  assert.match(neovarchRepairCommand('linux'), /neovrach_Agent\/main\/scripts\/install\.sh/)
+  assert.match(neovarchRepairCommand('win32'), /install\.ps1 \| iex/)
+  assert.doesNotMatch(buildRendererLoadErrorPage({ errorDescription: 'x' }), /hermes/i)
 })

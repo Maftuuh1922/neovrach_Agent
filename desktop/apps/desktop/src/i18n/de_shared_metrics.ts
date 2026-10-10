@@ -13,7 +13,7 @@ export const deSharedMetrics = {
   collectedReliability: 'App-Zustand: Abstürze, Start- und Antwortgeschwindigkeit, Updates, Messaging-Verbindungen',
   collectedUsage:
     'Agentenqualität: verfehlte Bearbeitungen, fehlerhafte Tool-Aufrufe, festgefahrene Schleifen, Kosten pro Aufgabe',
-  collectedMachine: 'Gerät: Betriebssystem, RAM-Bereich, GPU-Typ, Hermes-Version, Nutzung lokaler Modelle',
+  collectedMachine: 'Gerät: Betriebssystem, RAM-Bereich, GPU-Typ, Neovarch-Version, Nutzung lokaler Modelle',
   sending:
     'Statistiken bleiben auf diesem Computer, sofern Sie nicht „Teilen“ wählen. Geteilte Statistiken gehen einmal täglich mit einer zufälligen ID für dieses Profil an Nous. Abgesehen von einem einmaligen Hinweis, dass Neovarch installiert wurde (erst nach Ihrer Zustimmung gezählt), werden Statistiken von vor Ihrer Zustimmung nie gesendet. Sie können das jederzeit in den Einstellungen ändern.',
   readDocs: 'Alle Details lesen',
@@ -27,7 +27,7 @@ export const deSharedMetrics = {
   sendLabel: 'Nutzungsstatistiken mit Nous teilen',
   sendDesc:
     'Sendet Statistiken einmal täglich mit einer zufälligen ID für dieses Profil an Nous. Abgesehen vom einmaligen Installationshinweis werden Statistiken von vor Ihrer Zustimmung nie gesendet. Erfordert aktive Erfassung.',
-  unavailable: 'Aktualisieren Sie das Hermes-Backend, um diese Einstellung zu ändern.',
+  unavailable: 'Aktualisieren Sie das Neovarch-Backend, um diese Einstellung zu ändern.',
   stripBody: 'Nur Zählwerte. Niemals Ihre Nachrichten oder Dateien.',
   stripReaskBody:
     'Wir fragen noch einmal: Eine frühere Version konnte „Nein danke“ speichern, bevor Sie diese Frage gesehen haben.',

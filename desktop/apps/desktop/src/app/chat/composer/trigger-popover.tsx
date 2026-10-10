@@ -168,7 +168,7 @@ export function ComposerTriggerPopover({
             <span>{copy.lookupLoading}</span>
           </div>
         ) : (
-          <CompletionDrawerEmpty title={copy.lookupNoMatches}>
+          <CompletionDrawerEmpty title={kind === '@' ? 'Tidak ada hasil' : copy.lookupNoMatches}>
             {kind === '@' ? (
               <>
                 {copy.lookupTry} <span className="font-mono text-foreground/80">@file:</span> {copy.lookupOr}{' '}

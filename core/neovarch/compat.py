@@ -27,27 +27,6 @@ def _na(**extra) -> dict:
     return {"ok": False, "available": False, "message": NOT_AVAILABLE, "detail": NOT_AVAILABLE, **extra}
 
 
-def _memory_files() -> int:
-    mem = neovarch_home() / "memory"
-    return sum(1 for _ in mem.glob("*.md")) if mem.exists() else 0
-
-
-def _logs(request: web.Request) -> dict:
-    logs = neovarch_home() / "logs"
-    files = sorted(logs.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True) if logs.exists() else []
-    if not files:
-        return {"file": "", "lines": []}
-    try:
-        n = max(1, min(int(request.query.get("lines") or 200), 2000))
-    except ValueError:
-        n = 200
-    lines = files[0].read_text(encoding="utf-8", errors="replace").splitlines()[-n:]
-    q = (request.query.get("search") or "").lower()
-    if q:
-        lines = [ln for ln in lines if q in ln.lower()]
-    return {"file": str(files[0]), "lines": lines}
-
-
 def _moa() -> dict:
     slot = {"provider": "", "model": "", "enabled": False}
     preset = {"aggregator": slot, "aggregator_temperature": 0.7, "degraded_reference_policy": "loud",
@@ -103,17 +82,14 @@ GETS: dict[str, Any] = {
     "/api/git/gh-auth": {"available": False, "authenticated": False},
     "/api/hermes/update/check": _update_check,
     "/api/learning/graph": {"nodes": [], "edges": [], "clusters": [], "memory": [], "stats": {}},
-    "/api/learning/node": {"id": "", "title": "", "kind": "", "body": "", "links": []},
     "/api/local-models/hardware": {"uma": False, "vram_total_bytes": 0, "vram_usable_bytes": 0, "ram_total_bytes": 0,
                                    "ram_available_bytes": 0, "vram_label": "", "gpu_name": None,
                                    "gpu_util_percent": None, "vram_used_bytes": None},
     "/api/local-models/catalog": {"models": [], "entries": []},
     "/api/local-models/search": {"results": [], "models": []},
     "/api/local-models/search/files": {"files": []},
-    "/api/logs": _logs,
     "/api/mcp/servers": {"servers": []},
     "/api/mcp/catalog": {"entries": [], "diagnostics": []},
-    "/api/memory": lambda r: {"active": "builtin", "providers": [], "builtin_files": {"memory": _memory_files(), "user": 0}},
     "/api/messaging/platforms": {"platforms": []},
     "/api/model/moa": lambda r: _moa(),
     "/api/pairing": {"approved": [], "pending": []},

@@ -7,15 +7,15 @@ export const deBoot = {
     desktopBootFailedWithMessage: message => `Desktop-Start fehlgeschlagen: ${message}`,
     steps: {
       connectingGateway: 'Live-Desktop-Gateway wird verbunden',
-      loadingSettings: 'Hermes-Einstellungen werden geladen',
+      loadingSettings: 'Neovarch-Einstellungen werden geladen',
       loadingSessions: 'Letzte Sessions werden geladen',
-      retryingRemoteBackend: 'Wird mit dem Remote-Hermes-Backend neu verbunden…',
+      retryingRemoteBackend: 'Wird mit dem Remote-Neovarch-Backend neu verbunden…',
       startingDesktopConnection: 'Desktop-Verbindung wird gestartet',
       startingHermesDesktop: 'Neovarch Agent wird gestartet…'
     },
     errors: {
-      backgroundExited: 'Der Hermes-Hintergrundprozess wurde beendet.',
-      backgroundExitedDuringStartup: 'Der Hermes-Hintergrundprozess wurde während des Starts beendet.',
+      backgroundExited: 'Der Neovarch-Hintergrundprozess wurde beendet.',
+      backgroundExitedDuringStartup: 'Der Neovarch-Hintergrundprozess wurde während des Starts beendet.',
       backendStopped: 'Backend gestoppt',
       restartHermes: 'Neovarch neu starten',
       openLogs: 'Logs öffnen',
@@ -38,7 +38,7 @@ export const deBoot = {
       diskFull: 'Die Festplatte ist voll, deshalb konnte Neovarch nicht starten.',
       portInUse: 'Ein anderes Programm verwendet den Netzwerkport, den Neovarch braucht.',
       installMissing:
-        'Ein Teil der Hermes-Installation fehlt. Wählen Sie „Installation reparieren“, um sie wiederherzustellen.'
+        'Ein Teil der Neovarch-Installation fehlt. Wählen Sie „Installation reparieren“, um sie wiederherzustellen.'
     },
     failure: {
       title: 'Neovarch konnte nicht gestartet werden',
@@ -85,11 +85,11 @@ export const deBoot = {
       description:
         'Neovarch startet noch nicht, damit es keine Dateien lädt, die ein Update womöglich noch ändert. Sobald die Sperre endet, startet Neovarch von selbst.',
       heldByProcess: pid =>
-        `Das Update (Prozess ${pid}) wurde beendet, aber ein von ihm gestarteter Prozess hält die Hermes-Installation noch fest.`,
+        `Das Update (Prozess ${pid}) wurde beendet, aber ein von ihm gestarteter Prozess hält die Neovarch-Installation noch fest.`,
       heldUnknown:
-        'Ein Update wurde beendet, aber ein von ihm gestarteter Prozess hält die Hermes-Installation noch fest.',
+        'Ein Update wurde beendet, aber ein von ihm gestarteter Prozess hält die Neovarch-Installation noch fest.',
       unverified:
-        'Der Update-Helfer konnte gerade nicht prüfen, wem die Hermes-Installation gehört. Neovarch prüft weiter.',
+        'Der Update-Helfer konnte gerade nicht prüfen, wem die Neovarch-Installation gehört. Neovarch prüft weiter.',
       since: time => `Wartet seit ${time}`,
       lastChecked: time => `Zuletzt geprüft ${time}`,
       recoveryHint:

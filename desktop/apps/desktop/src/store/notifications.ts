@@ -1,6 +1,7 @@
 import { atom } from 'nanostores'
 
 import { translateNow } from '@/i18n'
+import { brandText } from '@/lib/brand-text'
 import { isOutOfSyncRpcParams } from '@/lib/gateway-rpc'
 import { isTimeoutError } from '@/lib/with-timeout'
 import { type ErrorToastCategory, recordFriction } from '@/store/desktop-metrics'
@@ -265,9 +266,10 @@ function showNotification(input: NotificationInput, errorCategory: ErrorToastCat
     icon: input.icon,
     accentColor: input.accentColor,
     meta: input.meta,
-    title: input.title,
-    message: input.message,
-    detail: input.detail,
+    // Upstream/core text still says "Hermes"; the user reads Neovarch.
+    title: brandText(input.title),
+    message: brandText(input.message),
+    detail: brandText(input.detail),
     action: input.action,
     secondaryAction: input.secondaryAction,
     onDismiss: input.onDismiss,

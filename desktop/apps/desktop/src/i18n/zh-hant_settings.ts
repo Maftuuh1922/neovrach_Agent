@@ -921,7 +921,7 @@ export const zhHantSettings = {
       savedTitle: '閘道設定已儲存',
       restartingMessage: 'Neovarch Agent 將使用已儲存的設定重新連線。',
       savedMessage: '已儲存，下次重新啟動後生效。',
-      connectedTo: (baseUrl, version) => `已連線至 ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `已連線至 ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: '遠端閘道可連線',
       signedOutTitle: '已登出',
       signedOutMessage: '已清除遠端閘道工作階段。',
@@ -1377,7 +1377,7 @@ export const zhHantSettings = {
         sessionRevoked: { title: '工作階段已登出', message: '你的工作階段已登出。請從「設定 → 閘道」重新登入。' },
         cliBillingDisabled: {
           title: '遠端支出已關閉',
-          message: '此帳戶的遠端支出已關閉，帳單管理員可在入口網站的 Hermes Agent 頁面開啟。'
+          message: '此帳戶的遠端支出已關閉，帳單管理員可在入口網站的 Neovarch Agent 頁面開啟。'
         },
         roleRequired: {
           title: '需要管理員權限',

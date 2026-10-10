@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import copy
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -92,7 +93,10 @@ def load_config() -> dict[str, Any]:
         loaded = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         if isinstance(loaded, dict):
             data = loaded
-    return _merge(DEFAULTS, data)
+    cfg = _merge(DEFAULTS, data)
+    from neovarch.session_settings import repair_config
+    repair_config(cfg)
+    return cfg
 
 
 def save_config(cfg: dict[str, Any]) -> None:
@@ -167,6 +171,10 @@ def provider_entries(cfg: dict) -> dict[str, dict]:
             entries[str(spec.get("id") or spec["name"])] = spec
             if spec.get("name") and str(spec["name"]) not in entries:
                 entries[str(spec["name"])] = spec
+            # The id the desktop uses (custom:<slug>) for an entry written by hand.
+            slug = re.sub(r"[^a-z0-9]+", "-", str(spec.get("name") or "").lower()).strip("-")[:48]
+            if slug and slug not in entries:
+                entries[slug] = spec
     return entries
 
 

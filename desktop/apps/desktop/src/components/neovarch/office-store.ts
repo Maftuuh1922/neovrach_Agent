@@ -4,12 +4,28 @@ import { pluginRest } from '@/api/plugins'
 import { onGatewayEvent } from '@/contrib/events'
 import { $gateway } from '@/store/gateway'
 
+/** Extra facts on a desk that belongs to a Perusahaan (company) agent. */
+export interface OfficeCompanyDesk {
+  agent_id: number
+  agent_status: string
+  budget_pct: null | number
+  pause_reason: null | string
+  paused: boolean
+  reports_to: null | number
+  ticket_key: null | string
+  ticket_status: null | string
+  ticket_title: null | string
+  title: string
+}
+
 /** One agent at its desk, as the core's `office.snapshot` / `office.update` describe it. */
 export interface OfficeAgent {
+  /** Set when the desk is a Perusahaan agent (kind 'company'). */
+  company?: OfficeCompanyDesk
   current_task: null | string
   current_tool: null | string
   id: string
-  kind: 'kanban' | 'session'
+  kind: 'company' | 'kanban' | 'session'
   last_activity: number
   last_activity_text: null | string
   message_count: number
@@ -61,8 +77,29 @@ export interface OfficeSnapshot {
   generated_at: number
   host: string
   kanban: Record<string, number>
+  /** The core's default model/provider (newer cores). */
+  model?: { model?: string; provider?: string }
   seq: number
   vault: OfficeVault
+}
+
+/** Agents really working right now: desks the core marks working, plus chats
+ *  the renderer knows are mid-turn whose desk has not caught up yet (an old
+ *  core or a dropped `office.update` left the Kantor saying "0 bekerja"). */
+export function officeWorkingCount(
+  office: null | OfficeSnapshot,
+  busySessionIds: readonly (null | string | undefined)[] = []
+): number {
+  const agents = Array.isArray(office?.agents) ? office.agents : []
+  const working = new Set(agents.filter(agent => agent?.status === 'working').map(agent => agent.id))
+
+  for (const sid of busySessionIds) {
+    if (sid) {
+      working.add(`session:${sid}`)
+    }
+  }
+
+  return working.size
 }
 
 export const OFFICE_ROUTE = '/office'
@@ -94,11 +131,25 @@ export function setOfficeView(view: OfficeView): void {
 /** "Kasih tugas": a Kanban card assigned to this agent, through the Kanban
  *  plugin's own REST door (`POST /api/plugins/kanban/tasks`). The core then
  *  pushes `office.update`, so the desk picks the task up live. */
-export async function assignOfficeTask(agent: Pick<OfficeAgent, 'name'>, title: string): Promise<unknown> {
+export async function assignOfficeTask(
+  agent: Pick<OfficeAgent, 'name'> & Partial<Pick<OfficeAgent, 'company'>>,
+  title: string
+): Promise<unknown> {
   const trimmed = title.trim()
 
   if (!trimmed) {
     throw new Error('Judul tugas kosong')
+  }
+
+  // A Perusahaan agent gets a real ticket (it wakes them when "Jalan otomatis" is on).
+  if (agent.company) {
+    const gateway = $gateway.get()
+
+    if (!gateway) {
+      throw new Error('Belum terhubung ke core')
+    }
+
+    return gateway.request('company.ticket.save', { assignee_id: agent.company.agent_id, title: trimmed })
   }
 
   return pluginRest('kanban', '/tasks', {
@@ -117,6 +168,41 @@ export const OFFICE_STATUS_LABEL: Record<OfficeAgent['status'], string> = {
 export const $office = atom<null | OfficeSnapshot>(null)
 export const $officeError = atom<null | string>(null)
 
+/** Fill the fields a renderer reads as arrays/objects so an old or partial
+ *  core answer can never crash a page (`agents.map is not a function`). */
+export function normalizeOfficeSnapshot(raw: unknown): OfficeSnapshot {
+  const snap = (raw && typeof raw === 'object' ? raw : {}) as Partial<OfficeSnapshot>
+  const agents = (Array.isArray(snap.agents) ? snap.agents : []).filter(
+    (agent): agent is OfficeAgent => Boolean(agent) && typeof agent === 'object' && typeof agent.id === 'string'
+  )
+  const counts = { idle: 0, total: agents.length, 'waiting-approval': 0, working: 0 }
+
+  for (const agent of agents) {
+    if (agent.status in counts) {
+      counts[agent.status] += 1
+    }
+  }
+
+  return {
+    ...snap,
+    agents,
+    counts,
+    feed: Array.isArray(snap.feed) ? snap.feed : [],
+    generated_at: Number(snap.generated_at) || 0,
+    host: String(snap.host ?? ''),
+    kanban: snap.kanban && typeof snap.kanban === 'object' ? snap.kanban : {},
+    seq: Number(snap.seq) || 0,
+    vault:
+      snap.vault && typeof snap.vault === 'object'
+        ? snap.vault
+        : { configured: false, connected: false, note_count: 0, path: '' }
+  }
+}
+
+export async function refreshOffice(): Promise<void> {
+  return refresh()
+}
+
 async function refresh(): Promise<void> {
   const gateway = $gateway.get()
 
@@ -125,7 +211,7 @@ async function refresh(): Promise<void> {
   }
 
   try {
-    $office.set(await gateway.request<OfficeSnapshot>('office.snapshot', {}))
+    $office.set(normalizeOfficeSnapshot(await gateway.request<OfficeSnapshot>('office.snapshot', {})))
     $officeError.set(null)
   } catch (error) {
     $officeError.set(error instanceof Error ? error.message : String(error))
@@ -136,13 +222,15 @@ async function refresh(): Promise<void> {
 // reconnect), then each `office.update` push replaces it.
 onMount($office, () => {
   void refresh()
+
   const offUpdate = onGatewayEvent('office.update', event => {
     const payload = event.payload as OfficeSnapshot | undefined
 
     if (payload && Array.isArray(payload.agents)) {
-      $office.set(payload)
+      $office.set(normalizeOfficeSnapshot(payload))
     }
   })
+
   const offReady = onGatewayEvent('gateway.ready', () => void refresh())
   const offGateway = $gateway.listen(() => void refresh())
 

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { getGlobalModelOptions } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { brandText } from '@/lib/brand-text'
 import { Check, ChevronDown, ChevronLeft, KeyRound, Loader2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
@@ -565,7 +566,7 @@ function Preparing({ boot }: { boot: DesktopBootState }) {
         value={progress / 100}
       />
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span className="truncate">{boot.message}</span>
+        <span className="truncate">{brandText(boot.message)}</span>
         <span>{progress}%</span>
       </div>
       {hasError ? <p className="text-xs text-destructive">{boot.error}</p> : null}

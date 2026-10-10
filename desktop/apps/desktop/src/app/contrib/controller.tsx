@@ -17,7 +17,6 @@ import { OFFICE_ROUTE } from '@/components/neovarch/office-store'
 import { NeovarchSocialPage } from '@/components/neovarch/social'
 import { SOCIAL_ROUTE } from '@/components/neovarch/social-store'
 import { NeovarchRail } from '@/components/neovarch/rail'
-import { NeovarchSessionsPanel } from '@/components/neovarch/sessions-panel'
 import { NeovarchUpdateBanner } from '@/components/neovarch/update-banner'
 import { NeovarchVaultPage, VAULT_ROUTE } from '@/components/neovarch/vault'
 import { NeovarchWallpaper } from '@/components/neovarch/wallpaper'
@@ -863,7 +862,6 @@ export function ContribController() {
         <NeovarchCommandBar />
         <div className="nv-frame-body">
           <NeovarchRail />
-          <NeovarchSessionsPanel />
           <div className="nv-stage" data-slot="nv-stage">
             <ContribWiring>
               <AppContextMenu />

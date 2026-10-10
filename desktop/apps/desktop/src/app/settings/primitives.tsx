@@ -322,6 +322,48 @@ export function SettingsSkeleton({
   )
 }
 
+/** Copy shared by every settings page that fails to load. */
+export const SETTINGS_LOAD_ERROR_COPY = {
+  retry: 'Coba lagi',
+  title: 'Halaman ini belum bisa dimuat'
+}
+
+/**
+ * A settings page whose data request failed: a plain Indonesian message, the
+ * error detail and a "Coba lagi" button instead of an endless skeleton.
+ */
+export function SettingsLoadError({
+  error,
+  onRetry,
+  title = SETTINGS_LOAD_ERROR_COPY.title
+}: {
+  error?: unknown
+  onRetry: () => void
+  title?: string
+}) {
+  const detail = error instanceof Error ? error.message : error ? String(error) : ''
+
+  return (
+    <SettingsContent>
+      <div className="grid min-h-40 place-items-center px-4 py-8 text-center" data-testid="settings-load-error" role="alert">
+        <div className="grid max-w-md gap-2">
+          <p className="text-[length:var(--conversation-text-font-size)] font-medium">{title}</p>
+          {detail && (
+            <p className="break-words text-[length:var(--conversation-caption-font-size)] text-muted-foreground">
+              {detail}
+            </p>
+          )}
+          <div>
+            <Button onClick={onRetry} size="sm" variant="outline">
+              {SETTINGS_LOAD_ERROR_COPY.retry}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </SettingsContent>
+  )
+}
+
 // Canonical implementation lives in components/ui; re-exported so the many
 // settings call sites keep their import path.
 export { EmptyState } from '@/components/ui/empty-state'

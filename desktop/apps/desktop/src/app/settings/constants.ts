@@ -233,7 +233,8 @@ export const PROVIDER_GROUPS: ProviderPrefix[] = [
 // backend schema only declares a string type.
 export const ENUM_OPTIONS: Record<string, string[]> = {
   'agent.image_input_mode': ['auto', 'native', 'text'],
-  'approvals.mode': ['manual', 'smart', 'off'],
+  // The Neovarch core knows two modes: ask before risky commands, or off.
+  'approvals.mode': ['ask', 'off'],
   'code_execution.mode': ['project', 'strict'],
   'context.engine': ['compressor', 'default', 'custom'],
   // '' = inherit the agent's own effort; the rest is the shared scale.

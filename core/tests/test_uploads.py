@@ -1,5 +1,6 @@
-"""Chat attachments: upload endpoint, binary downloads, vision / non-vision wiring,
-desktop staging RPCs (image.attach*, file.attach) and the chunked upload RPC."""
+"""Chat attachments: upload endpoint (phone POST /api/uploads), binary downloads,
+vision / non-vision wiring, desktop staging RPCs (image.attach*, file.attach) and
+the chunked upload RPC."""
 
 import asyncio
 import base64
@@ -251,6 +252,32 @@ async def test_chunked_upload_rpc(capture, monkeypatch, home):
         assert last["result"]["done"] and last["result"]["size"] == len(data) and last["result"]["kind"] == "image"
         got = await (await c.get(last["result"]["url"], headers=H)).read()
         assert got == data
+        await ws.close()
+    finally:
+        await c.close()
+
+
+async def test_upload_is_not_swallowed_by_the_quiet_fallback(capture, monkeypatch, home):
+    """Regression (phone 1.4.5 on a core without the route): the compat fallback
+    answered POST /api/uploads with 200 {"name": "uploads", ...} and no id, so the
+    phone showed an "uploads · 0 B" card and the agent got no image."""
+    gw, c = await _client(monkeypatch)
+    try:
+        ws, call, sid = await _session(c)
+        r = await _upload(c, sid, "scaled_1000000034.jpg", PNG, "image/jpeg")
+        assert r.status == 200
+        meta = await r.json()
+        assert meta["name"] == "scaled_1000000034.jpg" and meta["name"] != "uploads"
+        assert meta["size"] == len(PNG) and len(meta["id"]) == 12 and meta["kind"] == "image"
+        assert "available" not in meta
+        res = await call("prompt.submit", {"session_id": sid, "text": "ini", "attachments": [meta["id"]]})
+        assert res["result"]["attachments"][0]["id"] == meta["id"]
+        await _wait_idle(gw, sid)
+        parts = capture[-1]["messages"][-1]["content"]
+        assert parts[0] == {"type": "text", "text": "ini"} and parts[1]["type"] == "image_url"
+        # an empty / unknown id is refused instead of silently dropping the image
+        bad = await call("prompt.submit", {"session_id": sid, "text": "ini", "attachments": [""]})
+        assert "error" in bad
         await ws.close()
     finally:
         await c.close()

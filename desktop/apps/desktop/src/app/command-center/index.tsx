@@ -47,7 +47,10 @@ import { MaintenancePanel } from './maintenance'
 
 export type CommandCenterSection = 'maintenance' | 'sessions' | 'system' | 'usage'
 
-const SECTIONS = ['sessions', 'system', 'usage', 'maintenance'] as const satisfies readonly CommandCenterSection[]
+// Neovarch: System (doctor/logs/analytics), Usage (billing analytics) and
+// Maintenance (curator, backup, doctor) only have compat stubs in the core,
+// so the Command Center shows Sessions alone; old ?section= links fall back.
+const SECTIONS: readonly CommandCenterSection[] = ['sessions']
 
 const LOG_FILES = ['agent', 'errors', 'gateway', 'desktop'] as const
 const LOG_LEVELS = ['ALL', 'INFO', 'WARNING', 'ERROR'] as const

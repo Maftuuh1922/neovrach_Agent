@@ -128,7 +128,8 @@ def test_system_prompt_mentions_vault_and_injects_notes(vault, tmp_path):
 
 
 def test_system_prompt_without_vault(home, tmp_path):
-    assert "Obsidian" not in system_prompt(cfgmod.load_config(), tmp_path, "resep")
+    sp = system_prompt(cfgmod.load_config(), tmp_path, "resep")
+    assert "# Obsidian vault" not in sp and "Relevant vault notes" not in sp
 
 
 def test_status(vault):

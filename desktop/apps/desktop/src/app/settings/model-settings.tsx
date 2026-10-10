@@ -983,6 +983,9 @@ export function ModelSettings({ onMainModelChanged, scopeProfile, subpage }: Mod
   const errorNotice = error && (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-destructive">
       <span>{error}</span>
+      <Button onClick={() => void refresh()} size="sm" variant="outline">
+        Coba lagi
+      </Button>
       {skewRestart && (
         <Button disabled={restartingBackend} onClick={() => void recycleStaleBackend()} size="sm" variant="textStrong">
           {restartingBackend && <Loader2 className="size-3.5 animate-spin" />}

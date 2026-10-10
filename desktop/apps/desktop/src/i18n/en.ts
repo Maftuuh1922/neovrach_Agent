@@ -92,7 +92,7 @@ export const en: Translations = {
       kindCatalog: 'MCP · Catalog',
       kindCustom: 'MCP · Custom',
       kindPlugin: (plugin: string) => `MCP · Plugin ${plugin}`,
-      inCatalog: 'In the Hermes catalog',
+      inCatalog: 'In the Neovarch catalog',
       hostedTwin: 'Managed version available',
       alsoLocal: 'Also runs on this device',
       open: (name: string) => `Open ${name}`,
@@ -808,7 +808,7 @@ export const en: Translations = {
         agentTargetLocal: (profile, dir) => `Installs into the ${profile} backend (${dir})`,
         agentTargetRemote: profile => `Installs into the connected ${profile} backend`,
         catalogPinned: (name, sha) =>
-          `Hermes catalog entry "${name}" — the agent component installs at the reviewed pin${sha ? ` ${sha}` : ''}, not the branch tip.`,
+          `Neovarch catalog entry "${name}" — the agent component installs at the reviewed pin${sha ? ` ${sha}` : ''}, not the branch tip.`,
         reviewedHeading: 'Reviewed catalog entry',
         reviewedIntro:
           'This entry was human-reviewed at its pinned commit. You can still inspect the exact code below.',
@@ -1513,7 +1513,7 @@ export const en: Translations = {
       savedTitle: 'Gateway settings saved',
       restartingMessage: 'Neovarch Agent will reconnect using the saved settings — the shell stays open.',
       savedMessage: 'Saved for the next restart.',
-      connectedTo: (baseUrl, version) => `Connected to ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `Connected to ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: 'Remote gateway reachable',
       signedOutTitle: 'Signed out',
       signedOutMessage: 'Cleared the remote gateway session.',
@@ -2253,7 +2253,7 @@ export const en: Translations = {
       catalogHint:
         'Hit "+ Add to this Agent" on any plugin — reviewed entries install at their pinned commit into the selected profile. Bundled agent+desktop plugins offer both halves.',
       alreadyInstalled: (name: string) => `${name} is already installed in this profile.`,
-      catalogProvenance: (sha: string) => `Installed from the Hermes catalog${sha ? ` at pin ${sha}` : ''}.`,
+      catalogProvenance: (sha: string) => `Installed from the Neovarch catalog${sha ? ` at pin ${sha}` : ''}.`,
       pinnedProvenance: (sha: string) =>
         `Pinned to commit ${sha}. Updates are refused until it is reinstalled with a new pin.`,
       pinnedBadge: (sha: string) => `pinned @ ${sha}`,
@@ -2280,9 +2280,9 @@ export const en: Translations = {
       deepLinkErrorTitle: 'Plugin install link rejected',
       deepLinkCatalogInvalidName: 'The link\u2019s catalog name is missing or invalid.',
       deepLinkCatalogUnknown: (name: string) =>
-        `\u201C${name}\u201D is not in the Hermes plugin catalog. Nothing was installed.`,
+        `\u201C${name}\u201D is not in the Neovarch plugin catalog. Nothing was installed.`,
       deepLinkCatalogUnavailable:
-        'Could not load the Hermes plugin catalog. Check your connection and open the link again.',
+        'Could not load the Neovarch plugin catalog. Check your connection and open the link again.',
       settingsToggle: (name: string) => `Settings: ${name}`,
       settingsForm: {
         save: 'Save settings',

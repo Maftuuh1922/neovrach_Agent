@@ -791,7 +791,7 @@ const en: BotsMessages = {
     setupFailed: 'Setup failed',
     signIn: 'Sign in…',
     setUp: 'Set up…',
-    skillsHub: 'Hermes Skills Hub',
+    skillsHub: 'Neovarch Skills Hub',
     filterSkills: 'Filter skills…',
     searchHub: 'Search the hub (community + well-known sources)…',
     noMcpServers: 'No MCP servers configured or in the catalog.'
@@ -1228,7 +1228,7 @@ const ja: BotsMessages = {
     setupFailed: '設定に失敗しました',
     signIn: 'サインイン…',
     setUp: '設定…',
-    skillsHub: 'Hermes スキルハブ',
+    skillsHub: 'Neovarch スキルハブ',
     filterSkills: 'スキルを絞り込み…',
     searchHub: 'ハブを検索（コミュニティと既知のソース）…',
     noMcpServers: '設定済みまたはカタログ内の MCP サーバーはありません。'
@@ -1655,7 +1655,7 @@ const zh: BotsMessages = {
     setupFailed: '设置失败',
     signIn: '登录…',
     setUp: '设置…',
-    skillsHub: 'Hermes 技能中心',
+    skillsHub: 'Neovarch 技能中心',
     filterSkills: '筛选技能…',
     searchHub: '搜索技能中心（社区和常见来源）…',
     noMcpServers: '未配置 MCP 服务器，目录中也没有。'
@@ -2079,7 +2079,7 @@ const zhHant: BotsMessages = {
     setupFailed: '設定失敗',
     signIn: '登入…',
     setUp: '設定…',
-    skillsHub: 'Hermes 技能中心',
+    skillsHub: 'Neovarch 技能中心',
     filterSkills: '篩選技能…',
     searchHub: '搜尋技能中心（社群和常見來源）…',
     noMcpServers: '未設定 MCP 伺服器，目錄中也沒有。'

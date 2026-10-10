@@ -1,4 +1,5 @@
 import { stampRowsWithOwningConnection } from '@/lib/session-owner-stamp'
+import { asArray } from '@/lib/as-array'
 import type {
   AutomationBlueprint,
   CronDeliveryTarget,
@@ -27,15 +28,17 @@ const CRON_TRIGGER_REQUEST_TIMEOUT_MS = 24 * 60 * 60 * 1000
 // list just that profile's jobs, or 'all' for the unified cross-profile view.
 // Omitting the arg keeps the legacy 'all' default for non-profile callers.
 // profileScoped() still rides along for backend-process routing.
-export function getCronJobs(profile?: string): Promise<CronJob[]> {
+export async function getCronJobs(profile?: string): Promise<CronJob[]> {
   const suffix = profile ? `?profile=${encodeURIComponent(profile)}` : ''
 
-  return hermesApi<CronJob[]>({
+  const raw = await hermesApi<unknown>({
     ...profileScoped(),
     ...connectionScoped(),
     path: `/api/cron/jobs${suffix}`,
     timeoutMs: STARTUP_REQUEST_TIMEOUT_MS
   })
+
+  return asArray<CronJob>(raw, 'jobs')
 }
 
 export function getCronJob(jobId: string): Promise<CronJob> {
@@ -47,7 +50,7 @@ export function getCronJob(jobId: string): Promise<CronJob> {
 }
 
 export async function getCronJobRuns(jobId: string, limit = 20): Promise<SessionInfo[]> {
-  const { runs } = await hermesApi<{ runs: SessionInfo[] }>({
+  const raw = await hermesApi<{ runs: SessionInfo[] }>({
     ...profileScoped(),
     ...connectionScoped(),
     path: `/api/cron/jobs/${encodeURIComponent(jobId)}/runs?limit=${limit}`
@@ -62,20 +65,20 @@ export async function getCronJobRuns(jobId: string, limit = 20): Promise<Session
   // id-only resume and the transcript never loaded (#82527). The backend
   // stamps `profile` (the job's owning profile); this adds the connection
   // half, exactly as /api/sessions and the sidebar slices do.
-  return stampRowsWithOwningConnection(runs ?? [], getApiRequestConnection())
+  return stampRowsWithOwningConnection(asArray<SessionInfo>(raw, 'runs'), getApiRequestConnection())
 }
 
 // The single source of truth for cron delivery targets (local + configured
 // gateways). Both the manual cron editor and the blueprint dialog use this so
 // they never offer a platform that isn't connected. Mirrors the dashboard.
 export async function getCronDeliveryTargets(): Promise<CronDeliveryTarget[]> {
-  const { targets } = await hermesApi<{ targets: CronDeliveryTarget[] }>({
+  const raw = await hermesApi<{ targets: CronDeliveryTarget[] }>({
     ...profileScoped(),
     ...connectionScoped(),
     path: '/api/cron/delivery-targets'
   })
 
-  return targets ?? []
+  return asArray<CronDeliveryTarget>(raw, 'targets')
 }
 
 export function createCronJob(body: CronJobCreatePayload): Promise<CronJob> {

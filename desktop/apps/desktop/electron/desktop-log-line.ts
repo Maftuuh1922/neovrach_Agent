@@ -25,5 +25,5 @@ export function formatLogStamp(date: Date): string {
  * stdout chunk) pass one shared stamp so the group reads as one event.
  */
 export function formatDesktopLogLine(text: string, stamp = formatLogStamp(new Date())): string {
-  return `${stamp} [hermes] ${text}`
+  return `${stamp} [neovarch] ${text}`
 }

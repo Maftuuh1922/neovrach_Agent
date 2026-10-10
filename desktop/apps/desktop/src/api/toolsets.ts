@@ -7,6 +7,7 @@ import type {
   ToolsetModelsResponse
 } from '@/types/hermes'
 
+import { asArray } from '@/lib/as-array'
 import { capabilityScoped, hermesApi, type ProfileScope, profileScoped } from './client'
 
 // The optional trailing `profile` on every capability fetcher below is the
@@ -14,11 +15,13 @@ import { capabilityScoped, hermesApi, type ProfileScope, profileScoped } from '.
 // panels configure ANY profile without swapping the app-wide active profile.
 // Omitting it (every pre-existing caller) means `profileScoped(undefined)`
 // falls back to the app-wide `_apiProfile`, so behavior is byte-identical.
-export function getToolsets(profile?: ProfileScope): Promise<ToolsetInfo[]> {
-  return window.hermesDesktop.api<ToolsetInfo[]>({
+export async function getToolsets(profile?: ProfileScope): Promise<ToolsetInfo[]> {
+  const raw = await window.hermesDesktop.api<unknown>({
     ...capabilityScoped(profile),
     path: '/api/tools/toolsets'
   })
+
+  return asArray<ToolsetInfo>(raw, 'toolsets')
 }
 
 export function setToolsetEnabled(

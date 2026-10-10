@@ -1274,7 +1274,7 @@ export const ruOverrides = {
       savedTitle: 'Настройки шлюза сохранены',
       restartingMessage: 'Neovarch Agent переподключится с сохранёнными настройками — оболочка останется открытой.',
       savedMessage: 'Сохранено для следующего перезапуска.',
-      connectedTo: (baseUrl, version) => `Подключено к ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `Подключено к ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: 'Удалённый шлюз доступен',
       signedOutTitle: 'Вы вышли',
       signedOutMessage: 'Сессия удалённого шлюза сброшена.',
@@ -2827,7 +2827,7 @@ export const ruOverrides = {
       '/subscription': 'Показать план Nous и изменить его в браузере',
       '/topup': 'Показать баланс Nous и управлять оплатой',
       '/platform': 'Приостановить, возобновить или перечислить сбоящие платформы шлюза',
-      '/version': 'Показать версию Hermes Agent',
+      '/version': 'Показать версию Neovarch Agent',
       '/debug': 'Загрузить отчёт отладки с данными системы и журналами и получить ссылку',
       '/model': 'Переключить модель для этого сеанса'
     },
@@ -3290,7 +3290,7 @@ export const ruOverrides = {
     applyRemote: 'Применить и переподключиться',
     backToSetup: 'Назад',
     failedTitle: 'Установка не удалась',
-    settingUpTitle: 'Настройка Hermes Agent',
+    settingUpTitle: 'Настройка Neovarch Agent',
     finishingTitle: 'Завершаем',
     failedDesc:
       'Один из шагов установки завершился ошибкой. На Windows это может произойти, если запущена другая инстанция Neovarch CLI или desktop. Остановите все работающие инстанции Neovarch и повторите. Подробности — ниже или в журнале desktop.',

@@ -55,6 +55,9 @@ export function useEnvCredentials(profile?: string): UseEnvCredentials {
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [revealed, setRevealed] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
+  // A failed load must surface (error + retry), never leave `vars` null forever.
+  const [loadError, setLoadError] = useState<unknown>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   // Best-effort cleanup of a retired localStorage flag (global "Show
   // advanced" toggle) — everything in these views is configuration-level.
@@ -75,6 +78,7 @@ export function useEnvCredentials(profile?: string): UseEnvCredentials {
     // changed left its Save button live — writing the value into the profile
     // now being targeted instead of the one it was typed for.
     setVars(null)
+    setLoadError(null)
     setEdits({})
     setRevealed({})
 
@@ -83,16 +87,18 @@ export function useEnvCredentials(profile?: string): UseEnvCredentials {
         const next = await getEnvVars(profile)
 
         if (!cancelled) {
-          setVars(next)
+          setVars(next && typeof next === 'object' && !Array.isArray(next) ? next : {})
         }
       } catch (err) {
-        notifyError(err, t.settings.keys.failedLoad)
+        if (!cancelled) {
+          setLoadError(err)
+        }
       }
     })()
 
     return () => void (cancelled = true)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per target profile; copy is stable
-  }, [profile])
+  }, [profile, reloadToken])
 
   function patchVar(key: string, patch: Partial<Pick<EnvVarInfo, 'is_set' | 'redacted_value'>>) {
     setVars(c => (c ? { ...c, [key]: { ...c[key], ...patch } } : c))
@@ -190,6 +196,8 @@ export function useEnvCredentials(profile?: string): UseEnvCredentials {
   }
 
   return {
+    loadError,
+    reload: () => setReloadToken(n => n + 1),
     saveValue,
     vars,
     rowProps: {
@@ -211,6 +219,8 @@ interface CategoryHeadingProps {
 }
 
 interface UseEnvCredentials {
+  loadError: unknown
+  reload: () => void
   rowProps: Omit<EnvRowProps, 'varKey' | 'info'>
   saveValue: (key: string, value: string) => Promise<{ message?: string; ok: boolean }>
   vars: Record<string, EnvVarInfo> | null

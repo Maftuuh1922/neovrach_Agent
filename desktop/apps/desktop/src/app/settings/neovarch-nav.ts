@@ -50,6 +50,7 @@ export const NV_SETTINGS_LABELS: Record<string, string> = {
   'config:model:auxiliary': 'Model pembantu',
   'config:model:moa': 'Gabungan agen',
   'pview:accounts': 'Akun',
+  'pview:github': 'Akun GitHub',
   'pview:keys': 'Kunci API',
   'pview:custom-endpoints': 'Endpoint kustom',
   'pview:local': 'Model lokal',

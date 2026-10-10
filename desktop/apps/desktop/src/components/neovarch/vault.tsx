@@ -386,7 +386,14 @@ export function NeovarchVaultPage() {
         </ul>
       </aside>
       <section className="nv-vault-main">
-        {error && <p className="nv-vault-empty">Vault belum bisa dimuat: {error}</p>}
+        {error && (
+          <div className="nv-vault-empty" role="alert">
+            <p>Vault belum bisa dimuat: {error}</p>
+            <button className="nv-vault-retry" onClick={() => void load()} type="button">
+              Coba lagi
+            </button>
+          </div>
+        )}
         {view === 'graph' && graph && <VaultGraph graph={graph} onOpen={p => void open(p)} selected={selected} />}
         {view === 'note' && !note && <p className="nv-vault-empty">Pilih catatan di kiri, atau buka tab Graf.</p>}
         {view === 'note' && note && (

@@ -127,7 +127,7 @@ export const zhHantChat = {
       '/subscription': '檢視你的 Nous 方案，並在瀏覽器中變更',
       '/topup': '顯示你的 Nous 餘額，並在 Portal 管理帳務',
       '/platform': '暫停、恢復或列出故障的閘道平台',
-      '/version': '顯示 Hermes Agent 版本',
+      '/version': '顯示 Neovarch Agent 版本',
       '/debug': '上傳偵錯報告（系統資訊與記錄），並取得可分享連結',
       '/model': '切換此工作階段的模型'
     },

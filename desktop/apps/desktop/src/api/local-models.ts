@@ -1,6 +1,7 @@
 import type { LocalCatalogModel, LocalHardware, LocalModelsStatus, LocalRuntimeJob } from '@/types/hermes'
 
 import { hermesApi, profileScoped } from './client'
+import { asArray } from '@/lib/as-array'
 
 export interface LocalModelsScope {
   connectionId: string | null
@@ -25,10 +26,10 @@ export function getLocalHardware(scope?: LocalModelsScope): Promise<LocalHardwar
 }
 
 export function getLocalCatalog(scope?: LocalModelsScope): Promise<{ models: LocalCatalogModel[] }> {
-  return hermesApi<{ models: LocalCatalogModel[] }>({
+  return Promise.resolve(hermesApi<{ models: LocalCatalogModel[] }>({
     ...(scope ?? profileScoped()),
     path: '/api/local-models/catalog'
-  })
+  })).then(r => ({ ...r, models: asArray(r?.models, 'models') }) as { models: LocalCatalogModel[] })
 }
 
 export function installLocalRuntime(
@@ -89,10 +90,10 @@ export function getLocalRuntimeJob(jobId: string, scope?: LocalModelsScope): Pro
 }
 
 export function getLocalModelsJobs(scope?: LocalModelsScope): Promise<{ jobs: LocalRuntimeJob[] }> {
-  return hermesApi<{ jobs: LocalRuntimeJob[] }>({
+  return Promise.resolve(hermesApi<{ jobs: LocalRuntimeJob[] }>({
     ...(scope ?? profileScoped()),
     path: '/api/local-models/jobs'
-  })
+  })).then(r => ({ ...r, jobs: asArray(r?.jobs, 'jobs') }) as { jobs: LocalRuntimeJob[] })
 }
 
 // Pause/resume a download-phase job (catalog model, quickstart, runtime
@@ -169,17 +170,17 @@ export function searchHFModels(
   limit: number = 20,
   scope?: LocalModelsScope
 ): Promise<{ hits: HFSearchHit[] }> {
-  return hermesApi<{ hits: HFSearchHit[] }>({
+  return Promise.resolve(hermesApi<{ hits: HFSearchHit[] }>({
     ...(scope ?? profileScoped()),
     path: `/api/local-models/search?q=${encodeURIComponent(q)}&limit=${limit}`
-  })
+  })).then(r => ({ ...r, hits: asArray(r?.hits, 'hits') }) as { hits: HFSearchHit[] })
 }
 
 export function listHFRepoFiles(repo: string, scope?: LocalModelsScope): Promise<{ files: HFFileGroup[] }> {
-  return hermesApi<{ files: HFFileGroup[] }>({
+  return Promise.resolve(hermesApi<{ files: HFFileGroup[] }>({
     ...(scope ?? profileScoped()),
     path: `/api/local-models/search/files?repo=${encodeURIComponent(repo)}`
-  })
+  })).then(r => ({ ...r, files: asArray(r?.files, 'files') }) as { files: HFFileGroup[] })
 }
 
 export function downloadBrowsedModel(

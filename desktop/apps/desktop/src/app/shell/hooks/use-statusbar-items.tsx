@@ -25,7 +25,6 @@ import {
   Clock,
   Command,
   FolderOpen,
-  Globe,
   Hash,
   Layers3,
   Loader2,
@@ -76,7 +75,7 @@ import {
 } from '@/store/updates'
 import type { StatusResponse, UsageStats } from '@/types/hermes'
 
-import { CRON_ROUTE, SETTINGS_ROUTE, WEBHOOKS_ROUTE } from '../../routes'
+import { CRON_ROUTE, SETTINGS_ROUTE } from '../../routes'
 import type { StatusbarItem } from '../statusbar-controls'
 
 const EMPTY_USAGE: UsageStats = { calls: 0, input: 0, output: 0, total: 0 }
@@ -642,14 +641,6 @@ export function useStatusbarItems({
         toggleLabel: copy.cron,
         variant: 'action'
       },
-      {
-        icon: <Globe className="size-3" />,
-        id: 'webhooks',
-        label: copy.webhooks,
-        to: WEBHOOKS_ROUTE,
-        toggleLabel: copy.webhooks,
-        variant: 'action'
-      }
     ],
     [
       agentsOpen,

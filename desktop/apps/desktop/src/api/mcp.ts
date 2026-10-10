@@ -1,5 +1,6 @@
 import type { McpCatalogResponse, McpServerSummary } from '@/types/hermes'
 
+import { asArray } from '@/lib/as-array'
 import { capabilityScoped, hermesApi, type ProfileScope, profileScoped } from './client'
 
 export interface McpTestResult {
@@ -67,11 +68,13 @@ export function mcpOAuthRpc(scope?: ProfileScope) {
 // config.yaml via saveHermesConfig.
 // ---------------------------------------------------------------------------
 
-export function listMcpServers(): Promise<{ servers: McpServerSummary[] }> {
-  return hermesApi<{ servers: McpServerSummary[] }>({
+export async function listMcpServers(): Promise<{ servers: McpServerSummary[] }> {
+  const raw = await hermesApi<unknown>({
     ...profileScoped(),
     path: '/api/mcp/servers'
   })
+
+  return { ...(raw && typeof raw === 'object' ? raw : {}), servers: asArray<McpServerSummary>(raw, 'servers') }
 }
 
 /** Add one server to `mcp_servers` (validated + name-collision-checked

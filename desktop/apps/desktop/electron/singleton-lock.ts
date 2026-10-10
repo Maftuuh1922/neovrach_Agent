@@ -80,13 +80,52 @@ export function readLinuxProcState(pid: number): string | null {
   }
 }
 
+/** `/proc/<pid>/exe` target, or null when unreadable/gone. */
+export function readLinuxProcExe(pid: number): string | null {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/exe`)
+  } catch {
+    return null
+  }
+}
+
+/** Basename of an executable path, ignoring the kernel's ` (deleted)` suffix (unmounted AppImage). */
+export function executableName(exePath: string | null | undefined): string | null {
+  if (typeof exePath !== 'string' || exePath.trim() === '') {
+    return null
+  }
+
+  const clean = exePath.trim().replace(/ \(deleted\)$/, '')
+  const name = path.basename(clean)
+
+  return name === '' ? null : name
+}
+
+/**
+ * PID reuse: after a crash or reboot the lock's PID can belong to an unrelated
+ * live process (a shell, a browser). Chromium then keeps failing to reach the
+ * "owner" and every launch exits silently. A live owner whose executable name
+ * provably differs from ours is not this app, so the lock is stale. Unknown
+ * executables (unreadable /proc entry) are never judged.
+ */
+export function isForeignSingletonLockOwner(
+  ownerExe: string | null | undefined,
+  selfExe: string | null | undefined
+): boolean {
+  const owner = executableName(ownerExe)
+  const self = executableName(selfExe)
+
+  return owner !== null && self !== null && owner !== self
+}
+
 /**
  * Remove a provably-stale SingletonLock (Linux only) and return the dead
  * owner's PID, or null when the lock must be left alone: another machine's
  * lock (hostname mismatch), an unparseable target, or a live-looking owner.
  *
  * Live-looking means `/proc/<pid>/stat` shows a state other than Z — never
- * `kill(pid, 0)`, which reports zombies as alive.
+ * `kill(pid, 0)`, which reports zombies as alive — AND the owner is running an
+ * executable with our name (a reused PID owned by another program is stale).
  */
 export function removeStaleSingletonLock(
   userDataDir: string,
@@ -94,6 +133,8 @@ export function removeStaleSingletonLock(
     platform?: NodeJS.Platform
     hostname?: string
     readProcState?: (pid: number) => string | null
+    readProcExe?: (pid: number) => string | null
+    selfExe?: string
   } = {}
 ): number | null {
   if ((deps.platform ?? process.platform) !== 'linux') {
@@ -119,7 +160,16 @@ export function removeStaleSingletonLock(
   }
 
   if (!isStaleSingletonLockOwner(readProcState(pid))) {
-    return null
+    // Our own PID is never stale (a re-check after a lost race).
+    if (pid === process.pid) {
+      return null
+    }
+
+    const readProcExe = deps.readProcExe ?? readLinuxProcExe
+
+    if (!isForeignSingletonLockOwner(readProcExe(pid), deps.selfExe ?? process.execPath)) {
+      return null
+    }
   }
 
   try {

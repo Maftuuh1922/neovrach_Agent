@@ -289,8 +289,47 @@ def find_endpoint(cfg: dict, eid: str) -> dict | None:
 
 # ------------------------------------------------------------ model options ---
 
-def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, Any]:
-    ep = cfgmod.resolve_endpoint(cfg)
+def clean_models(models: Any) -> list[str]:
+    """Non-empty, stripped, de-duplicated model ids (order kept)."""
+    out: list[str] = []
+    for m in models if isinstance(models, list) else []:
+        mid = str(m or "").strip()
+        if mid and mid not in out:
+            out.append(mid)
+    return out
+
+
+def apply_discovered(spec: dict, served: list[str]) -> dict[str, Any]:
+    """Replace a custom endpoint's model list with what its server really serves.
+
+    Returns what was pruned and whether the endpoint's own model is unknown
+    to the server (a dead pick such as a typo)."""
+    served = clean_models(served)[:500]
+    before = clean_models(spec.get("models"))
+    spec["models"] = served
+    spec["models_discovered"] = True
+    model = str(spec.get("model") or "").strip()
+    return {"removed": [m for m in before if m not in served],
+            "model": model, "model_unknown": bool(model and served and model not in served)}
+
+
+async def refresh_models(cfg: dict) -> dict[str, Any]:
+    """Probe every custom endpoint that discovers models and prune dead ids."""
+    report: dict[str, Any] = {}
+    for spec in _custom_list(cfg):
+        if not isinstance(spec, dict) or not spec.get("discover_models", True) or not spec.get("base_url"):
+            continue
+        res = await probe(str(spec["base_url"]), cfgmod.secret(str(spec.get("key_env") or "")),
+                          cfgmod.endpoint_headers(spec), bool(spec.get("allow_insecure_tls")))
+        if res.get("ok") and res.get("models"):
+            report[_eid(spec)] = apply_discovered(spec, res["models"])
+    return report
+
+
+def model_options(cfg: dict, include_unconfigured: bool = False, endpoint: dict | None = None) -> dict[str, Any]:
+    """The picker catalog. ``endpoint`` is a session's effective endpoint
+    (its own pick), so the current row/model follow that session."""
+    ep = endpoint or cfgmod.resolve_endpoint(cfg)
     current = ep["provider"]
     providers: list[dict[str, Any]] = []
     from neovarch import router9
@@ -311,7 +350,7 @@ def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, An
         is_cur = current == slug
         if not (authed or is_cur or include_unconfigured):
             continue
-        models = list(PRESET_MODELS.get(slug, [preset["model"]]))
+        models = clean_models(PRESET_MODELS.get(slug, [preset["model"]]))
         if is_cur and ep["model"] and ep["model"] not in models:
             models.insert(0, ep["model"])
         providers.append({"slug": slug, "name": PRESET_LABELS.get(slug, slug), "models": models,
@@ -323,13 +362,23 @@ def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, An
             continue
         view = endpoint_view(cfg, spec)
         slug = f"custom:{view['id']}"
-        models = list(view["models"])
-        if view["is_current"] and ep["model"] and ep["model"] not in models:
+        is_cur = current in (slug, f"custom:{view['name']}")
+        models = clean_models(view["models"])
+        if spec.get("models_discovered") and spec.get("models"):
+            # A discovered list is authoritative: drop ids the server no
+            # longer serves, keeping only the live pick so it stays visible.
+            served = clean_models(spec.get("models"))
+            models = [m for m in models if m in served]
+        unknown = bool(is_cur and ep["model"] and spec.get("models_discovered") and spec.get("models")
+                       and ep["model"] not in clean_models(spec.get("models")))
+        if is_cur and ep["model"] and ep["model"] not in models:
             models.insert(0, ep["model"])
+        view["is_current"] = is_cur
         providers.append({"slug": slug, "name": view["name"], "models": models, "total_models": len(models),
                           "is_current": view["is_current"], "is_user_defined": True, "api_url": view["base_url"],
                           "authenticated": True, "key_env": spec.get("key_env"), "source": "custom",
-                          "aliases": [view["name"]], "auth_type": "api_key" if view["has_api_key"] else "none"})
+                          "aliases": [view["name"]], "auth_type": "api_key" if view["has_api_key"] else "none",
+                          **({"unknown_models": [ep["model"]]} if unknown else {})})
     if current and not any(p["is_current"] for p in providers) and ep["base_url"]:
         name = current.split(":", 1)[-1] or "custom"
         providers.insert(0, {"slug": current, "name": name, "models": [ep["model"]] if ep["model"] else [],
@@ -337,7 +386,8 @@ def model_options(cfg: dict, include_unconfigured: bool = False) -> dict[str, An
                              "api_url": ep["base_url"], "authenticated": True, "source": "config"})
     providers.sort(key=lambda p: (not p["is_current"], not p.get("builtin", False), not p["is_user_defined"],
                                   p["name"].lower()))
-    return {"model": ep["model"], "provider": current, "providers": providers}
+    return {"model": ep["model"], "provider": current, "providers": providers,
+            "model_unknown": any(p.get("unknown_models") for p in providers if p["is_current"])}
 
 
 def set_model(cfg: dict, body: dict) -> dict[str, Any]:
@@ -368,9 +418,9 @@ def set_model(cfg: dict, body: dict) -> dict[str, Any]:
     if provider.startswith("custom:"):
         spec = find_endpoint(cfg, provider.split(":", 1)[1])
         if spec is not None and model:
+            # The endpoint's model only; never append to its model list, so a
+            # typo (``depsek``) does not stay in the picker after it is replaced.
             spec["model"] = model
-            if model not in (spec.get("models") or []):
-                spec.setdefault("models", []).append(model)
     ep = cfgmod.resolve_endpoint(cfg)
     return {"ok": True, "scope": "main", "provider": provider, "model": model or ep["model"],
             "base_url": ep["base_url"], "stale_aux": []}

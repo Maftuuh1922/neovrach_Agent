@@ -1,6 +1,7 @@
 import type { ModelCapabilities, ModelOptionProvider, ModelOptionsResult } from '@hermes/shared'
 
 import { getGlobalModelOptions, type HermesGateway } from '@/hermes'
+import { asArray } from '@/lib/as-array'
 
 type CatalogProviderIdentity = Partial<Pick<ModelOptionProvider, 'aliases' | 'name'>> &
   Pick<ModelOptionProvider, 'slug'>
@@ -143,7 +144,57 @@ function restModelOptions(
   return profileKey ? getGlobalModelOptions(opts, profileKey) : getGlobalModelOptions(opts)
 }
 
-export async function requestModelOptions({
+/** Catalog rows the picker can trust: a provider list (never an object or the
+ *  fallback stub), providers with a slug, and string model ids, deduped. */
+const cleanModels = (models: unknown): boolean =>
+  models === undefined ||
+  (Array.isArray(models) &&
+    models.every(m => typeof m === 'string' && m.trim() !== '') &&
+    new Set(models).size === models.length)
+
+export function normalizeModelOptions(options: unknown): ModelOptionsResult {
+  const record = (options && typeof options === 'object' ? options : {}) as Partial<ModelOptionsResult>
+
+  // Already well-formed: hand back the same object (callers and caches compare by identity).
+  if (
+    options &&
+    typeof options === 'object' &&
+    (record.providers === undefined ||
+      (Array.isArray(record.providers) &&
+        record.providers.every(
+          row => row && typeof row === 'object' && Boolean(row.slug || row.name) && cleanModels(row.models)
+        )))
+  ) {
+    return options as ModelOptionsResult
+  }
+
+  const providers = asArray<ModelOptionProvider>(record.providers, 'providers')
+    .filter(row => row && typeof row === 'object' && Boolean(row.slug || row.name))
+    .map(row => {
+      if (row.models === undefined) {
+        return row
+      }
+
+      const models = [
+        ...new Set(asArray<unknown>(row.models).filter((m): m is string => typeof m === 'string' && m.trim() !== ''))
+      ]
+
+      return { ...row, models }
+    })
+
+  if (record.providers === undefined && !Array.isArray(options)) {
+    // Keep "no catalog in this answer" distinguishable from an empty one.
+    return record as ModelOptionsResult
+  }
+
+  return { ...record, providers } as ModelOptionsResult
+}
+
+export async function requestModelOptions(req: ModelOptionsRequest): Promise<ModelOptionsResult> {
+  return normalizeModelOptions(await requestModelOptionsRaw(req))
+}
+
+async function requestModelOptionsRaw({
   explicitOnly = true,
   gateway,
   profile,

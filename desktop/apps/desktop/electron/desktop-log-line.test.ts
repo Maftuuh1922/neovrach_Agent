@@ -9,7 +9,7 @@ describe('formatDesktopLogLine', () => {
     const moment = new Date(2026, 8, 3, 7, 5, 9, 42)
     const line = formatDesktopLogLine('[boot] Resolving Hermes backend', formatLogStamp(moment))
 
-    const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}),(\d{3}) \[hermes\] (.*)$/.exec(line)
+    const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}),(\d{3}) \[neovarch\] (.*)$/.exec(line)
 
     expect(match).not.toBeNull()
     const [, y, mo, d, h, mi, s, ms, text] = match!

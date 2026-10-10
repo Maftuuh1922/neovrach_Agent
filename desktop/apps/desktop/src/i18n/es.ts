@@ -1862,7 +1862,7 @@ export const esOverrides = {
       savedTitle: 'Ajustes del gateway guardados',
       restartingMessage: 'Neovarch Agent se reconectará con los ajustes guardados.',
       savedMessage: 'Guardado para el próximo reinicio.',
-      connectedTo: (baseUrl, version) => `Conectado a ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `Conectado a ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: 'Gateway remoto accesible',
       signedOutTitle: 'Sesión cerrada',
       signedOutMessage: 'Se borró la sesión del gateway remoto.',
@@ -2251,7 +2251,7 @@ export const esOverrides = {
         cliBillingDisabled: {
           title: 'El gasto remoto está desactivado',
           message:
-            'El gasto remoto está desactivado para esta cuenta; un administrador de facturación puede activarlo desde la página de Hermes Agent del portal.'
+            'El gasto remoto está desactivado para esta cuenta; un administrador de facturación puede activarlo desde la página de Neovarch Agent del portal.'
         },
         roleRequired: {
           title: 'Se requiere rol de administrador',
@@ -3965,7 +3965,7 @@ export const esOverrides = {
       '/subscription': 'Ver tu plan de Nous y cambiarlo en el navegador',
       '/topup': 'Mostrar tu saldo de Nous y gestionar la facturación en el portal',
       '/platform': 'Pausar, reanudar o listar una plataforma del gateway que falla',
-      '/version': 'Mostrar la versión de Hermes Agent',
+      '/version': 'Mostrar la versión de Neovarch Agent',
       '/debug': 'Subir un informe de depuración (información del sistema + registros) y obtener enlaces para compartir',
       '/model': 'Cambiar el modelo de esta sesión'
     },
@@ -4480,7 +4480,7 @@ export const esOverrides = {
     applyRemote: 'Aplicar y reconectar',
     backToSetup: 'Atrás',
     failedTitle: 'Falló la instalación',
-    settingUpTitle: 'Configurando Hermes Agent',
+    settingUpTitle: 'Configurando Neovarch Agent',
     finishingTitle: 'Terminando',
     failedDesc:
       'Uno de los pasos de configuración no terminó. Puede ocurrir si hay otra copia de Neovarch en ejecución, se cortó la conexión a internet o un antivirus bloqueó el instalador. Cierra las demás ventanas de Neovarch y elige Recargar y reintentar. Si vuelve a fallar, abre los registros y envíalos al soporte.',

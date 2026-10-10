@@ -705,8 +705,8 @@
   --radius-2xl: 16px;
   --radius-3xl: 16px;
   --radius: 10px;
-  /* Reading column width; the column sits left, not centred. */
-  --composer-width: 46rem;
+  /* Reading column + composer width (~800px), centred in the stage. */
+  --composer-width: min(50rem, 100%);
 }
 
 /* ── Frame: rail · [sessions panel] · stage panel · context rail ────────── */
@@ -983,20 +983,29 @@
   color: var(--nv-text-3);
 }
 
-/* ── Conversation: left-aligned reading column ──────────────────────────── */
+/* ── Conversation: one centred reading column (900px → 4K) ─────────────────
+   The column and the composer share --composer-width and both centre in the
+   stage, so closing the sidebar never leaves a wide empty strip on one side. */
 :root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] {
-  margin-left: 0;
+  margin-left: auto;
   margin-right: auto;
-  padding-left: 2rem;
+  padding-left: 1.5rem;
   padding-right: 1.5rem;
 }
-:root[data-nv-skin='neovarch'] [data-slot='composer-dock'].absolute {
-  left: calc(2rem - 5px);
-  translate: none;
+/* Timeline jumps land below the sticky header, not under it. */
+:root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] [data-message-id],
+:root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] [id] {
+  scroll-margin-top: calc(var(--titlebar-height, 2.5rem) + 1rem);
 }
-:root[data-nv-skin='neovarch'] [data-slot='aui_intro'] {
-  align-items: flex-start;
-  text-align: left;
+/* Wide tables scroll sideways inside the column instead of widening it. */
+:root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+:root[data-nv-skin='neovarch'] [data-slot='aui_thread-content'] pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .nv-home {
   margin: 0;
@@ -3733,3 +3742,19 @@
 .nv-kartu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .nv-kartu-note { font-size: 12px; opacity: 0.75; margin: 0; }
 @media (max-width: 720px) { .nv-kartu-body { grid-template-columns: 1fr; } }
+/* "Pilih model" when the chat has no model yet (context rail). */
+.nv-context-pick-model,
+.nv-office-retry {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--nv-accent, currentColor);
+  background: transparent;
+  color: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.nv-context-pick-model:hover,
+.nv-office-retry:hover {
+  background: color-mix(in srgb, var(--nv-accent, currentColor) 14%, transparent);
+}

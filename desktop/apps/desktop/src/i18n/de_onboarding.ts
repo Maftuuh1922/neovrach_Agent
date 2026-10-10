@@ -1,7 +1,7 @@
 import type { TranslationOverrides } from './define-locale'
 
 export const deOnboarding: TranslationOverrides['onboarding'] = {
-  headerTitle: 'Hermes Agent für Sie einrichten',
+  headerTitle: 'Neovarch Agent für Sie einrichten',
   headerDesc:
     'Verbinden Sie einen Modell-Anbieter, um mit dem Chatten zu beginnen. Die meisten Optionen brauchen nur einen Klick.',
   preparingInstall:

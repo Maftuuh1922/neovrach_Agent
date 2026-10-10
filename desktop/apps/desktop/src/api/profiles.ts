@@ -7,13 +7,18 @@ import type {
 } from '@/types/hermes'
 
 import { capabilityScoped, hermesApi, type ProfileScope, STARTUP_REQUEST_TIMEOUT_MS } from './client'
+import { asArray } from '@/lib/as-array'
 
 export function getProfiles(scope?: ProfileScope): Promise<ProfilesResponse> {
-  return hermesApi<ProfilesResponse>({
+  return Promise.resolve(hermesApi<ProfilesResponse>({
     ...(scope === undefined ? {} : capabilityScoped(scope)),
     path: '/api/profiles',
     timeoutMs: STARTUP_REQUEST_TIMEOUT_MS
-  })
+  })).then(r =>
+    // Keep the response (and its array) identical when it is already well
+    // formed: profile caches compare by identity to skip re-renders.
+    r && Array.isArray(r.profiles) ? r : ({ ...r, profiles: asArray(r?.profiles, 'profiles') } as ProfilesResponse)
+  )
 }
 
 export function createProfile(body: ProfileCreatePayload): Promise<{ name: string; ok: boolean; path: string }> {

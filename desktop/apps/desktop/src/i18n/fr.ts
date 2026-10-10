@@ -1872,7 +1872,7 @@ export const frOverrides = {
       savedTitle: 'Paramètres du gateway enregistrés',
       restartingMessage: 'Neovarch Agent va se reconnecter avec les paramètres enregistrés — le shell reste ouvert.',
       savedMessage: 'Enregistré pour le prochain redémarrage.',
-      connectedTo: (baseUrl, version) => `Connecté à ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
+      connectedTo: (baseUrl, version) => `Connecté à ${baseUrl}${version ? ` · Neovarch ${version}` : ''}`,
       reachableTitle: 'Gateway distant accessible',
       signedOutTitle: 'Déconnecté',
       signedOutMessage: 'Session du gateway distant effacée.',
@@ -2265,7 +2265,7 @@ export const frOverrides = {
         cliBillingDisabled: {
           title: 'Les dépenses à distance sont désactivées',
           message:
-            'Les dépenses à distance sont désactivées pour ce compte — un administrateur de facturation peut les activer depuis la page Hermes Agent du portail.'
+            'Les dépenses à distance sont désactivées pour ce compte — un administrateur de facturation peut les activer depuis la page Neovarch Agent du portail.'
         },
         roleRequired: {
           title: 'Rôle administrateur requis',
@@ -3980,7 +3980,7 @@ export const frOverrides = {
       '/subscription': 'Voir votre forfait Nous et le modifier dans le navigateur',
       '/topup': 'Afficher votre solde Nous et gérer la facturation sur le portail',
       '/platform': 'Suspendre, reprendre ou lister une plateforme de gateway en échec',
-      '/version': 'Afficher la version de Hermes Agent',
+      '/version': 'Afficher la version de Neovarch Agent',
       '/debug': 'Téléverser un rapport de débogage (infos système + journaux) et obtenir des liens partageables',
       '/model': 'Changer le modèle de cette session'
     },
@@ -4497,7 +4497,7 @@ export const frOverrides = {
     applyRemote: 'Appliquer et se reconnecter',
     backToSetup: 'Retour',
     failedTitle: "Échec de l'installation",
-    settingUpTitle: 'Configuration de Hermes Agent',
+    settingUpTitle: 'Configuration de Neovarch Agent',
     finishingTitle: 'Finalisation',
     failedDesc:
       "L'une des étapes d'installation a échoué. Sous Windows, cela peut arriver si une autre instance Neovarch CLI ou desktop est en cours d'exécution. Arrêtez toutes les instances Neovarch en cours, puis réessayez. Consultez les détails ci-dessous ou le journal du bureau pour la transcription complète.",

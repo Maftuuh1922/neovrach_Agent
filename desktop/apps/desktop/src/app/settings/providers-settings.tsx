@@ -31,10 +31,11 @@ import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
 
 import { isKeyVar, ProviderKeyRows } from './credential-key-ui'
 import { CustomEndpointsSettings } from './custom-endpoints-settings'
+import { GithubAccountSettings } from './github-account-settings'
 import { SettingsCategoryHeading, useEnvCredentials } from './env-credentials'
 import { providerGroup, providerMeta, providerPriority } from './helpers'
 import { LocalModelsSettings } from './local-models-settings'
-import { SettingsContent, SettingsSkeleton } from './primitives'
+import { SettingsContent, SettingsLoadError, SettingsSkeleton } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
@@ -53,7 +54,9 @@ function GroupLabel({ children }: { children: ReactNode }) {
 }
 
 // Sub-views surfaced as a sidebar subnav: account sign-in vs raw API keys.
-export const PROVIDER_VIEWS = ['accounts', 'keys', 'custom-endpoints', 'local'] as const
+// 'github' is Neovarch's Akun page; 'accounts' (provider OAuth logins the core
+// does not support) is no longer listed in the nav.
+export const PROVIDER_VIEWS = ['github', 'accounts', 'keys', 'custom-endpoints', 'local'] as const
 
 export type ProviderView = (typeof PROVIDER_VIEWS)[number]
 
@@ -393,7 +396,7 @@ export function ProvidersSettings({
 }: ProvidersSettingsProps) {
   const { t } = useI18n()
   const scopeProfile = useStore($settingsRequestProfile)
-  const { rowProps, vars } = useEnvCredentials(scopeProfile)
+  const { loadError, reload, rowProps, vars } = useEnvCredentials(scopeProfile)
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([])
   const [openProvider, setOpenProvider] = useState<null | string>(null)
   const [disconnecting, setDisconnecting] = useState<null | string>(null)
@@ -529,6 +532,22 @@ export function ProvidersSettings({
     }
   }
 
+  // Custom endpoints do not use the env list: never gate them on it (an old
+  // core without /api/env left this view on an endless skeleton).
+  if (view === 'custom-endpoints') {
+    return <CustomEndpointsSettings onConfigSaved={onConfigSaved} onMainModelChanged={onMainModelChanged} />
+  }
+
+  if (!vars && loadError) {
+    return <SettingsLoadError error={loadError} onRetry={reload} title="Penyedia belum bisa dimuat" />
+  }
+
+  // Neovarch's only account is GitHub (token sign-in); provider OAuth logins
+  // are not supported by the core.
+  if (view === 'github') {
+    return <GithubAccountSettings />
+  }
+
   if (!vars) {
     return <SettingsSkeleton search sections={[{ rows: 6 }]} />
   }
@@ -536,7 +555,7 @@ export function ProvidersSettings({
   const hasOauth = oauthProviders.length > 0
   // The sidebar subnav owns the Accounts/API-keys split now; with no OAuth
   // providers there's nothing for the "Accounts" view to show, so fall to keys.
-  const showApiKeys = view === 'keys' || (!hasOauth && view !== 'custom-endpoints')
+  const showApiKeys = view === 'keys' || !hasOauth
 
   const keyGroups = buildProviderKeyGroups(vars)
 
@@ -589,10 +608,6 @@ export function ProvidersSettings({
         )}
       </SettingsContent>
     )
-  }
-
-  if (view === 'custom-endpoints') {
-    return <CustomEndpointsSettings onConfigSaved={onConfigSaved} onMainModelChanged={onMainModelChanged} />
   }
 
   if (view === 'local') {
